@@ -1,0 +1,227 @@
+/* Plain CSS; static surfaces, system type, no decorative rendering loop. */
+/* Playback queue and member playlist editor; all metadata is escaped in markup. */
+#playback-panel{display:none;position:fixed;right:16px;bottom:104px;z-index:45;width:min(380px,calc(100vw - 24px));border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:0 20px 48px #0009;padding:4px 8px 8px}
+/* The queue is player chrome, not a page overlay: a drawer opened from the player bar only. */
+#playback-panel.open{display:block}
+#playback-panel summary{display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px;list-style:none}
+#playback-panel summary::-webkit-details-marker{display:none}
+.pq-heading{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+#playback-count{font:600 11px/1 ui-monospace,monospace;letter-spacing:0;background:var(--panel2);color:var(--fg);border-radius:999px;padding:2px 7px}
+#playback-panel .pq-close{margin-left:auto;border:0;background:none;color:var(--dim);font-size:17px;line-height:1;padding:2px 6px;cursor:pointer}
+#playback-panel .pq-close:hover{color:var(--fg)}
+#playback-panel .hint{font-size:11px;margin:6px 4px}
+#playback-items,#playlist-members,#playlist-candidates{max-height:42vh;overflow:auto;overscroll-behavior:contain}
+#playback-items{display:flex;flex-direction:column;gap:2px;max-height:min(48vh,430px)}
+/* Compact rows: one line, title then a muted artist, state pill, × on hover. */
+#playback-items .pq-row{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 6px;font-size:13px;line-height:1.15;border:0;border-radius:9px;background:none;cursor:pointer;touch-action:pan-y;-webkit-user-select:none;user-select:none;position:relative}
+#playback-items .pq-row:hover,#playback-items .pq-row:focus-visible{background:var(--panel2)}
+#playback-items .pq-row:focus-visible{outline:2px solid #7aa2ff;outline-offset:-2px}
+#playback-items .pq-handle{flex:none;width:3px;height:16px;border-radius:2px;background:var(--line);opacity:0;transition:opacity .12s}
+#playback-items .pq-row:hover .pq-handle,#playback-items .pq-row:focus-visible .pq-handle,#playback-items .pq-row.pq-lift .pq-handle{opacity:1}
+#playback-items .pq-name{flex:1;min-width:0;font-size:13px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#playback-items .pq-name small{display:inline;margin-left:6px;color:var(--dim);font-size:11px}
+.pq-tag{flex:none;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);opacity:.85}
+#playback-items .pq-row.pq-ready{box-shadow:inset 2px 0 0 #4fd18b}
+#playback-items .pq-row.pq-ready .pq-tag{color:#4fd18b;opacity:1}
+#playback-items .pq-row.pq-loading .pq-tag{animation:pqpulse 1.1s ease-in-out infinite}
+#playback-items .pq-row.pq-lift{background:var(--panel2);box-shadow:0 12px 26px #0009;opacity:.96;cursor:grabbing}
+@keyframes pqpulse{0%,100%{opacity:.35}50%{opacity:1}}
+#playback-items .pq-x{flex:none;display:grid;place-items:center;width:22px;height:22px;min-height:0;border:0;background:none;color:var(--dim);font-size:15px;line-height:1;padding:0;border-radius:6px;opacity:0;cursor:pointer}
+#playback-items .pq-row:hover .pq-x,#playback-items .pq-row:focus-visible .pq-x,#playback-items .pq-x:focus-visible{opacity:.75}
+#playback-items .pq-x:hover{opacity:1;background:#ffffff14;color:var(--fg)}
+#playback-items .pq-empty{margin:6px 6px 10px}
+/* Now playing sits above the list, carrying the live dot. `hidden` must win over
+   the flex display, or an empty bar shows above the queue. */
+.pq-now{display:flex;align-items:center;gap:8px;padding:6px 8px;margin:0 0 4px;border-radius:10px;background:var(--panel2)}
+.pq-now[hidden]{display:none}
+.pq-now .pq-name{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pq-now .pq-name small{display:inline;margin-left:6px;color:var(--dim);font-size:11px}
+.pq-now .pq-tag.now{color:#7ee2a8;opacity:1}
+.pq-live{flex:none;width:7px;height:7px;border-radius:50%;background:#4fd18b;box-shadow:0 0 0 0 #4fd18b88;animation:pqlive 1.8s ease-out infinite}
+@keyframes pqlive{0%{box-shadow:0 0 0 0 #4fd18b88}70%{box-shadow:0 0 0 7px #4fd18b00}100%{box-shadow:0 0 0 0 #4fd18b00}}
+#playback-panel .pq-toolbar{margin:4px 2px 0;gap:6px}
+#playback-panel .pq-toolbar button{padding:4px 9px;font-size:11px;background:none;border:1px solid var(--line);border-radius:8px;color:var(--dim)}
+#playback-panel .pq-toolbar button:hover{color:var(--fg);border-color:var(--dim)}
+.pq-help{color:var(--dim);opacity:.75}
+.pq-row{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:9px 2px;flex-wrap:wrap}
+.pq-name{flex:1;min-width:100px;overflow-wrap:anywhere}.pq-name small{display:block;color:var(--dim);font-size:12px}
+.pq-grip{touch-action:none;cursor:grab;flex:none;font-size:22px;padding:4px 10px}
+.pq-actions,.pq-toolbar{display:flex;gap:5px;flex-wrap:wrap}.pq-actions button{padding:5px 9px;font-size:12px}.pq-toolbar{margin:10px 0}
+#playlist-editor{width:680px;padding:20px;background:var(--panel);color:var(--text)}
+#playlist-editor form{display:flex;align-items:center;justify-content:space-between;gap:12px}#playlist-editor input{min-width:0;max-width:100%;flex:1}#playlist-editor label{display:block;margin:10px 0}
+@media(max-width:600px){#playback-panel{right:8px;bottom:148px;width:calc(100vw - 16px);padding:2px 6px 6px;box-sizing:border-box}#playback-items{max-height:38vh}#playback-items .pq-x{opacity:.6}#playback-items .pq-handle{opacity:.5}.pq-actions{flex-basis:100%;padding-left:2px}.pq-actions button{min-height:38px}#playlist-editor{padding:12px;box-sizing:border-box}}
+
+:root{color-scheme:dark;--bg:#101014;--panel:#191a21;--panel2:#23252e;--line:#343641;--dim:#aaadbd;--radius:16px}
+/* The app is chrome, not a document: a long press must never start a text
+   selection or the OS copy/paste callout. Fields stay selectable. */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,select,[contenteditable="true"]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+body{line-height:1.5;padding-bottom:calc(24px + env(safe-area-inset-bottom));text-rendering:optimizeLegibility}
+/* The player is an overlay: reserve its room only while it is actually on, so a page that
+   is not playing music does not end in a fat empty band. */
+body:has(#player.on){padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+header{background:#101014;backdrop-filter:none;padding-top:env(safe-area-inset-top)}
+.bar{max-width:1200px;margin:auto;padding:16px 24px;gap:10px}
+.brand{font-size:19px;letter-spacing:-.6px}.chip{background:var(--panel);padding:5px 10px}
+main{max-width:1120px;padding:24px}.tabs{gap:8px;padding-bottom:16px;margin-bottom:22px}
+.tab{border-color:transparent;font-weight:600;padding:10px 16px}.tab.on{color:var(--accent);background:#1b2b26;border-color:#34584b}
+button{min-height:40px;transition:transform .14s ease,opacity .14s ease}
+button:active:not(:disabled){transform:translateY(1px)}
+:where(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+textarea,input[type=text],input[type=number],select{min-height:42px}
+:is(.acard,.arcard,.plcard){transition:transform .16s ease}
+.acard{padding:12px;border-radius:16px}.albumgrid,.artistgrid{gap:20px}
+.acard .aplay{transition:transform .16s ease,opacity .16s ease}
+.acard:focus-within .aplay{opacity:1;transform:none}
+.libtop{margin-bottom:18px}.libtop h2{font-size:29px;letter-spacing:-.04em}
+.libbar{gap:12px}.seg{padding:4px}.seg button{min-height:36px}
+.feedcard,.followrow,.libgroup,.plcard{border-radius:16px}.feedcard,.followrow{padding:16px}
+.empty{padding:28px;border-style:dashed}.dropzone{padding:14px;border-color:#454753}
+.songrow{min-height:54px}.songhead{padding-top:10px;padding-bottom:10px}.sdl{min-width:28px}
+dialog{max-width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 32px);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 80px #0008;overscroll-behavior:contain}
+dialog::backdrop{background:#050609bb}dialog input,dialog textarea{min-width:0}dialog h2{letter-spacing:-.025em}
+#player{position:fixed;background:#191a21;backdrop-filter:none;border-top:1px solid #454753;padding:12px max(16px,env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));gap:12px;box-shadow:0 -8px 28px #0003}
+#player .ptitle{font-size:14px}#player .psub{font-size:12px}
+.bubble{backdrop-filter:none;background:#0b0c11f2}.bubble[data-paused]{animation-play-state:paused!important}
+.prog i{transition:none}#toast{transition:opacity .18s ease,transform .18s ease}
+@keyframes votePulse{0%,100%{transform:scale(1)}35%{transform:scale(1.14)}}
+@media(hover:none){.acard .aplay{opacity:1;transform:none}}
+@media(max-width:720px){main{padding:18px 14px}.bar{padding:12px 14px}.tabs{gap:4px}.tab{padding:9px 12px}.libbar{flex-wrap:wrap}.libbar .seg{max-width:100%;flex-wrap:wrap}.libbar select{flex:1 1 120px;max-width:100%}.libbar .libsearch{flex-basis:100%}.albumgrid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}.acard{padding:10px}.feedacts,.followrow .acts{flex-wrap:wrap}.followrow{flex-wrap:wrap}.feedacts button{flex:1}.addbox{flex-wrap:wrap}.addbox textarea{flex:1 1 220px}#player{gap:8px;flex-wrap:wrap}#player .pseek{flex-basis:130px}.brand{font-size:18px}}
+/* Song cards reuse the exact row controls and their user-scoped handlers. */
+.songcontrols{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;color:var(--dim)}
+.songgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:18px}
+.songgrid .songcard{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"art art" "title title" "artist artist" "album album" "votes votes" "index index" "duration actions";gap:8px;padding:14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);align-content:start}
+.songgrid .songcard.playing{border-color:var(--accent);background:#16241f}
+.songgrid .songcard .thumb{grid-area:art;width:100%;height:auto;aspect-ratio:1;border-radius:10px;font-size:40px}
+.songgrid .songcard .thumb:empty::after{content:'♫'}
+.songgrid .songcard .st{grid-area:title}
+.songgrid .songcard .st b{white-space:normal;overflow-wrap:anywhere}
+.songgrid .songcard .lsave{margin-top:8px;max-width:100%}
+.songgrid .songcard .sartist{grid-area:artist;display:block}
+.songgrid .songcard .salbum{grid-area:album;display:block}
+.songgrid .songcard .votes{grid-area:votes;display:flex;overflow:visible;flex-wrap:wrap}
+.songgrid .songcard .idx{grid-area:index;text-align:left}
+.songgrid .songcard .sdur{grid-area:duration;text-align:left}
+.songgrid .songcard .send{grid-area:actions}
+.songgrid .songcard .splay{opacity:1;min-width:40px;min-height:40px;background:var(--panel2);border-radius:50%}
+.songgrid .songcard .sdl{opacity:1;display:inline-grid;place-items:center;min-width:40px;min-height:40px}
+.songmenu{position:fixed;z-index:1000;display:grid;gap:4px;min-width:200px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px #0008}.songmenu button{text-align:left;background:transparent;color:var(--text);border:0;border-radius:8px;padding:8px 12px}.songmenu button:hover,.songmenu button:focus{background:var(--panel2)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.bubble{opacity:1;transform:none}.acard:hover{transform:none}}
+
+/* ---- Navigation: one persistent menu ------------------------------------
+   The header keeps identity only; the queue's own counters and Pause/Clear
+   live in the Queue view (.qstrip). The nav is sticky at the top on desktop
+   and a fixed bottom bar on phones and in the installed PWA. */
+header{position:relative;top:auto;z-index:1}
+.tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 22px;padding:10px max(24px,calc((100vw - 1200px)/2));padding-right:max(24px,calc((100vw - 1200px)/2));position:sticky;top:0;z-index:25;background:#101014;border-bottom:1px solid var(--line);box-shadow:0 1px 0 #0006}
+:root{--hdr:63px}
+.tabs .grow{flex:1 1 auto}
+.tabs .tab{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#btn-more{display:none}
+.navpanel{display:contents}
+.qstrip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.qstrip .grow{flex:1 1 auto}
+.qstrip button{min-height:36px;padding:8px 12px}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  /* One number owns the bottom bar: its height, the space the page reserves for
+     it, and every panel that has to clear it. A labelled tab can never change it. */
+  :root{--hdr:0px;--nav-h:59px;--safe-b:env(safe-area-inset-bottom,0px)}
+  body{padding-bottom:calc(var(--nav-h) + var(--safe-b))}
+  body:has(#player.on){padding-bottom:calc(113px + var(--nav-h) + var(--safe-b))}
+  .tabs{position:fixed;inset:auto 0 0 0;top:auto;max-width:none;margin:0;gap:3px;
+    height:calc(var(--nav-h) + var(--safe-b));box-sizing:border-box;align-items:center;
+    padding:6px 6px var(--safe-b);flex-wrap:nowrap;overflow:visible;border-top:1px solid var(--line);border-bottom:0;background:#101014;box-shadow:none;z-index:50}
+  .tabs .grow{display:none}
+  /* Long labels shrink to fit their slot instead of clipping or pushing the bar. */
+  .tabs .tab{flex:1 1 0;min-width:0;height:46px;min-height:0;padding:0 2px;align-self:center;
+    font-size:clamp(10px,2.9vw,11.5px);letter-spacing:-.3px;border-color:transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tabs .tab.on{border-color:#34584b}
+  @media (max-width:345px){ .tabs .tab{font-size:9.5px;letter-spacing:-.45px;padding:0 1px} }
+  #btn-more{display:inline-flex}
+  .navpanel{display:none}
+  .tabs.more-open .navpanel{display:flex;flex-direction:column;gap:6px;position:fixed;left:8px;right:8px;bottom:calc(var(--nav-h) + var(--safe-b) + 7px);z-index:51;padding:8px;background:#191a21;border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 40px #000a}
+  .tabs.more-open .navpanel .tab{flex:none;justify-content:flex-start;text-align:left;font-size:14px;letter-spacing:0;min-height:46px;height:auto;padding:10px 14px}
+  #player{bottom:calc(var(--nav-h) + var(--safe-b))}
+  #toast{bottom:calc(91px + var(--nav-h) + var(--safe-b))}
+  #playback-panel{right:8px;bottom:calc(131px + var(--nav-h) + var(--safe-b))}
+}
+
+/* Fullscreen player: one clean column, opened from the bar (⤢ or the title). */
+#player-full{display:none;position:fixed;inset:0;z-index:70;background:linear-gradient(180deg,#1b1b23 0%,#101014 62%);flex-direction:column;align-items:center;
+  padding:0 20px calc(22px + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain}
+#player-full.on{display:flex}
+#player-full .pf-tab{margin:8px auto 0;border:0;background:none;color:var(--dim);font-size:22px;line-height:1;padding:8px 30px;border-radius:12px;cursor:pointer}
+#player-full .pf-tab:hover{color:var(--text);background:var(--panel2)}
+#player-full .pf-body{width:min(560px,100%);display:flex;flex-direction:column;gap:14px;margin:auto 0;padding:8px 0 4px}
+#player-full .pf-art{width:min(100%,420px,44vh);aspect-ratio:1;margin:0 auto;border-radius:18px;overflow:hidden;background:var(--panel2);box-shadow:0 20px 54px #0007}
+#player-full .pf-art img{width:100%;height:100%;object-fit:cover;display:block}
+#player-full .pf-text{text-align:center;min-width:0}
+#player-full .pf-title{font-size:20px;font-weight:650;line-height:1.25;overflow-wrap:anywhere}
+#player-full .pf-sub{color:var(--dim);font-size:13px;margin-top:4px;overflow-wrap:anywhere}
+#player-full .pf-seek{width:100%;height:6px}
+#player-full .pf-times{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:-6px}
+#player-full .pf-ctrl{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:2px}
+#player-full .pf-ctrl .iconbtn{opacity:.8}
+#player-full .pf-ctrl .iconbtn.big{width:60px;height:60px}
+#player-full .pf-foot{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:4px}
+#player-full .pf-foot button{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 14px;font-size:12.5px;cursor:pointer}
+#player-full .pf-foot button:hover{border-color:var(--accent);color:var(--accent)}
+#player-full .pf-foot input{width:96px}
+body.fullplayer{overflow:hidden}
+@media(max-width:760px){
+  #player-full .pf-title{font-size:18px}
+  #player-full .pf-body{gap:12px}
+  #player-full .pf-art{width:min(100%,38vh)}
+}
+@media(max-width:760px) and (max-height:640px){
+  #player-full .pf-art{display:none}
+  #player-full .pf-body{gap:10px}
+}
+
+/* ---------- Feed tabs, member activity, member profiles ---------- */
+.feedtabs{display:inline-flex;gap:4px;margin:0 0 14px;border:1px solid var(--line);border-radius:999px;background:#191a21}
+.feedtabs .segbtn{min-height:36px;padding:0 18px;border:0;border-radius:999px;background:transparent;color:var(--dim);font:inherit;font-size:14px;cursor:pointer}
+.feedtabs .segbtn.on{background:var(--accent);color:#0b0b10;font-weight:600}
+.actrow{padding:12px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:14px;background:#191a21}
+.actboost{border-color:#745b27;background:linear-gradient(100deg,#302711,#191a21 65%)}
+.actboost .actline{font-weight:600}
+.actboost .actline b{color:#ffd66f}
+.actboost .acttime{color:#d6b75d}
+.actline{font-size:14px;line-height:1.45;color:var(--text)}
+.actline b{font-weight:600}
+.actwho{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;color:var(--accent2);font:inherit;font-weight:600;cursor:pointer}
+.actwho:hover{text-decoration:underline}
+.actlisten .acttracks{margin:8px 0 0;padding:0 0 0 4px;list-style:none;display:grid;gap:3px}
+.acttracks li{font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acttracks li b{color:var(--text);font-weight:500}
+.acttime{margin-top:6px;font-size:12px;color:var(--dim)}
+.memberdlg{width:min(560px,calc(100vw - 24px))}
+.mdhead{display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.mdicon{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#23242c;font-size:22px;flex:none}
+.mdwho{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mdwho b{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mdwho small{color:var(--dim);font-size:12px}
+.mdclose{margin-left:auto;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#191a21;color:var(--text);font-size:18px;line-height:1;cursor:pointer}
+.mdbody{display:grid;gap:16px;margin-top:12px;max-height:min(62dvh,520px);overflow:auto;overscroll-behavior:contain}
+.mds h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.mdrow{display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px solid #22232b;font-size:13px}
+.mdrow span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mdrow small{margin-left:auto;color:var(--dim);flex:none;font-size:12px}
+@media(max-width:720px){.feedtabs{width:100%}.feedtabs .segbtn{flex:1}}
+
+.voters{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px}
+.voters>small{color:var(--dim);font-size:12px}
+.voter{padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:#191a21;color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+.voter:hover{border-color:var(--accent2)}
+.folderhead{display:flex;align-items:center;gap:10px;margin:8px 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.folderhead .grow{display:flex;flex-direction:column;gap:3px;min-width:0}
+.folderhead small,.foldermeta{color:var(--dim);font-size:12px}
+.folderlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));gap:8px;margin:8px 0 14px}
+.foldercard{display:flex;align-items:center;gap:10px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);text-align:left;cursor:pointer}
+.foldercard:hover,.foldercard:focus-visible{border-color:var(--accent2);background:var(--panel2)}
+.foldericon{color:var(--accent);font-size:18px}
+.foldername{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.foldermeta{margin-left:auto;white-space:nowrap}
+.songmenu{max-height:min(70vh,560px);overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:560px){.folderhead{flex-wrap:wrap}.folderhead .backbtn{width:100%;text-align:left}}

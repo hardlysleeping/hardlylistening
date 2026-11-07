@@ -1,0 +1,30 @@
+// Isolated personal listening DOM/API tests. No server, storage or audio.
+const fs=require('fs'), vm=require('vm'), assert=require('assert');
+const html=fs.readFileSync('web/index.html','utf8');
+const elements={}, calls=[], copied=[];
+const el=id=>elements[id] ||= {value:'',hidden:true,open:false,textContent:'',innerHTML:'',querySelectorAll:()=>[],showModal(){this.open=true;}};
+let saves={tracks:[],playlists:[]}, fail=false;
+const ctx=vm.createContext({$:el,esc:s=>String(s).replaceAll('<','&lt;').replaceAll('"','&quot;'),location:{protocol:'https:',origin:'https://music.example'},navigator:{clipboard:{writeText:async s=>copied.push(s)}},alert:s=>calls.push(['error',s]),renderLibrary(){},fetch:async path=>({ok:!fail,status:403,json:async()=>fail?{error:'Denied'}:path.endsWith('/saves')?structuredClone(saves):{devices:[{id:'hl_123',label:'<img>',created:'now',revoked:0}]}}),api:async(path,body)=>{calls.push([path,body]);if(fail)throw Error('Denied');if(path.endsWith('/devices'))return {username:'hl_123',password:'test-secret'};if(path.endsWith('/saves')){const key=body.kind==='track'?'tracks':'playlists';saves[key]=body.saved?[body.id]:[];}return {ok:true};}});
+vm.runInContext(html.slice(html.indexOf('// Personal listening state'),html.indexOf('function socialControl')),ctx);
+(async()=>{
+ assert.equal(ctx.listeningSaveControl('track',1),'');
+ await ctx.loadListeningSaves();
+ assert(ctx.listeningSaveControl('track',1).includes('Add to library'));
+ await ctx.toggleListeningSave('track',1);
+ assert(ctx.listeningSaveControl('track',1).includes('Remove from library'));
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[0])),['/api/listening/saves',{kind:'track',id:1,saved:true}]);
+ await ctx.toggleListeningSave('track',1);assert.equal(saves.tracks.length,0);
+ await ctx.toggleListeningSave('playlist',7);assert.equal(saves.playlists[0],7);
+ await ctx.openListening();assert(el('#listening-devices').innerHTML.includes('&lt;img>'));
+ el('#listening-label').value='Phone';await ctx.createListeningDevice();
+ assert.equal(el('#listening-password').value,'test-secret');assert(!el('#listening-secret').hidden);
+ for(const field of ['url','username','password'])await ctx.copyListening(field);
+ assert.deepEqual(copied,['https://music.example','hl_123','test-secret']);
+ ctx.clearListeningSecret();assert.equal(el('#listening-password').value,'');assert(el('#listening-secret').hidden);
+ ctx.location.protocol='http:';await ctx.openListening();assert(el('#listening-create').disabled);assert.equal(el('#listening-url').value,'');
+ const count=calls.length;await ctx.createListeningDevice();assert.equal(calls.length,count);
+ fail=true;await ctx.loadListeningSaves();assert.equal(ctx.listeningSaveControl('track',1),'');await ctx.loadListeningDevices();assert.equal(el('#listening-error').textContent,'Denied');
+ assert(html.includes('oncancel="clearListeningSecret()"'));
+ assert(!html.includes('qrserver'));
+ console.log('Listening DOM: explicit saves/removal, personal payloads, credential lifecycle, separate copies, escaping, HTTPS and errors PASS');
+})().catch(e=>{console.error(e);process.exitCode=1;});

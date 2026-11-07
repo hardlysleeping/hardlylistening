@@ -1,0 +1,9 @@
+name = "hardlylistening-offline"
+main = "worker.mjs"
+compatibility_date = "2026-11-01"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+workers_dev = false
+# point this at your own zone before deploying
+routes = [{ pattern = "music.example.com/*", zone_name = "example.com" }]
+[observability]
+enabled = false

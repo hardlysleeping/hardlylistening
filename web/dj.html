@@ -1,0 +1,2579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5, user-scalable=yes">
+<title>HardlyListening — Mixer</title>
+<meta name="theme-color" content="#101014">
+<style>
+  :root{
+    --bg:#0d0d11; --panel:#16161d; --panel2:#1d1d26; --line:#2b2b36;
+    --text:#ececf1; --dim:#9595a4; --accent:#58d3a8; --accent2:#7aa2ff;
+    --warn:#ffcf5c; --err:#ff6b6b; --a:#58d3a8; --b:#ff9f5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent2);text-decoration:none}
+  header{position:sticky;top:0;z-index:30;background:rgba(13,13,17,.95);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .bar{display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap}
+  .brand{font-weight:700;font-size:16px}
+  .brand span{color:var(--accent)}
+  .grow{flex:1}
+  button{font:inherit;border-radius:9px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);padding:7px 12px;cursor:pointer}
+  button:hover{background:#262631}
+  button.on{background:var(--accent);color:#08231a;border-color:transparent;font-weight:650}
+  button.rec.on{background:var(--err);color:#fff}
+  .small{font-size:12px;padding:5px 9px}
+
+  main{max-width:1180px;margin:0 auto;padding:14px;display:grid;gap:14px}
+  .decks{display:grid;grid-template-columns:1fr 90px 1fr;gap:12px;align-items:stretch}
+  @media (max-width:860px){ .decks{grid-template-columns:1fr} .mid{order:3} }
+
+  .deck{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:12px;display:grid;gap:10px;border-top:3px solid var(--a)}
+  .deck.b{border-top-color:var(--b)}
+  .deck.b .accent{color:var(--b)}
+  .deckno{font-size:11px;letter-spacing:1.2px;font-weight:800}
+  .deck.a .accent{color:var(--a)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+  .sub{color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .art{width:64px;height:64px;border-radius:10px;object-fit:cover;background:#242430;flex:none}
+  .scrub{width:100%;accent-color:var(--accent2)}
+  /* A record you can drag: one full turn moves the playhead JOG_TURN_SECONDS. */
+  .scrubrow{display:flex;align-items:center;gap:10px}
+  .scrubrow .scrub{flex:1;min-width:0}
+  .jog{width:68px;height:68px;flex:none;border-radius:50%;position:relative;cursor:grab;
+    touch-action:none;border:1px solid #2f2f3b;
+    background:conic-gradient(from 0deg,#191921,#24242e,#191921,#22222b,#191921);
+    box-shadow:inset 0 0 0 6px #111118, inset 0 0 16px #000a, 0 1px 0 #ffffff10}
+  .jog:active,.jog.dragging{cursor:grabbing;border-color:#58d3a8aa}
+  .jog:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+  .jog.off{opacity:.4}
+  .jog.off:active{cursor:default}
+  .jogface{position:absolute;inset:7px;border-radius:50%;display:grid;place-items:center;
+    /* concentric grooves so it reads as a record, not a round button */
+    background:
+      repeating-radial-gradient(circle at 50% 50%,#1c1c25 0 1px,#23232d 1px 3px),
+      radial-gradient(circle at 50% 32%,#2e2e3a,#14141b 74%);
+    border:1px solid #33333f;box-shadow:inset 0 0 0 9px #ffffff06, inset 0 6px 14px #0006;
+    will-change:transform}
+  .jogface b{position:relative;z-index:1;font-size:11px;letter-spacing:1px;color:#cfcfda;
+    font-weight:800;text-shadow:0 1px 2px #000}
+  .jogmark{position:absolute;top:1px;left:50%;width:4px;height:9px;margin-left:-2px;
+    border-radius:2px;background:var(--accent);box-shadow:0 0 6px -1px var(--accent)}
+  .deck.b .jogmark{background:var(--b)}
+  .jog.dragging .jogface{border-color:#58d3a866}
+  @media (max-width:900px){ .jog{display:none} .scrubrow{gap:0} }
+  .time{font-variant-numeric:tabular-nums;color:var(--dim);font-size:12px}
+  .bank{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .ctl{background:var(--panel2);border:1px solid #242430;border-radius:12px;padding:8px 6px;
+    display:grid;gap:6px;justify-items:center;position:relative;cursor:help}
+  .ctl b{font-size:11px;letter-spacing:.7px;color:var(--dim);font-weight:700}
+  .ctl output{font-size:12px;font-variant-numeric:tabular-nums;color:var(--text)}
+  .ctl input[type=range]{writing-mode:vertical-lr;direction:rtl;height:92px;width:26px;
+    accent-color:var(--accent);background:transparent}
+  .ctl.fader input[type=range]{writing-mode:horizontal-tb;direction:ltr;width:100%;height:22px}
+  .faders{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .faders .ctl{justify-items:stretch}
+  .ctl.fader label{display:flex;justify-content:space-between;align-items:center;width:100%;gap:8px;font-size:11px;color:var(--dim)}
+  .faders label{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+  .hintline{font-size:11px;color:#6c6c7c;line-height:1.3;text-align:center}
+  body.learn .hintline{color:var(--warn)}
+
+  .mid{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:12px;display:grid;gap:10px;align-content:start;justify-items:center}
+  .cross{display:grid;gap:6px;justify-items:center}
+  .cross input[type=range]{width:100%;accent-color:var(--accent2)}
+  .meter{width:12px;height:120px;background:#0a0a0e;border:1px solid var(--line);
+    border-radius:6px;position:relative;overflow:hidden}
+  .meter i{position:absolute;bottom:0;left:0;right:0;height:0;background:linear-gradient(
+    to top, var(--accent) 0 70%, var(--warn) 70% 90%, var(--err) 90% 100%)}
+
+  /* preload queues: what each deck plays next, in order */
+  .queues{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
+  @media (max-width:860px){ .queues{grid-template-columns:1fr} }
+  .qcol{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:10px;min-width:0;border-top:2px solid var(--line)}
+  .qcol[data-side="A"]{border-top-color:var(--a)}
+  .qcol[data-side="B"]{border-top-color:var(--b)}
+  .qhead{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+  .qhead .side{font-size:11px;letter-spacing:1.2px;font-weight:800;margin:0;flex:1;min-width:0}
+  .qcol[data-side="A"] .side{color:var(--a)}
+  .qcol[data-side="B"] .side{color:var(--b)}
+  .qhead .qcount{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .qhead button.small{padding:3px 8px;font-size:11px}
+  .qlist{display:flex;flex-direction:column;gap:4px;min-height:44px;max-height:280px;overflow:auto}
+  .qempty{padding:12px 10px;border:1px dashed var(--line);border-radius:10px;color:var(--dim);
+    font-size:12px;line-height:1.45}
+  .qrow{position:relative;display:grid;grid-template-columns:16px 1fr auto auto auto auto auto;gap:6px;
+    align-items:center;padding:7px 8px;border-radius:9px;background:var(--panel2);
+    border:1px solid transparent;cursor:pointer;overflow:hidden}
+  .qrow:hover{background:#20202a}
+  .qrow.dragging{opacity:.55;border-color:var(--line)}
+  .qrow.current{border-color:#58d3a8aa;box-shadow:0 0 0 1px #58d3a855 inset}
+  .qrow .grip{color:var(--dim);cursor:grab;touch-action:none;font-size:12px;line-height:1;
+    user-select:none;text-align:center}
+  .qrow .grip:active{cursor:grabbing}
+  .qrow .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+  .qrow .s{color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qrow .dur{color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+  @media (max-width:1100px){ .qrow .dur{display:none} }
+  .qrow .x,.qrow .mv,.qrow .dup{background:none;border:1px solid var(--line);color:var(--dim);
+    font-size:11px;line-height:1;cursor:pointer;padding:3px 5px;border-radius:6px;font-variant-numeric:tabular-nums}
+  .qrow .x{border-color:transparent;font-size:14px}
+  .qrow .x:hover{color:var(--text);background:#2a2a36}
+  .qrow .mv:hover{color:var(--text);border-color:#5b6cff88;background:#1b1f33}
+  .qcol[data-side="B"] .qrow .mv:hover{border-color:#ff7a5c88;background:#2a1b17}
+  .qrow .dup:hover{color:var(--text);border-color:var(--line);background:#2a2a36}
+  /* transfer state: waiting -> preloading (bar) -> ready, or failed */
+  .chip{font-size:10px;letter-spacing:.6px;text-transform:uppercase;padding:2px 6px;border-radius:999px;
+    border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  .qrow[data-state="loading"] .chip{color:#e0a24a;border-color:#6f5527;background:#3a2a1466}
+  .qrow[data-state="ready"] .chip{color:#58d3a8;border-color:#2f6b56;background:#12302a66}
+  .qrow[data-state="failed"] .chip{color:#ff8b8b;border-color:#6b2f2f;background:#30121266}
+  .qrow .bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#ffffff14}
+  .qrow .bar i{display:block;height:100%;width:0;background:#ffc46b;transition:width .18s linear;
+    box-shadow:0 0 8px -1px #ffc46b99}
+  .qrow[data-state="ready"] .bar i{background:#66e8bc;box-shadow:0 0 8px -1px #66e8bc99}
+  .qrow[data-state="failed"] .bar i{background:#ff8b8b;box-shadow:none;width:100%}
+  /* on a phone the row is tighter: smaller chip, same information */
+  @media (max-width:560px){
+    .qrow{gap:5px;grid-template-columns:14px 1fr auto auto auto auto}
+    .chip{font-size:9.5px;letter-spacing:0;padding:2px 5px}
+    .qrow .x{font-size:16px;padding:2px 2px}
+  }
+  /* ---- shared room: who is here, and who is holding which control ---- */
+  .roster{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden}
+  .who{display:flex;align-items:center;gap:5px;padding:2px 7px 2px 3px;border-radius:999px;
+    background:var(--panel2);border:1px solid var(--line);font-size:11.5px;color:var(--dim);
+    max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .who .dui{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;flex:none;
+    font-size:10px;font-weight:800;color:#0b0b10;box-shadow:0 0 0 2px #00000030}
+  .who.me{color:var(--text);border-color:#58d3a866}
+  .who.holding{border-color:currentColor}
+  .livechip{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;padding:3px 8px;
+    border-radius:999px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  .livechip.on{color:var(--accent);border-color:#2f6b56;background:#12302a66}
+  .livechip.off{color:#ff9f9f;border-color:#6b2f2f;background:#30121266}
+  .claim{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;
+    display:grid;place-items:center;font-size:9.5px;font-weight:800;color:#0b0b10;
+    background:var(--claim,#58d3a8);box-shadow:0 0 0 2px #0d0d11,0 0 10px -2px var(--claim,#58d3a8);
+    pointer-events:none;z-index:3;animation:claimIn .16s ease-out}
+  @keyframes claimIn{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+  .ctl{position:relative}
+  .cross{position:relative}
+  .claimed{box-shadow:0 0 0 1px var(--claim) inset,0 0 10px -3px var(--claim)}
+  .joinaudio{border-color:#e879f9aa;color:#f6d9ff}
+  @media (prefers-reduced-motion:reduce){ .claim{animation:none} }
+  .qhint{margin:8px 2px 0;font-size:11px;color:var(--dim);line-height:1.45}
+  .qcol .qhint{margin-top:auto}
+  .bpmchip{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    font:inherit;font-size:11.5px;font-variant-numeric:tabular-nums;padding:2px 7px;
+    border-radius:999px;cursor:pointer}
+  .bpmchip:hover{border-color:#58d3a8aa}
+  .bpmchip[data-known="0"]{color:var(--dim)}
+  .bpmchip.synced{border-color:#58d3a8aa;color:#58d3a8}
+  .syncbtn{border-color:#5b6cff55}
+  button.half,button.double{display:none}
+  button.half,button.double{padding:2px 6px;font-size:11px;line-height:1.2;color:var(--dim)}
+  button.half:hover,button.double:hover{color:var(--text)}
+  .time.rate{min-width:44px;text-align:right}
+  /* unobtrusive: recedes until hovered or focused */
+  button.ghost{background:transparent;border-color:transparent;color:var(--dim);opacity:.75}
+  button.ghost:hover,button.ghost:focus-visible{opacity:1;border-color:var(--line);color:var(--text)}
+  button.ghost.running{opacity:1;border-color:#58d3a8aa;color:#58d3a8}
+
+  /* one search, feeding either queue */
+  .finder{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;
+    margin-top:12px;min-width:0}
+  .fheadrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+  .finder .fhead{font-size:11px;letter-spacing:1.2px;font-weight:800;color:var(--dim);margin:0;flex:1 1 auto}
+  .tempostat{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .recpanel{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:10px;margin-top:12px;min-width:0}
+  .recnote{margin:0 0 8px;font-size:11.5px;color:var(--warn);line-height:1.5;
+    background:#2a2114;border:1px solid #6f5527;border-radius:9px;padding:7px 9px}
+  #recplay{width:100%;margin:0 0 8px;height:38px;border-radius:9px;background:var(--panel2)}
+  .reclist{display:flex;flex-direction:column;gap:6px}
+  .recrow{display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;align-items:center;
+    background:var(--panel2);border:1px solid transparent;border-radius:9px;padding:7px 9px}
+  .recrow.playing{border-color:#58d3a8aa}
+  .recrow .t{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .recrow .s{color:var(--dim);font-size:11px}
+  .recrow button{padding:4px 8px;font-size:12px;background:var(--panel);border:1px solid var(--line);
+    color:var(--text);border-radius:8px;cursor:pointer}
+  .recrow button:hover{border-color:#58d3a8aa}
+  .recnow{margin:0 0 6px;font-size:11.5px;color:var(--dim)}
+  .recrow a.dl{font-size:12px;text-decoration:none;color:#58d3a8;border:1px solid #2f6b56;
+    border-radius:8px;padding:4px 8px;background:#12302a66}
+  .recrow a.dl:hover{background:#17453a}
+  @media (max-width:560px){ .recrow{grid-template-columns:1fr auto auto auto} .recrow .dur{display:none} }
+  #tempobtn{font-size:11px;padding:3px 8px}
+  .finder input{width:100%;background:var(--panel2);border:1px solid var(--line);
+    color:var(--text);border-radius:9px;padding:9px 11px;font:inherit;outline:none;min-width:0}
+  .fscopes{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .finder .scope{display:flex;align-items:center;gap:8px;font-size:11px;flex:1 1 200px;min-width:0;
+    letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
+  .finder .scope select{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);
+    color:var(--text);border-radius:9px;padding:7px 9px;font:inherit;font-size:12.5px;
+    text-transform:none;letter-spacing:0;outline:none;cursor:pointer}
+  .plist{max-height:min(58vh, 620px);overflow:auto;margin-top:8px}
+  .prow .thumb{width:34px;height:34px;border-radius:7px;object-fit:cover;flex:0 0 auto;
+    background:var(--panel2);display:flex;align-items:center;justify-content:center;
+    color:var(--dim);font-size:14px;border:1px solid var(--line)}
+  .rowlink{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
+  .rowlink:hover,.rowlink:focus-visible{color:#fff;border-bottom-color:#58d3a8aa;outline:none}
+  .qrow .t .rowlink:hover{color:#fff}
+  .deck .title .rowlink,.deck .sub .rowlink{color:inherit}
+  .deck .title .rowlink:hover,.deck .sub .rowlink:hover{color:#fff;border-bottom-color:#58d3a8aa}
+  .plopen{display:inline-flex;align-items:center;justify-content:center;width:28px;height:29px;
+    flex:0 0 auto;border:1px solid var(--line);border-radius:9px;color:var(--dim);
+    text-decoration:none;font-size:13px;background:var(--panel2)}
+  .plopen:hover{color:var(--text);border-color:#58d3a8aa}
+  .morebtn{display:block;width:100%;margin-top:6px;padding:8px;font:inherit;font-size:12px;
+    background:var(--panel2);border:1px dashed var(--line);color:var(--dim);border-radius:9px;cursor:pointer}
+  .morebtn:hover{color:var(--text);border-color:#58d3a8aa}
+  .prow{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;cursor:default}
+  .prow:hover{background:#20202a}
+  .prow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+  .prow .s{color:var(--dim);font-size:11.5px}
+  .prow .dur{flex:0 0 auto}
+  @media (max-width:1100px){ .prow .dur{display:none} }
+  .prow button{padding:4px 8px;font-size:12px}
+  .prow button[data-send="A"]{border-color:#5b6cff66}
+  .prow button[data-send="B"]{border-color:#ff7a5c66}
+  .prow button[disabled]{opacity:.45;cursor:default}
+
+  .learnbar{background:#141a17;border:1px solid #23402f;border-radius:14px;padding:12px;
+    display:grid;gap:6px}
+  .learnbar h3{margin:0;font-size:13px;color:var(--accent);letter-spacing:.4px;text-transform:uppercase}
+  .learnbar p{margin:0;color:#c8d3cc;font-size:13.5px}
+  .learnbar .when{color:var(--dim);font-size:12.5px}
+  .flash{outline:2px solid var(--warn);outline-offset:2px;border-radius:12px}
+  .steps{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .steps .dot{width:7px;height:7px;border-radius:50%;background:#33503f}
+  .steps .dot.done{background:var(--accent)}
+  .midipanel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px}
+  .midipanel[hidden]{display:none}
+  .midisel{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--dim)}
+  .midisel select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:12px;max-width:170px}
+  .midistatus{font-size:12px;color:var(--dim);margin:8px 0}
+  .midistatus.on{color:var(--accent)}
+  .midimap{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:6px}
+  .midihead{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:6px;font-size:10.5px;color:#5f5f72;
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+  .midirow{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 8px;font-size:11.5px}
+  .midirow span{flex:1;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .midirow input{width:52px;background:#141419;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:3px 5px;font-size:11.5px}
+  .midirow.learning{border-color:var(--accent)}
+  .midirow button[disabled]{opacity:.4;cursor:not-allowed}
+  .midinote{font-size:11px;color:#5f5f72;margin-top:8px}
+  .midinote code{background:#141419;border-radius:4px;padding:1px 5px}
+    /* ------------------------------------------------------------------ phone
+     A mixer has to fit on one screen: both decks share a row, the crossfader
+     sits directly under them, and the queues stay side by side. Nothing is
+     removed — labels, chips and buttons all stay — only padding, gaps and the
+     two long paragraphs shrink to make the whole board reachable. */
+  @media (max-width:900px){
+    main{padding:8px;gap:8px;padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+    .bar{padding:6px 8px;gap:6px}
+    .brand{font-size:13.5px}
+    .bar button.small{font-size:11px;padding:4px 7px;border-radius:7px;white-space:nowrap}
+
+    .decks{grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:8px;align-items:start}
+    .deck.a{grid-column:1;grid-row:1}
+    .deck.b{grid-column:2;grid-row:1}
+    /* The board first, the tour card and the MIDI panel after it. */
+    #learnbar{order:9}
+    .midipanel{order:8;margin-bottom:0}
+    .deck .bpmrow{flex-wrap:nowrap;gap:4px;overflow:hidden}
+    .deck .bpmrow .bpmchip,.deck .bpmrow .small,.deck .bpmrow .time{font-size:9.5px;padding:2px 5px}
+
+    .mid{grid-column:1 / -1;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;
+      gap:6px 8px;padding:6px 8px;border-radius:12px}
+    .mid .cross{flex:1 1 150px;min-width:120px;gap:3px}
+    .mid .cross input[type=range]{height:20px}
+    .mid > .row{gap:10px !important;align-items:center !important}
+    .meter{width:9px;height:38px;border-radius:4px}
+
+    .deck{padding:8px;gap:6px;border-radius:12px;border-top-width:2px}
+    .deckno{font-size:9.5px;letter-spacing:.8px}
+    .deck .row{gap:5px}
+    .deck .row > button{padding:4px 7px;font-size:11px;border-radius:7px}
+    .deck .art{width:34px;height:34px;border-radius:7px}
+    /* the title owns the full line and Play / Cue / Sync wrap under it: half a
+       deck is not wide enough for a name beside the buttons */
+    .deck .deckhead{row-gap:5px}
+    .deck .deckhead > div{flex:1 0 calc(100% - 40px) !important;min-width:0}
+    .deck .deckhead > button{flex:0 0 auto}
+    .deck .title{font-size:12px;white-space:normal;line-height:1.25;max-height:2.5em;
+      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .deck .sub{font-size:10px;white-space:normal;line-height:1.2;max-height:2.4em;overflow:hidden}
+    .deck .time{font-size:10px}
+    .deck .bpmchip{font-size:10px;padding:2px 5px}
+    .deck .scrub{height:18px}
+
+    .bank,.bank.fx,.faders{gap:4px}
+    .ctl{padding:4px 3px;border-radius:8px;gap:3px}
+    .ctl b{font-size:8.5px;letter-spacing:.3px}
+    .ctl output{font-size:10px}
+    .ctl input[type=range]{height:46px;width:26px}   /* wider = a real thumb target */
+    .ctl.fader input[type=range]{height:16px;width:100%}
+    .hintline{font-size:8.5px;line-height:1.1}
+
+    /* queues: still two columns, each row two lines instead of five controls wide */
+    .queues{grid-template-columns:1fr 1fr;gap:8px}
+    .qcol{padding:7px;border-radius:11px}
+    .qhead{gap:5px;margin-bottom:6px;flex-wrap:nowrap}
+    .qhead .side{font-size:9.5px;letter-spacing:.6px}
+    .qhead .qcount{font-size:9.5px}
+    .qhead button.small{padding:2px 6px;font-size:10px}
+    .qlist{max-height:34vh;gap:3px;min-height:36px}
+    .qcol .qhint{display:none}
+    .qempty{padding:8px;font-size:10.5px;line-height:1.35}
+    .qrow{grid-template-columns:11px minmax(0,1fr) auto auto;
+      grid-template-rows:auto auto;gap:2px 5px;padding:5px 6px;border-radius:8px}
+    .qrow .grip{grid-column:1;grid-row:1 / span 2;font-size:10px}
+    .qrow .t{grid-column:2;grid-row:1;font-size:11.5px;line-height:1.25}
+    .qrow .s{font-size:9.5px;line-height:1.2}
+    .qrow .dur{display:none}
+    .qrow .chip{grid-column:3;grid-row:1;justify-self:end;font-size:8.5px;padding:1px 4px}
+    .qrow .x{grid-column:4;grid-row:1;font-size:14px;padding:0 2px;line-height:1}
+    .qrow .mv{grid-column:3;grid-row:2;justify-self:end;font-size:9.5px;padding:1px 4px}
+    .qrow .dup{grid-column:4;grid-row:2;font-size:9.5px;padding:1px 4px}
+    /* two tight header rows beat a sideways-scrolling bar whose last buttons
+       are invisible: nothing in the header is ever off screen */
+    .bar{flex-wrap:wrap;gap:5px;padding:6px 8px}
+    .bar .brand{flex:none;white-space:nowrap}
+
+    /* the tour card stays, but as a two-line strip */
+    .learnbar{padding:8px 10px;gap:4px;border-radius:11px}
+    .learnbar h3{font-size:11px}
+    .learnbar p{font-size:11.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;
+      -webkit-box-orient:vertical;overflow:hidden}
+    .learnbar .when{display:none}
+    .steps{gap:5px}
+    .steps .dot{width:6px;height:6px}
+    .midipanel,.learnbar{font-size:12px}
+  }
+
+  /* Landscape on a phone: short viewport, so the faders get shorter rather
+     than pushing the crossfader off the screen. */
+  @media (max-width:900px) and (max-height:500px){
+    main{padding:6px;gap:6px}
+    .deck{padding:6px;gap:4px}
+    .deck .art{width:28px;height:28px}
+    .ctl{padding:3px 2px;gap:2px}
+    .ctl input[type=range]{height:30px}
+    .ctl.fader input[type=range]{height:13px}
+    .hintline{font-size:8px;line-height:1}
+    .meter{height:30px}
+    .bank,.bank.fx,.faders{gap:3px}
+    .bar{padding:3px 6px}
+    .bar .brand{font-size:12px}
+    .bar button.small{font-size:10px;padding:3px 6px}
+    .deck{gap:2px}
+    .deck .row{gap:3px}
+    .deck .scrub{height:12px}
+    .deck .bpmrow .bpmchip,.deck .bpmrow .small,.deck .bpmrow .time{font-size:9px;padding:1px 4px}
+  }
+
+  @media (max-width:420px){
+    .deck .row > button{padding:3px 6px;font-size:10.5px}
+    .ctl input[type=range]{height:46px;width:24px}
+    .bank{gap:3px}
+    .qhead .qcount{display:none}
+    /* below ~380 px the tempo row cannot fit on one line: wrap it rather than
+       clipping SYNC off the side of the deck */
+    .deck .bpmrow{flex-wrap:wrap;overflow:visible}
+  }
+
+footer{color:#5f5f72;font-size:12px;padding:0 14px 24px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">Hardly<span>Listening</span> · Mixer</div>
+    <span class="livechip" id="livechip" title="Shared room — everyone here controls the same decks">connecting</span>
+    <div class="roster" id="roster"></div>
+    <div class="grow"></div>
+    <button class="small" id="autodj" aria-pressed="false" title="This tab controls Auto DJ; start one deck first. Manual movement stops automation.">Auto DJ: off</button>
+    <span id="autodjstatus" role="status"></span>
+    <button class="small" id="joinaudio" hidden title="Browsers block audio until you tap">Join audio</button>
+    <a href="/"><button class="small">Library</button></a>
+    <button class="small" id="learnbtn">Learn mode</button>
+    <button class="small rec" id="recbtn">Record</button>
+    <button class="small" id="midibtn">MIDI</button>
+    <button class="small ghost" id="recentre" title="Return every control to its default — double-click for instant">Reset</button>
+    <button class="small" id="panic">Reload</button>
+  </div>
+</header>
+
+<main>
+  <section class="midipanel" id="midipanel" hidden>
+    <div class="row" style="flex-wrap:wrap;gap:8px">
+      <b style="font-size:12px;letter-spacing:.7px">MIDI</b>
+      <button class="small" id="midienable">Enable MIDI</button>
+      <label class="midisel">Out <select id="midiout"><option value="">off</option></select></label>
+      <label class="midisel">In <select id="midiin"><option value="">off</option></select></label>
+      <label class="midisel">Ch <select id="midich"></select></label>
+      <button class="small" id="midireset" title="Restore the default CC numbers">Default map</button>
+    </div>
+    <div class="midistatus" id="midistatus">MIDI is off. Enable it, choose an output, and every fader sends a CC.</div>
+    <div class="midihead"><span>Control</span><span>CC</span></div>
+    <div class="midimap" id="midimap"></div>
+    <div class="midinote">Web MIDI needs a secure context: use <code>http://127.0.0.1:8470/dj</code>
+      or an HTTPS address. A plain http:// LAN address is blocked by the browser, not by the app.</div>
+  </section>
+  <div class="learnbar" id="learnbar">
+    <h3 id="learn-title">Start here</h3>
+    <p id="learn-body">Two decks. Load a track on each, press play, then slide the crossfader.
+      Click any control to read what it does.</p>
+    <div class="when" id="learn-when"></div>
+    <div class="steps">
+      <span class="dot" data-i="0"></span><span class="dot" data-i="1"></span>
+      <span class="dot" data-i="2"></span><span class="dot" data-i="3"></span>
+      <span class="grow"></span>
+      <button class="small" id="stepnext">Next step</button>
+    </div>
+  </div>
+
+  <div class="decks" id="decks">
+    <section class="deck a" data-deck="A">
+      <div class="row"><span class="deckno" style="color:var(--a)">DECK A</span></div>
+      <div class="row deckhead">
+        <img class="art" id="artA" alt="">
+        <div style="flex:1;min-width:0">
+          <div class="title" id="titleA">No track loaded</div>
+          <div class="sub" id="subA">Pick one from the list below</div>
+        </div>
+        <button id="playA">Play</button>
+        <button id="cueA" class="small">Cue</button>
+        <button id="syncdeckA" class="small" title="Match the other deck's tempo">Sync</button>
+      </div>
+      <div class="scrubrow">
+        <div class="jog off" id="jogA" role="slider" tabindex="0" title="Drag to scrub deck A — one full turn moves 12 seconds" aria-label="Scrub deck A"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span class="jogface"><i class="jogmark"></i><b>A</b></span>
+        </div>
+        <input class="scrub" type="range" id="seekA" min="0" max="1000" value="0">
+      </div>
+      <div class="row bpmrow"><span class="time" id="timeA">0:00</span><span class="grow"></span>
+        <button class="bpmchip" id="bpmA" title="Detected tempo — click to type a value">BPM —</button>
+        <button class="small half" id="halfA" data-side="A" title="Halve the stored tempo (half-time fix)">½</button>
+        <button class="small double" id="dblA" data-side="A" title="Double the stored tempo">×2</button>
+        <button class="small syncbtn" id="syncA" title="Match tempo to the other deck">SYNC</button>
+        <span class="time rate" id="rateA">1.00×</span></div>
+
+      <div class="bank">
+        <div class="ctl" data-learn="low"><b>LOW</b><input type="range" min="-20" max="12" step="1" value="0" data-ctl="low"><output>0 dB</output><span class="hintline">Bass</span></div>
+        <div class="ctl" data-learn="mid"><b>MID</b><input type="range" min="-20" max="12" step="1" value="0" data-ctl="mid"><output>0 dB</output><span class="hintline">Vocals</span></div>
+        <div class="ctl" data-learn="high"><b>HIGH</b><input type="range" min="-20" max="12" step="1" value="0" data-ctl="high"><output>0 dB</output><span class="hintline">Hats</span></div>
+        <div class="ctl" data-learn="filter"><b>FILTER</b><input type="range" min="-100" max="100" step="1" value="0" data-ctl="filter"><output>off</output><span class="hintline">Sweep</span></div>
+      </div>
+
+      <div class="bank fx" style="grid-template-columns:1fr 1fr">
+        <div class="ctl fader" data-learn="reverb">
+          <label><span>REVERB</span><output id="revoutA">0%</output></label>
+          <input type="range" min="0" max="100" step="1" value="0" data-ctl="reverb">
+          <span class="hintline">Space</span>
+        </div>
+        <div class="ctl fader" data-learn="delay">
+          <label><span>DELAY</span><output id="deloutA">0%</output></label>
+          <input type="range" min="0" max="100" step="1" value="0" data-ctl="delay">
+          <span class="hintline">Echo</span>
+        </div>
+      </div>
+
+      <div class="faders">
+        <div class="ctl fader" data-learn="pitch">
+          <label><span>PITCH</span><output id="pitchoutA">0.0%</output></label>
+          <input type="range" min="-8" max="8" step="0.1" value="0" data-ctl="pitch">
+          <span class="hintline">Speed</span>
+        </div>
+        <div class="ctl fader" data-learn="volume">
+          <label><span>VOLUME</span><output id="voloutA">70%</output></label>
+          <input type="range" min="0" max="100" step="1" value="70" data-ctl="volume">
+          <span class="hintline">Channel</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="mid">
+      <div class="cross">
+        <b style="font-size:11px;letter-spacing:.7px;color:var(--dim)">CROSSFADER</b>
+        <input type="range" min="0" max="100" value="50" id="crossfader">
+        <div class="time" id="crossout">A 50 · B 50</div>
+      </div>
+      <div class="row" style="gap:14px;align-items:flex-end">
+        <div style="display:grid;justify-items:center;gap:4px">
+          <span class="time">A</span><div class="meter"><i id="meterA"></i></div>
+        </div>
+        <div style="display:grid;justify-items:center;gap:4px">
+          <span class="time">M</span><div class="meter"><i id="meterM"></i></div>
+        </div>
+        <div style="display:grid;justify-items:center;gap:4px">
+          <span class="time">B</span><div class="meter"><i id="meterB"></i></div>
+        </div>
+      </div>
+      <div class="cross" style="width:100%">
+        <b style="font-size:11px;letter-spacing:.7px;color:var(--dim)">MASTER</b>
+        <input type="range" min="0" max="100" value="80" id="master">
+      </div>
+    </section>
+
+    <section class="deck b" data-deck="B">
+      <div class="row"><span class="deckno" style="color:var(--b)">DECK B</span></div>
+      <div class="row deckhead">
+        <img class="art" id="artB" alt="">
+        <div style="flex:1;min-width:0">
+          <div class="title" id="titleB">No track loaded</div>
+          <div class="sub" id="subB">Pick one from the list below</div>
+        </div>
+        <button id="playB">Play</button>
+        <button id="cueB" class="small">Cue</button>
+        <button id="syncdeckB" class="small" title="Match the other deck's tempo">Sync</button>
+      </div>
+      <div class="scrubrow">
+        <div class="jog off" id="jogB" role="slider" tabindex="0" title="Drag to scrub deck B — one full turn moves 12 seconds" aria-label="Scrub deck B"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span class="jogface"><i class="jogmark"></i><b>B</b></span>
+        </div>
+        <input class="scrub" type="range" id="seekB" min="0" max="1000" value="0">
+      </div>
+      <div class="row bpmrow"><span class="time" id="timeB">0:00</span><span class="grow"></span>
+        <button class="bpmchip" id="bpmB" title="Detected tempo — click to type a value">BPM —</button>
+        <button class="small half" id="halfB" data-side="B" title="Halve the stored tempo (half-time fix)">½</button>
+        <button class="small double" id="dblB" data-side="B" title="Double the stored tempo">×2</button>
+        <button class="small syncbtn" id="syncB" title="Match tempo to the other deck">SYNC</button>
+        <span class="time rate" id="rateB">1.00×</span></div>
+
+      <div class="bank">
+        <div class="ctl" data-learn="low"><b>LOW</b><input type="range" min="-20" max="12" step="1" value="0" data-ctl="low"><output>0 dB</output><span class="hintline">Bass</span></div>
+        <div class="ctl" data-learn="mid"><b>MID</b><input type="range" min="-20" max="12" step="1" value="0" data-ctl="mid"><output>0 dB</output><span class="hintline">Vocals</span></div>
+        <div class="ctl" data-learn="high"><b>HIGH</b><input type="range" min="-20" max="12" step="1" value="0" data-ctl="high"><output>0 dB</output><span class="hintline">Hats</span></div>
+        <div class="ctl" data-learn="filter"><b>FILTER</b><input type="range" min="-100" max="100" step="1" value="0" data-ctl="filter"><output>off</output><span class="hintline">Sweep</span></div>
+      </div>
+
+      <div class="bank fx" style="grid-template-columns:1fr 1fr">
+        <div class="ctl fader" data-learn="reverb">
+          <label><span>REVERB</span><output id="revoutB">0%</output></label>
+          <input type="range" min="0" max="100" step="1" value="0" data-ctl="reverb">
+          <span class="hintline">Space</span>
+        </div>
+        <div class="ctl fader" data-learn="delay">
+          <label><span>DELAY</span><output id="deloutB">0%</output></label>
+          <input type="range" min="0" max="100" step="1" value="0" data-ctl="delay">
+          <span class="hintline">Echo</span>
+        </div>
+      </div>
+
+      <div class="faders">
+        <div class="ctl fader" data-learn="pitch">
+          <label><span>PITCH</span><output id="pitchoutB">0.0%</output></label>
+          <input type="range" min="-8" max="8" step="0.1" value="0" data-ctl="pitch">
+          <span class="hintline">Speed</span>
+        </div>
+        <div class="ctl fader" data-learn="volume">
+          <label><span>VOLUME</span><output id="voloutB">70%</output></label>
+          <input type="range" min="0" max="100" step="1" value="70" data-ctl="volume">
+          <span class="hintline">Channel</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="queues">
+    <section class="qcol" data-side="A" aria-label="Deck A preload queue">
+      <div class="qhead">
+        <p class="side">DECK A · UP NEXT</p>
+        <span class="qcount" id="qcA">0 tracks</span>
+        <button class="small" id="qclearA" type="button">Clear</button>
+      </div>
+      <div class="qlist" id="qA"></div>
+      <p class="qhint">Queued tracks load ahead of time, so swapping one in is instant.
+        Drag the handle to reorder, click a row to load it.</p>
+    </section>
+    <section class="qcol" data-side="B" aria-label="Deck B preload queue">
+      <div class="qhead">
+        <p class="side">DECK B · UP NEXT</p>
+        <span class="qcount" id="qcB">0 tracks</span>
+        <button class="small" id="qclearB" type="button">Clear</button>
+      </div>
+      <div class="qlist" id="qB"></div>
+      <p class="qhint">Queued tracks load ahead of time, so swapping one in is instant.
+        Drag the handle to reorder, click a row to load it.</p>
+    </section>
+  </div>
+
+  <section class="finder" aria-label="Search tracks">
+    <div class="fheadrow">
+      <p class="fhead">FIND A TRACK — SEND IT TO A OR B</p>
+      <span class="tempostat" id="fcount"></span>
+      <span class="tempostat" id="tempostat"></span>
+      <button class="small ghost" id="titlbtn" title="Replace numeric titles with the tags already inside each file">Fix number titles</button>
+      <button class="small ghost" id="tempobtn" title="Detect BPM for tracks that have none yet">Analyse tempos</button>
+    </div>
+    <input id="qsearch" placeholder="Search your library — title, artist, album">
+    <div class="fscopes">
+      <label class="scope">Scope <select id="scopeMain" aria-label="Search scope"><option value="repository">Repository</option><option value="personal">Your playlists</option></select></label>
+      <label class="scope">Playlist <select id="plselMain"><option value="">Everything in scope</option></select></label>
+      <a class="plopen" id="plopen" hidden target="_blank" rel="noopener" title="Open this playlist in the library">↗</a>
+    </div>
+    <div class="plist" id="fresults"></div>
+  </section>
+
+  <section class="recpanel" id="recpanel" hidden aria-label="Recordings in this tab">
+    <div class="fheadrow">
+      <p class="fhead">RECORDINGS — THIS TAB ONLY</p>
+      <span class="tempostat" id="recstat"></span>
+      <button class="small ghost" id="recclear" title="Drop every recording kept in this tab">Clear all</button>
+    </div>
+    <p class="recnote" id="recnote">Your mix is held in this browser tab, not on the server and not on
+      disk. Download anything you want to keep — reloading, closing the tab or leaving the page
+      discards it all.</p>
+    <p class="recnow" id="recnow">Pick Play on a take to review it here — drag the bar to scrub.</p>
+    <audio id="recplay" controls preload="metadata"></audio>
+    <div class="reclist" id="reclist"></div>
+  </section>
+</main>
+
+<footer>
+  Headphone cue (splitting one deck to headphones) needs a second output device and
+  is not something a browser can do — use a real mixer or Mixxx for that.
+</footer>
+
+<audio id="audioA" preload="metadata"></audio>
+<audio id="audioB" preload="metadata"></audio>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+// ---------------------------------------------------------------- explanation
+const EXPLAIN = {
+  low:   {title:"LOW — bass", body:"Boosts or cuts bass under about 150 Hz: kick drum, bassline, the weight of the track.",
+          when:"To stop two kick drums fighting during a mix, pull LOW down on the incoming deck and bring it back after the switch."},
+  mid:   {title:"MID — body and vocals", body:"Around 1 kHz: vocals, snares, most melodic instruments.",
+          when:"Cut a little on one track when both have busy vocals; tiny cuts sound cleaner than big boosts."},
+  high:  {title:"HIGH — cymbals and air", body:"Above roughly 8 kHz: hi-hats, shakers, the sparkle of a track.",
+          when:"Raise slightly to keep a track alive when its bass is cut, or cut it if the mix feels harsh."},
+  filter:{title:"FILTER — one-knob sweep", body:"Centre is off. Turn left to remove highs (things get dull and underwater); turn right to remove bass (thin and tense).",
+          when:"The classic build: sweep the filter down before a drop, then snap it back to centre on the beat."},
+  pitch: {title:"PITCH — speed", body:"Changes playback speed, and with it the tempo. +2% is about +2 BPM at 100 BPM.",
+          when:"Match the two decks' tempo before you mix. On a computer this also changes the key, exactly like a turntable."},
+  volume:{title:"VOLUME — channel fader", body:"The level of this deck before the crossfader.",
+          when:"Set both to about 70% and mix with the crossfader. If you push channels up and the crossfader too, it clips."},
+  cross: {title:"CROSSFADER", body:"Fades between deck A and deck B. Centre plays both.",
+          when:"Ninety percent of your mixing happens here. Move it slowly through the point where both tracks are playing."},
+  reverb:{title:"REVERB — space", body:"Sends the deck through a synthetic room. Small amounts put the track in a space; large amounts turn it into a wash.",
+          when:"Use it in the last bar before a drop, then snap it back — it makes the transition feel intentional instead of abrupt."},
+  delay: {title:"DELAY — echo", body:"Repeats what it hears, getting quieter each time. It is a timed echo, not a reverb.",
+          when:"Nudge it up on the last drum hit before a switch; leave it at zero the rest of the time or the mix turns to mud."},
+  master:{title:"MASTER", body:"The final level of everything you hear and record.",
+          when:"If the meter is into yellow/red, turn this down a little — the recording clips at the same point."},
+};
+
+function explain(key){
+  const e = EXPLAIN[key]; if (!e) return;
+  $("#learn-title").textContent = e.title;
+  $("#learn-body").textContent = e.body;
+  $("#learn-when").textContent = e.when;
+}
+
+// ---------------------------------------------------------------- audio graph
+let ctx = null;
+const decks = {};
+
+function makeImpulse(seconds = 2.2, decay = 2.6){
+  const rate = ctx.sampleRate, len = Math.floor(rate * seconds);
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let c = 0; c < 2; c++){
+    const data = buf.getChannelData(c);
+    for (let i = 0; i < len; i++)
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
+function buildDeck(id){
+  const audio = $("#audio" + id);
+  const src = ctx.createMediaElementSource(audio);
+  const trim = ctx.createGain();
+  const low = ctx.createBiquadFilter();  low.type = "lowshelf";  low.frequency.value = 150;
+  const mid = ctx.createBiquadFilter();  mid.type = "peaking";   mid.frequency.value = 1000; mid.Q.value = 0.8;
+  const high = ctx.createBiquadFilter(); high.type = "highshelf"; high.frequency.value = 8000;
+  const hpf = ctx.createBiquadFilter();  hpf.type = "highpass";  hpf.frequency.value = 20;
+  const lpf = ctx.createBiquadFilter();  lpf.type = "lowpass";   lpf.frequency.value = 21000;
+  const chan = ctx.createGain();
+  const xfade = ctx.createGain();
+  const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+  const buf = new Float32Array(analyser.fftSize);
+
+  // FX sends, parallel to the dry signal: dry stays 100%, sends add on top.
+  const revSend = ctx.createGain(); revSend.gain.value = 0;
+  const convolver = ctx.createConvolver(); convolver.buffer = makeImpulse();
+  const revWet = ctx.createGain(); revWet.gain.value = 1;
+  const delSend = ctx.createGain(); delSend.gain.value = 0;
+  const delay = ctx.createDelay(1.0); delay.delayTime.value = 0.28;
+  const feedback = ctx.createGain(); feedback.gain.value = 0.32;
+  const delWet = ctx.createGain(); delWet.gain.value = 1;
+
+  src.connect(trim); trim.connect(low); low.connect(mid); mid.connect(high);
+  high.connect(hpf); hpf.connect(lpf); lpf.connect(chan);
+  chan.connect(xfade); xfade.connect(master);
+  chan.connect(analyser);
+
+  chan.connect(revSend); revSend.connect(convolver); convolver.connect(revWet);
+  revWet.connect(xfade);
+  chan.connect(delSend); delSend.connect(delay);
+  delay.connect(feedback); feedback.connect(delay);
+  delay.connect(delWet); delWet.connect(xfade);
+
+  decks[id] = {audio, src, trim, low, mid, high, hpf, lpf, chan, xfade, analyser, buf,
+               revSend, delSend, delay, feedback, rate: 1, track: null};
+}
+
+let master, masterAnalyser, recorderDest, recorder = null, recChunks = [];
+
+function bootAudio(){
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  master = ctx.createGain();
+  masterAnalyser = ctx.createAnalyser(); masterAnalyser.fftSize = 512;
+  recorderDest = ctx.createMediaStreamDestination();
+  master.connect(masterAnalyser);
+  master.connect(ctx.destination);
+  master.connect(recorderDest);
+  buildDeck("A"); buildDeck("B");
+  applyMaster();
+  applyCross();
+  requestAnimationFrame(meters);
+}
+
+// ---------------------------------------------------------------- controls
+function dbLabel(v){ return (v > 0 ? "+" : "") + v + " dB"; }
+
+function applyDeck(id){
+  const d = decks[id]; if (!d) return;
+  const deck = document.querySelector(`.deck[data-deck="${id}"]`);
+  const get = k => +deck.querySelector(`[data-ctl="${k}"]`).value;
+
+  d.low.gain.value = get("low");
+  d.mid.gain.value = get("mid");
+  d.high.gain.value = get("high");
+  d.chan.gain.value = Math.pow(get("volume") / 100, 1.6) * 0.9;
+  d.audio.playbackRate = 1 + get("pitch") / 100;
+
+  d.revSend.gain.value = get("reverb") / 100 * 0.9;
+  d.delSend.gain.value = get("delay") / 100 * 0.8;
+
+  const f = get("filter") / 100;               // -1 .. 1
+  if (f < 0) { d.lpf.frequency.value = 21000 * Math.pow(220 / 21000, -f); d.hpf.frequency.value = 20; }
+  else if (f > 0) { d.lpf.frequency.value = 21000; d.hpf.frequency.value = 20 * Math.pow(1800 / 20, f); }
+  else { d.lpf.frequency.value = 21000; d.hpf.frequency.value = 20; }
+
+  deck.querySelectorAll("[data-ctl]").forEach(input => {
+    const out = input.closest(".ctl").querySelector("output");
+    if (!out) return;
+    if (input.dataset.ctl === "filter"){
+      const v = +input.value;
+      out.textContent = v === 0 ? "off" : (v < 0 ? `LP ${Math.round(21000 * Math.pow(220/21000, -v/100))} Hz`
+                                                   : `HP ${Math.round(20 * Math.pow(1800/20, v/100))} Hz`);
+    } else if (input.dataset.ctl === "volume"){
+      out.textContent = input.value + "%";
+    } else if (input.dataset.ctl === "reverb" || input.dataset.ctl === "delay"){
+      out.textContent = input.value + "%";
+    } else if (input.dataset.ctl === "pitch"){
+      out.textContent = (input.value > 0 ? "+" : "") + (+input.value).toFixed(1) + "%";
+    } else {
+      out.textContent = dbLabel(+input.value);
+    }
+  });
+  $("#pitchout" + id).textContent = (get("pitch") > 0 ? "+" : "") + get("pitch").toFixed(1) + "%";
+  $("#volout" + id).textContent = get("volume") + "%";
+  paintBpm(id);
+}
+
+// ---------------------------------------------------------------- tempo
+// The stored tempo is the track's own BPM (analysed offline). What you hear is
+// that times the deck's playback rate, so the readout follows the pitch fader
+// and SYNC simply solves for the rate that matches the other deck.
+const PITCH_LIMIT = 8;                 // the pitch fader's range, in percent
+
+function baseBpm(id){
+  const deck = decks[id];
+  const track = deck && deck.track;
+  const value = track && Number(track.bpm);
+  return value && value > 20 ? value : 0;
+}
+function liveBpm(id){
+  const deck = decks[id];
+  const base = baseBpm(id);
+  if (!base || !deck) return 0;
+  return base * (deck.audio.playbackRate || 1);
+}
+function paintBpm(id){
+  const deck = decks[id];
+  if (!deck) return;
+  const base = baseBpm(id), live = liveBpm(id);
+  const chip = $("#bpm" + id);
+  chip.dataset.known = base ? "1" : "0";
+  chip.textContent = base ? `${live.toFixed(1)} BPM` : "BPM —";
+  chip.title = base
+    ? `${base.toFixed(1)} BPM at 0% · click to halve, double or type a tempo`
+    : "No tempo stored for this track — analyse it in the Library, or type one";
+  $("#rate" + id).textContent = (deck.audio.playbackRate || 1).toFixed(2) + "×";
+  $("#half" + id).style.display = base ? "inline-block" : "none";
+  $("#dbl" + id).style.display = base ? "inline-block" : "none";
+}
+
+// What SYNC should do, as a pure calculation: the pitch percent that matches
+// `target` BPM from a track whose own tempo is `mine`, and whether that fits the
+// fader's ±PITCH_LIMIT range at all.
+function syncPercent(target, mine, limit = PITCH_LIMIT){
+  if (!target || !mine) return { percent: 0, inRange: false };
+  const percent = (target / mine - 1) * 100;
+  return { percent: Math.round(percent * 10) / 10, inRange: Math.abs(percent) <= limit + 1e-9 };
+}
+
+function syncDeck(id){
+  const other = id === "A" ? "B" : "A";
+  const target = liveBpm(other);
+  const mine = baseBpm(id);
+  if (!mine){ toastQueue(id, "no tempo for this track"); return false; }
+  if (!target){ toastQueue(id, `load a track on ${other} first`); return false; }
+  const { percent, inRange } = syncPercent(target, mine);
+  if (!inRange){
+    // Leave the fader where it is: moving it half way and stopping is worse than
+    // saying plainly that the decks are too far apart for a pitch-fader match.
+    toastQueue(id, `${percent > 0 ? "+" : ""}${percent.toFixed(1)}% needed — outside the ±${PITCH_LIMIT}% fader`);
+    return false;
+  }
+  const pitch = document.querySelector(`.deck[data-deck="${id}"] [data-ctl="pitch"]`);
+  pitch.value = String(percent);
+  pitch.dispatchEvent(new Event("input", { bubbles: true }));
+  paintBpm(id);
+  $("#syncdeck" + id).classList.add("on");
+  return true;
+}
+
+// Correcting a stored tempo is a shared-metadata write, so it goes through the
+// admin route rather than being kept in the browser.
+async function correctBpm(id, action, value){
+  const deck = decks[id];
+  const track = deck && deck.track;
+  if (!track) return;
+  try {
+    const res = await fetch(`/api/track/${track.id}/bpm`, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value == null ? { action } : { bpm: value })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "could not save tempo");
+    track.bpm = data.bpm || 0;
+    // keep the library row in step so the queue/search labels agree
+    const row = library.find(t => t.id === track.id);
+    if (row) row.bpm = track.bpm;
+    paintBpm("A"); paintBpm("B"); renderQueues(); renderResults();
+  } catch (e) {
+    toastQueue(id, e.message);
+  }
+}
+
+$("#syncdeckA").onclick = () => syncDeck("A");
+$("#syncdeckB").onclick = () => syncDeck("B");
+$("#syncA").onclick = () => syncDeck("A");
+$("#syncB").onclick = () => syncDeck("B");
+for (const side of ["A", "B"]){
+  $("#bpm" + side).onclick = () => {
+    const deck = decks[side];
+    if (!deck || !deck.track) return;
+    const typed = prompt("Tempo for this track (BPM). Leave it empty to clear.", baseBpm(side) || "");
+    if (typed === null) return;
+    const value = Number(typed);
+    correctBpm(side, value > 0 ? "" : "clear", value > 0 ? value : null);
+  };
+  $("#half" + side).onclick = () => correctBpm(side, "halve");
+  $("#dbl" + side).onclick = () => correctBpm(side, "double");
+}
+
+function applyCross(){
+  const x = +$("#crossfader").value / 100;
+  const a = Math.cos(x * Math.PI / 2), b = Math.sin(x * Math.PI / 2);
+  if (decks.A) decks.A.xfade.gain.value = a;
+  if (decks.B) decks.B.xfade.gain.value = b;
+  // Show the fader POSITION, not the equal-power gains: at centre both gains are
+  // 0.71, which reads like a bug to anyone who has not met the curve yet.
+  $("#crossout").textContent = `A ${Math.round((1 - x) * 100)} · B ${Math.round(x * 100)}`;
+}
+
+function applyMaster(){
+  const v = +$("#master").value / 100;
+  if (master) master.gain.value = Math.pow(v, 1.6);
+}
+
+// ---------------------------------------------------------------- meters
+function meters(){
+  const draw = (analyser, buf, el) => {
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const rms = Math.sqrt(sum / buf.length);
+    const pct = Math.min(100, Math.round(rms * 320));
+    el.style.height = pct + "%";
+    return rms;
+  };
+  if (decks.A) draw(decks.A.analyser, decks.A.buf, $("#meterA"));
+  if (decks.B) draw(decks.B.analyser, decks.B.buf, $("#meterB"));
+  if (masterAnalyser) draw(masterAnalyser, new Float32Array(masterAnalyser.fftSize), $("#meterM"));
+  requestAnimationFrame(meters);
+}
+
+// ---------------------------------------------------------------- transport
+const fmt = s => {
+  if (!isFinite(s)) return "0:00";
+  s = Math.max(0, Math.floor(s));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+function loadTrack(id, track){
+  bootAudio();
+  const d = decks[id];
+  d.track = track;
+  // A preloaded queue item plays from memory, so cueing it is instant.
+  const pre = media.get(track.id);
+  d.audio.preload = "auto";
+  d.audio.src = pre && pre.url ? pre.url : `/api/track/${track.id}/audio`;
+  d.audio.load();
+  $("#title" + id).innerHTML = link(track.title || "Untitled", trackHref(track));
+  $("#sub" + id).innerHTML = [link(track.artist_name, artistHref(track)),
+    track.album ? link(track.album, trackHref(track)) : ""].filter(Boolean).join(" · ");
+  const art = $("#art" + id);
+  art.src = track.artwork || "";
+  art.style.visibility = track.artwork ? "visible" : "hidden";
+  $("#time" + id).textContent = "0:00";
+  $("#seek" + id).value = 0;
+  $("#play" + id).textContent = "Play";
+  paintBpm(id);
+  publishDeck(id, {track_id: track.id, playing: false, position: 0});
+  if (step === 0) { step = 1; showStep(); }
+}
+
+// ---------------------------------------------------------------- jog discs
+// A small record you drag with the mouse (or a thumb on a tablet). One full turn
+// moves the playhead a fixed number of seconds, which is how a digital jog wheel
+// behaves; the disc turns with your hand so the movement reads as vinyl, not as a
+// slider. Seeking is live — playback carries on from wherever you leave it.
+const JOG_TURN_SECONDS = 12;
+const JOG_TURNS = new Map();          // deck id -> radians turned by hand so far
+
+// Shortest signed difference between two angles, so crossing the ±180° seam does
+// not jump the playhead forward by most of a turn.
+function jogWrap(delta){
+  while (delta > Math.PI) delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;
+  return delta;
+}
+function jogSeconds(radians){ return (radians / (2 * Math.PI)) * JOG_TURN_SECONDS; }
+function jogTarget(start, radians, duration){
+  const end = duration || 0;
+  return Math.max(0, Math.min(end, start + jogSeconds(radians)));
+}
+
+function paintJog(id, radians, audio){
+  const disc = $("#jog" + id);
+  if (!disc) return;
+  const face = disc.querySelector(".jogface");
+  if (face) face.style.transform = `rotate(${((radians * 180) / Math.PI).toFixed(1)}deg)`;
+  const ready = !!(audio && audio.duration && !Number.isNaN(audio.duration));
+  disc.classList.toggle("off", !ready);
+  const now = ready ? audio.currentTime || 0 : 0;
+  const seek = $("#seek" + id);
+  if (seek && ready) seek.value = (now / audio.duration) * 1000;
+  if (ready) $("#time" + id).textContent = fmt(now) + " / " + fmt(audio.duration);
+  disc.setAttribute("aria-valuenow", ready ? Math.round((now / audio.duration) * 100) : 0);
+}
+
+function wireJog(id){
+  const disc = $("#jog" + id);
+  if (!disc) return;
+  const audio = () => $("#audio" + id);
+  const angleOf = event => {
+    const box = disc.getBoundingClientRect();
+    return Math.atan2(event.clientY - (box.top + box.height / 2),
+                      event.clientX - (box.left + box.width / 2));
+  };
+  let dragging = false, lastAngle = 0, baseTime = 0, baseTurned = 0;
+  let turned = JOG_TURNS.get(id) || 0;
+  const remember = () => JOG_TURNS.set(id, turned);
+
+  disc.addEventListener("pointerdown", event => {
+    const a = audio();
+    if (!a || !a.duration) return;               // nothing loaded: a spin would do nothing
+    bootAudio();
+    dragging = true;
+    lastAngle = angleOf(event);
+    baseTime = a.currentTime || 0;
+    baseTurned = turned;                 // each drag measures from where it started
+    disc.setPointerCapture?.(event.pointerId);
+    disc.classList.add("dragging");
+    event.preventDefault();
+  });
+  disc.addEventListener("pointermove", event => {
+    if (!dragging) return;
+    const a = audio();
+    const angle = angleOf(event);
+    const delta = jogWrap(angle - lastAngle);
+    lastAngle = angle;
+    turned += delta;
+    remember();
+    if (a && a.duration) a.currentTime = jogTarget(baseTime, turned - baseTurned, a.duration);
+    paintJog(id, turned, a);
+  });
+  const release = event => {
+    if (!dragging) return;
+    dragging = false;
+    disc.classList.remove("dragging");
+    if (disc.hasPointerCapture?.(event.pointerId)) disc.releasePointerCapture(event.pointerId);
+  };
+  disc.addEventListener("pointerup", release);
+  disc.addEventListener("pointercancel", release);
+  // Keyboard lives on the same disc: arrows nudge a second, Shift ten, Home rewinds.
+  disc.addEventListener("keydown", event => {
+    const a = audio();
+    if (!a || !a.duration) return;
+    const step = event.shiftKey ? 10 : 1;
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft"){
+      const dir = event.key === "ArrowRight" ? 1 : -1;
+      a.currentTime = Math.max(0, Math.min(a.duration, (a.currentTime || 0) + dir * step));
+      turned += dir * 2 * Math.PI * (step / JOG_TURN_SECONDS);
+      remember();
+    } else if (event.key === "Home"){
+      a.currentTime = 0;
+      turned = 0;
+      remember();
+    } else return;
+    paintJog(id, turned, a);
+    event.preventDefault();
+  });
+}
+
+function wireDeck(id){
+  const d = () => decks[id];
+  $("#play" + id).onclick = async () => {
+    audioJoined = true; bootAudio(); await ctx.resume();
+    const a = d().audio;
+    if (a.paused) { await a.play(); $("#play" + id).textContent = "Pause"; }
+    else { a.pause(); $("#play" + id).textContent = "Play"; }
+  };
+  $("#cue" + id).onclick = () => { bootAudio(); const a = d().audio; a.currentTime = 0;
+    if (a.paused) a.play().then(() => $("#play" + id).textContent = "Pause"); };
+  const audio = $("#audio" + id);
+  audio.addEventListener("timeupdate", () => {
+    $("#time" + id).textContent = fmt(audio.currentTime) + " / " + fmt(audio.duration);
+    if (audio.duration) $("#seek" + id).value = (audio.currentTime / audio.duration) * 1000;
+  });
+  audio.addEventListener("ended", () => { $("#play" + id).textContent = "Play"; });
+  audio.addEventListener("loadedmetadata", () => {
+    $("#time" + id).textContent = "0:00 / " + fmt(audio.duration);
+  });
+  $("#seek" + id).addEventListener("input", e => {
+    if (audio.duration) audio.currentTime = (e.target.value / 1000) * audio.duration;
+  });
+  document.querySelectorAll(`.deck[data-deck="${id}"] [data-ctl]`).forEach(input => {
+    input.addEventListener("input", () => { bootAudio(); applyDeck(id); });
+  });
+  // The disc follows normal playback too, so it always shows where the record is.
+  audio.addEventListener("loadedmetadata", () => paintJog(id, jogTurned(id), audio));
+  audio.addEventListener("timeupdate", () => paintJog(id, jogTurned(id), audio));
+  wireJog(id);
+}
+
+// The disc's own angle lives in its closure; playback repaints read it back here.
+function jogTurned(id){ return JOG_TURNS.get(id) || 0; }
+
+// ---------------------------------------------------------------- library
+let library = [];
+let playlists = [];
+async function loadLibrary(){
+  try {
+    const res = await fetch("/api/library");
+    const data = await res.json();
+    library = data.tracks || [];
+    playlists = data.playlists || [];
+  } catch (e) { library = []; playlists = []; }
+  try {
+    const res = await fetch("/api/listening/saves", { credentials: "same-origin" });
+    if (res.ok){
+      const s = await res.json();
+      personal = {
+        tracks: new Set((s.tracks || []).map(Number)),
+        playlists_set: new Set((s.playlists || []).map(String)),
+        playlist_tracks: s.playlist_tracks || []
+      };
+    }
+  } catch (e) { /* signed out or unavailable: Repository scope still works */ }
+  fillScopes();
+  renderQueues();
+  renderResults();
+  tempoMeter();
+  paintTitleButton();
+  for (const side of SIDES) if (lastDecks[side]) applyRemoteDeck(side, lastDecks[side]);
+}
+
+// One search feeds both decks; each deck keeps its own ordered queue, and every
+// queued track is fetched into memory ahead of time so cueing it is a pointer
+// swap instead of a network wait.
+const SIDES = ["A", "B"];
+const MAX_QUEUE = 12;
+const queues = { A: [], B: [] };
+const media = new Map();          // track id -> {state, pct, url, size, ctrl}
+let personal = { tracks: new Set(), playlists_set: new Set(), playlist_tracks: [] };
+
+function trackById(id){ return library.find(t => t.id === +id); }
+
+// Every name in the mixer links back into the library page, in the scope the
+// finder is showing. New tab on purpose: a same-tab navigation would stop the
+// mix mid-set.
+const LINK_ATTRS = 'target="_blank" rel="noopener"';
+function browseScope(){ return $("#scopeMain").value === "personal" ? "mine" : "shared"; }
+function browseHref(params){
+  const query = new URLSearchParams({ scope: browseScope(), ...params });
+  return `/?${query.toString()}`;
+}
+function trackHref(t){
+  // An album_id is URL-safe; a synthesized artist+title key is not, so those
+  // tracks link by id and the library page resolves the album itself.
+  return browseHref(t.album_id ? { album: t.album_id, track: t.id } : { track: t.id });
+}
+function artistHref(t){
+  return t.artist_name ? browseHref({ artist: t.artist_name }) : "";
+}
+// Text that is a link when a destination exists, plain text otherwise.
+function link(text, href){
+  return href ? `<a class="rowlink" href="${esc(href)}" ${LINK_ATTRS}>${esc(text)}</a>` : esc(text);
+}
+
+function fillScopes(){
+  const el = $("#plselMain");
+  const scope = $("#scopeMain").value;
+  const keep = el.value;
+  const pool = scope === "personal"
+    ? playlists.filter(p => personal.playlists_set.has(String(p.id)))
+    : playlists;
+  el.innerHTML = '<option value="">Everything in scope</option>' + pool.map(p =>
+    `<option value="${p.id}">${esc(p.title)}</option>`).join("");
+  el.value = pool.some(p => String(p.id) === keep) ? keep : "";
+  paintPlaylistLink();
+}
+
+// The selected playlist is a real page, so its name doubles as the way there.
+function paintPlaylistLink(){
+  const open = $("#plopen");
+  const pid = $("#plselMain").value;
+  open.hidden = !pid;
+  if (pid) open.href = browseHref({ playlist: pid });
+}
+
+function inScope(){
+  const pid = $("#plselMain").value;
+  if ($("#scopeMain").value === "personal"){
+    const saved = personal.tracks;
+    if (pid) return library.filter(t => personal.playlist_tracks.some(l =>
+      String(l.playlist_id) === pid && l.track_id === t.id));
+    return library.filter(t => saved.has(t.id));
+  }
+  return pid ? library.filter(t => (t.playlists || []).some(p => String(p.id) === pid)) : library;
+}
+
+// ------------------------------------------------------------ queue state
+function loadQueues(){
+  for (const side of SIDES){
+    let ids = [];
+    try { ids = JSON.parse(localStorage.getItem("hl.queue" + side) || "[]"); } catch (e) { ids = []; }
+    queues[side] = (Array.isArray(ids) ? ids : []).filter(id => Number.isFinite(id)).slice(0, MAX_QUEUE);
+  }
+}
+function saveQueues(){
+  for (const side of SIDES){
+    try { localStorage.setItem("hl.queue" + side, JSON.stringify(queues[side])); } catch (e) { /* private mode */ }
+  }
+}
+
+function stateOf(id){
+  const m = media.get(id);
+  return m ? m.state : "waiting";
+}
+const CHIP = { waiting: "queued", loading: "preloading", ready: "ready", failed: "no preload" };
+
+function chipText(id){
+  const m = media.get(id);
+  if (!m) return CHIP.waiting;
+  if (m.state === "loading") return m.pct == null ? "preloading" : `preloading ${Math.round(m.pct * 100)}%`;
+  return CHIP[m.state] || CHIP.waiting;
+}
+
+function rowHtml(side, id){
+  const t = trackById(id);
+  if (!t) return "";
+  const st = stateOf(id);
+  const pct = st === "ready" ? 100 : st === "failed" ? 100 : (media.get(id)?.pct ?? 0) * 100;
+  return `<div class="qrow${decks[side] && decks[side].track && decks[side].track.id === t.id ? " current" : ""}"
+      data-id="${t.id}" data-side="${side}" data-state="${st}" title="${esc(t.title)}">
+      <span class="grip" role="button" aria-label="Drag to reorder">⠿</span>
+      <div class="t">${link(t.title || "Untitled", trackHref(t))}<div class="s">${link(t.artist_name || "", artistHref(t))}${t.album ? " · " + link(t.album, trackHref(t)) : ""}</div></div>
+      <span class="dur">${t.bpm ? Math.round(+t.bpm) + " BPM" : "—"}</span>
+      <span class="chip">${chipText(t.id)}</span>
+      <button class="mv" data-copy="${side}" data-id="${t.id}" title="Copy to deck ${other(side)}'s queue"
+        aria-label="Copy to deck ${other(side)}">→${other(side)}</button>
+      <button class="dup" data-dup="${side}" data-id="${t.id}" title="Queue this track again"
+        aria-label="Duplicate in this queue">⧉</button>
+      <button class="x" data-remove="${side}" data-id="${t.id}" aria-label="Remove from queue">×</button>
+      <span class="bar"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></span>
+    </div>`;
+}
+
+function renderQueues(){
+  for (const side of SIDES){
+    const list = $("#q" + side);
+    const ids = queues[side];
+    list.innerHTML = ids.length
+      ? ids.map(id => rowHtml(side, id)).join("")
+      : `<div class="qempty">Nothing queued yet. Search below and send a track to ${side};
+           it downloads in the background, so swapping it in is instant.</div>`;
+    updateCount(side);
+  }
+}
+
+// The header line is live too: a queue that is still downloading says so.
+function updateCount(side){
+  const ids = queues[side];
+  if (!ids.length){ $("#qc" + side).textContent = "0 tracks"; return; }
+  const ready = ids.filter(id => stateOf(id) === "ready").length;
+  const loading = ids.filter(id => stateOf(id) === "loading").length;
+  const failed = ids.filter(id => stateOf(id) === "failed").length;
+  const bits = [`${ids.length} track${ids.length === 1 ? "" : "s"}`, `${ready} ready`];
+  if (loading) bits.push(`${loading} preloading`);
+  if (failed) bits.push(`${failed} no preload`);
+  $("#qc" + side).textContent = bits.join(" · ");
+}
+
+// ------------------------------------------------------------ preloading
+// Two downloads at a time keeps a mix from stalling the page while still
+// fetching the queue in the order the user arranged it.
+const MAX_PARALLEL = 2;
+let activeLoads = 0;
+
+function wantedOrder(){
+  return SIDES.flatMap(side => queues[side]);
+}
+
+function ensureMedia(id){
+  if (!media.has(id)) media.set(id, { state: "waiting", pct: null, url: null, size: 0, ctrl: null });
+  return media.get(id);
+}
+
+function pump(){
+  while (activeLoads < MAX_PARALLEL){
+    const id = wantedOrder().find(x => (media.get(x) || { state: "waiting" }).state === "waiting");
+    if (id == null) return;
+    fetchTrack(id);
+  }
+}
+
+function paintRow(id){
+  document.querySelectorAll(`.qrow[data-id="${id}"]`).forEach(row => {
+    const m = media.get(id) || { state: "waiting", pct: null };
+    row.dataset.state = m.state;
+    row.querySelector(".chip").textContent = chipText(id);
+    const pct = m.state === "failed" ? 100 : m.state === "ready" ? 100 : (m.pct ?? 0) * 100;
+    row.querySelector(".bar i").style.width = Math.max(0, Math.min(100, pct)) + "%";
+  });
+  if (queues.A.includes(+id)) updateCount("A");
+  if (queues.B.includes(+id)) updateCount("B");
+}
+
+async function fetchTrack(id){
+  const m = ensureMedia(id);
+  if (m.state !== "waiting") return;
+  m.state = "loading"; m.pct = 0; activeLoads++;
+  paintRow(id);
+  const ctrl = new AbortController(); m.ctrl = ctrl;
+  let lastPaint = 0;
+  try {
+    const res = await fetch(`/api/track/${id}/audio`, { signal: ctrl.signal, credentials: "same-origin" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const len = Number(res.headers.get("content-length")) || 0;
+    let blob;
+    if (res.body && res.body.getReader){
+      const reader = res.body.getReader();
+      const parts = []; let got = 0;
+      for (;;){
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value); got += value.length;
+        m.pct = len ? Math.min(0.99, got / len) : null;
+        const now = Date.now();
+        if (now - lastPaint > 100){ lastPaint = now; paintRow(id); }
+      }
+      blob = new Blob(parts, { type: res.headers.get("content-type") || "audio/mpeg" });
+    } else {
+      blob = await res.blob();
+    }
+    if (m.url) URL.revokeObjectURL(m.url);
+    m.url = URL.createObjectURL(blob); m.size = blob.size; m.pct = 1; m.state = "ready";
+  } catch (e) {
+    m.state = "failed"; m.pct = null;
+  } finally {
+    m.ctrl = null; activeLoads--;
+    paintRow(id);
+    pump();
+  }
+}
+
+function releaseMedia(id){
+  const used = SIDES.some(side => queues[side].includes(id)) ||
+               SIDES.some(side => decks[side] && decks[side].track && decks[side].track.id === id);
+  if (used) return;
+  const m = media.get(id);
+  if (!m) return;
+  if (m.ctrl) m.ctrl.abort();
+  if (m.url) URL.revokeObjectURL(m.url);
+  media.delete(id);
+}
+
+// ------------------------------------------------------------ add / remove
+function addToQueue(side, id){
+  id = +id;
+  if (!trackById(id)) return false;
+  if (queues[side].includes(id)){ toastQueue(side, "already queued"); return false; }
+  // The same track may sit on both queues — a real double-drop. One download
+  // serves both, because media is cached by track id, not per deck.
+  if (queues[side].length >= MAX_QUEUE){ toastQueue(side, `queue is full (${MAX_QUEUE})`); return false; }
+  queues[side].push(id);
+  saveQueues(); ensureMedia(id);
+  renderQueues(); syncSendButtons(id); pump();
+  publishQueue(side);
+  return true;
+}
+const other = side => (side === "A" ? "B" : "A");
+
+let toastTimer = null;
+function toastQueue(side, message){
+  const el = $("#qc" + side);
+  const normal = el.textContent;
+  el.textContent = message;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.textContent = normal; }, 1600);
+}
+
+// Copy a queued track to the other deck without hunting for it again.
+function copyToOther(side, id){
+  const target = other(side);
+  id = +id;
+  if (queues[target].includes(id)){ toastQueue(target, "already queued"); return false; }
+  if (queues[target].length >= MAX_QUEUE){ toastQueue(target, `queue is full (${MAX_QUEUE})`); return false; }
+  queues[target].push(id);
+  saveQueues(); ensureMedia(id); renderQueues(); pump();
+  publishQueue(target);
+  toastQueue(target, "copied from deck " + side);
+  return true;
+}
+
+// Same deck, played twice in a row (a loop, or the same drop either side of a
+// breakdown). The copy lands directly under the row it came from.
+function duplicateInQueue(side, id){
+  id = +id;
+  const at = queues[side].indexOf(id);
+  if (at < 0) return false;
+  if (queues[side].length >= MAX_QUEUE){ toastQueue(side, `queue is full (${MAX_QUEUE})`); return false; }
+  queues[side].splice(at + 1, 0, id);
+  saveQueues(); renderQueues(); pump();
+  publishQueue(side);
+  return true;
+}
+
+function removeFromQueue(side, id){
+  const i = queues[side].indexOf(+id);
+  if (i < 0) return;
+  queues[side].splice(i, 1);
+  saveQueues(); renderQueues(); syncSendButtons(+id);
+  publishQueue(side);
+  releaseMedia(+id);
+  pump();
+}
+
+function syncOrderFromDom(side){
+  queues[side] = $$(`#q${side} .qrow`).map(row => +row.dataset.id);
+  saveQueues();
+  publishQueue(side);
+}
+
+// ------------------------------------------------------------ drag reorder
+// Pointer events, so the same handle reorders with a mouse or a thumb. The
+// handle is the only draggable part, which leaves normal scrolling on phones.
+let drag = null;
+document.addEventListener("pointerdown", e => {
+  const grip = e.target.closest(".qrow .grip");
+  if (!grip) return;
+  const row = grip.closest(".qrow");
+  drag = { side: row.dataset.side, el: row };
+  row.classList.add("dragging");
+  e.preventDefault();
+});
+document.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest(".qrow");
+  if (!over || over === drag.el || over.dataset.side !== drag.side) return;
+  const list = over.parentElement;
+  const rect = over.getBoundingClientRect();
+  list.insertBefore(drag.el, e.clientY > rect.top + rect.height / 2 ? over.nextSibling : over);
+  syncOrderFromDom(drag.side);
+});
+document.addEventListener("pointerup", () => {
+  if (!drag) return;
+  drag.el.classList.remove("dragging");
+  syncOrderFromDom(drag.side);
+  renderQueues();
+  drag = null;
+});
+
+// ------------------------------------------------------------ search results
+// A send button shows which queue already holds the track, and flips the moment
+// it is sent — without rebuilding the whole result list under the pointer.
+function syncSendButtons(id){
+  document.querySelectorAll(`#fresults button[data-send][data-id="${id}"]`).forEach(btn => {
+    const side = btn.dataset.send;
+    const queuedIn = queues[side].includes(+id);
+    btn.disabled = queuedIn;
+    btn.textContent = queuedIn ? `in ${side}` : `→ ${side}`;
+  });
+}
+
+// The list shows everything that matches, in pages of PAGE_SIZE: a fixed slice
+// used to hide most of the library behind no indication that more existed.
+const PAGE_SIZE = 60;
+let shownResults = PAGE_SIZE;
+
+function resultRow(t){
+  const a = queues.A.includes(t.id), b = queues.B.includes(t.id);
+  // Prefer the provider's artwork URL; fall back to the cover embedded in the
+  // file, which the server extracts locally. A broken image becomes a note tile.
+  const art = `<img class="thumb" src="${esc(t.artwork || `/api/track/${t.id}/artwork`)}"
+    alt="" decoding="async" loading="eager">`;
+  return `<div class="prow">
+    ${art}
+    <div class="t">${link(t.title || "Untitled", trackHref(t))}<div class="s">${link(t.artist_name || "", artistHref(t))}${t.album ? " · " + link(t.album, trackHref(t)) : ""}${t.bpm ? " · " + Math.round(+t.bpm) + " BPM" : ""}</div></div>
+    <span class="s dur">${fmt(t.duration)}</span>
+    <button data-send="A" data-id="${t.id}" class="small"${a ? " disabled" : ""}>${a ? "in A" : "→ A"}</button>
+    <button data-send="B" data-id="${t.id}" class="small"${b ? " disabled" : ""}>${b ? "in B" : "→ B"}</button>
+  </div>`;
+}
+
+function renderResults(keepPage = false){
+  if (!keepPage) shownResults = PAGE_SIZE;
+  const q = $("#qsearch").value.trim().toLowerCase();
+  const pool = inScope();
+  const matches = pool.filter(t => !q ||
+    `${t.title} ${t.artist_name} ${t.album}`.toLowerCase().includes(q));
+  const count = $("#fcount");
+  if (count) count.textContent = `${matches.length} of ${pool.length} track${pool.length === 1 ? "" : "s"}`;
+  if (!matches.length){
+    $("#fresults").innerHTML = `<div class="prow"><span class="s">
+      ${library.length ? "nothing matches that search" : "your library is empty — download something first"}</span></div>`;
+    return;
+  }
+  const visible = matches.slice(0, shownResults);
+  const more = matches.length - visible.length;
+  $("#fresults").innerHTML = visible.map(resultRow).join("") +
+    (more > 0 ? `<button class="morebtn" id="morebtn">Show ${Math.min(PAGE_SIZE, more)} more · ${more} left</button>` : "");
+}
+
+// Images do not bubble, so the failure is caught on the way down.
+$("#fresults").addEventListener("error", event => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || !image.classList.contains("thumb")) return;
+  const tile = document.createElement("span");
+  tile.className = "thumb empty";
+  tile.textContent = "♪";
+  image.replaceWith(tile);
+}, true);
+
+$("#fresults").addEventListener("click", event => {
+  const more = event.target.closest("#morebtn");
+  if (!more) return;
+  shownResults += PAGE_SIZE;
+  renderResults(true);
+});
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+// Send buttons in the finder, plus queue row interaction.
+$("#fresults").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-send]");
+  if (btn) addToQueue(btn.dataset.send, +btn.dataset.id);
+});
+for (const side of SIDES){
+  $("#q" + side).addEventListener("click", e => {
+    const rm = e.target.closest("button[data-remove]");
+    if (rm){ removeFromQueue(rm.dataset.remove, +rm.dataset.id); return; }
+    const cp = e.target.closest("button[data-copy]");
+    if (cp){ copyToOther(cp.dataset.copy, +cp.dataset.id); return; }
+    const dp = e.target.closest("button[data-dup]");
+    if (dp){ duplicateInQueue(dp.dataset.dup, +dp.dataset.id); return; }
+    if (e.target.closest(".grip") || e.target.closest("a")) return;
+    const row = e.target.closest(".qrow");
+    if (!row) return;
+    const track = trackById(row.dataset.id);
+    if (!track) return;
+    loadTrack(side, track);
+    renderQueues();
+  });
+  $("#qclear" + side).onclick = () => {
+    for (const id of [...queues[side]]) removeFromQueue(side, id);
+  };
+}
+
+// ---------------------------------------------------------------- wiring
+// ------------------------------------------------------------ tempo analysis
+// Detection is a server job on real files, so the mixer only asks for it and
+// mirrors the progress; nothing here decodes audio.
+let tempoPoll = 0;
+function tempoMeter(){
+  const missing = library.filter(t => !Number(t.bpm)).length;
+  const el = $("#tempostat");
+  if (el.dataset.mode === "running") return;
+  el.textContent = library.length
+    ? (missing ? `${missing} without BPM` : "all tracks have BPM")
+    : "";
+  $("#tempobtn").style.display = missing ? "inline-block" : "none";
+}
+async function pollTempo(){
+  clearTimeout(tempoPoll);
+  try {
+    const res = await fetch("/api/tempo/status", { credentials: "same-origin" });
+    const st = await res.json();
+    const el = $("#tempostat");
+    if (st.running){
+      el.dataset.mode = "running";
+      el.textContent = `analysing ${st.done}/${st.total}${st.current ? " · " + st.current.slice(0, 28) : ""}`;
+      $("#tempobtn").style.display = "none";
+      tempoPoll = setTimeout(pollTempo, 1500);
+      return;
+    }
+    el.dataset.mode = "";
+    if (st.error) el.textContent = "tempo analysis failed";
+    tempoPoll = setTimeout(async () => { await loadLibrary(); tempoMeter(); }, 0);
+  } catch (e) { $("#tempostat").dataset.mode = ""; }
+}
+// Titles that are really provider ids: preview first, then apply on a second
+// click. Only metadata changes — no file is renamed or moved.
+let titlePreview = 0;
+function numericTitles(){
+  return library.filter(t => /^\s*\d{6,}\s*$/.test(String(t.title || ""))).length;
+}
+function paintTitleButton(){
+  const n = numericTitles();
+  const btn = $("#titlbtn");
+  btn.style.display = n || titlePreview ? "inline-block" : "none";
+  // A reload finishing mid-confirmation must not swallow the "click again" step.
+  if (titlePreview) return;
+  btn.textContent = `Fix ${n} number title${n === 1 ? "" : "s"}`;
+}
+$("#titlbtn").onclick = async () => {
+  const btn = $("#titlbtn");
+  try {
+    const body = titlePreview ? { apply: true } : {};
+    const res = await fetch("/api/library/titles", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "could not read titles");
+    if (!titlePreview){
+      titlePreview = 1;
+      btn.textContent = data.count
+        ? `Apply to ${data.count}? click again`
+        : "nothing to fix";
+      return;
+    }
+    titlePreview = 0;
+    // The repair runs server-side on real files; poll until it finishes.
+    btn.textContent = `fixing ${data.total}…`;
+    const poll = async () => {
+      const res2 = await fetch("/api/titles/status", { credentials: "same-origin" });
+      const st = await res2.json();
+      if (st.running){
+        btn.textContent = `fixing ${st.done}/${st.total}…`;
+        setTimeout(poll, 800);
+        return;
+      }
+      btn.textContent = `${st.changed} title${st.changed === 1 ? "" : "s"} fixed`;
+      await loadLibrary();
+      renderQueues();
+      renderResults();
+      setTimeout(() => { titlePreview = 0; paintTitleButton(); }, 4000);
+    };
+    poll();
+  } catch (e) {
+    btn.textContent = e.message.slice(0, 40);
+    titlePreview = 0;
+  }
+};
+
+$("#tempobtn").onclick = async () => {
+  $("#tempobtn").style.display = "none";
+  $("#tempostat").textContent = "starting…";
+  try {
+    const res = await fetch("/api/library/tempo", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "could not start");
+    if (!data.started) $("#tempostat").textContent = data.reason || "nothing to do";
+    pollTempo();
+  } catch (e) {
+    $("#tempostat").textContent = e.message;
+    tempoMeter();
+  }
+};
+
+$("#qsearch").addEventListener("input", () => renderResults());
+$("#scopeMain").addEventListener("change", () => { fillScopes(); renderResults(); });
+$("#plselMain").addEventListener("change", () => { paintPlaylistLink(); renderResults(); });
+$("#crossfader").addEventListener("input", () => { bootAudio(); applyCross(); });
+$("#master").addEventListener("input", () => { bootAudio(); applyMaster(); });
+$("#crossfader").addEventListener("pointerdown", () => explain("cross"));
+$("#master").addEventListener("pointerdown", () => explain("master"));
+$("#learnbtn").onclick = e => {
+  document.body.classList.toggle("learn");
+  e.target.classList.toggle("on", document.body.classList.contains("learn"));
+};
+$("#panic").onclick = () => location.reload();
+
+// ---------------------------------------------------------------- reset tools
+// Every control glides back to the value the page started with. The glide takes
+// longer the further the control has travelled, so a small nudge snaps back and
+// a full cut eases home over about a second. Double-click is instant.
+const DEFAULT_POS = new Map();
+function controlInputs(){
+  return [...document.querySelectorAll(".deck [data-ctl]"), $("#crossfader"), $("#master")];
+}
+function snapDefaults(){
+  for (const el of controlInputs()) if (!DEFAULT_POS.has(el)) DEFAULT_POS.set(el, Number(el.value));
+}
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+let resetTimer = 0;
+
+// Ramp maths kept separate so the glide can be checked without a running page.
+// Distance is measured against the control's own range: a small nudge returns in
+// about a fifth of a second, a full cut from one end takes ~1.2 s.
+function resetDuration(from, to, span, step){
+  const travel = Math.abs(from - to);
+  if (travel <= (step || 0) / 2) return 0;
+  // Curved so a near-default control snaps home while a full cut eases home.
+  const d = Math.min(1, travel / (span || 1));
+  return 145 + 1095 * Math.pow(d, 1.6);
+}
+function resetValue(from, to, dur, elapsed){
+  if (!dur) return to;
+  const p = Math.min(1, Math.max(0, elapsed / dur));
+  return from + (to - from) * easeOut(p);
+}
+
+function resetControls(instant){
+  clearInterval(resetTimer);
+  const btn = $("#recentre");
+  const items = controlInputs().map(el => {
+    const from = Number(el.value);
+    const to = DEFAULT_POS.has(el) ? DEFAULT_POS.get(el) : Number(el.defaultValue || 0);
+    const span = Number(el.max) - Number(el.min) || 1;
+    const step = Number(el.step) || 0;
+    return { el, from, to, span, step, dur: resetDuration(from, to, span, step) };
+  }).filter(it => it.dur > 0);
+  if (!items.length){ btn.classList.remove("running"); return; }
+
+  const flush = () => items.forEach(it => it.el.dispatchEvent(new Event("input", { bubbles: true })));
+  const settle = (it, value) => {
+    it.el.value = String(it.step ? Math.round(value / it.step) * it.step : value);
+  };
+
+  if (instant){
+    items.forEach(it => settle(it, it.to));
+    flush(); btn.classList.remove("running"); return;
+  }
+
+  btn.classList.add("running");
+  const start = performance.now();
+  // Two drivers, one ramp: rAF for a visible tab, a slow timer as the safety
+  // net so a background tab or a throttled phone still finishes the glide.
+  // Both call the same tick, which reads elapsed time, so doubling up is safe.
+  const stop = () => { clearInterval(resetTimer); cancelAnimationFrame(resetFrame); };
+  const tick = () => {
+    const elapsed = performance.now() - start;
+    let done = true;
+    for (const it of items){
+      if (elapsed < it.dur) done = false;
+      settle(it, resetValue(it.from, it.to, it.dur, elapsed));
+    }
+    flush();
+    if (done){ stop(); btn.classList.remove("running"); return; }
+    resetFrame = requestAnimationFrame(tick);
+  };
+  resetTimer = setInterval(tick, 250);
+  resetFrame = requestAnimationFrame(tick);
+}
+
+snapDefaults();
+$("#recentre").onclick = () => resetControls(false);
+$("#recentre").ondblclick = e => { e.preventDefault(); resetControls(true); };
+
+// click any control's label to read about it
+$$(".ctl").forEach(ctl => {
+  ctl.addEventListener("pointerdown", () => explain(ctl.dataset.learn));
+});
+
+// ---------------------------------------------------------------- recording
+// A finished mix stays in this tab: it is a Blob in memory, never uploaded and
+// never written to disk until the user asks for the file. That keeps recordings
+// off the owner's server while still letting the person listen back, scrub and
+// decide. Nothing survives a reload — the panel says so, and beforeunload warns.
+const recordings = [];
+let recSeq = 0;
+
+function recName(){
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  let name = `hardlylistening-mix-${stamp}.webm`;
+  // Two takes in the same second must not look like the same file.
+  let n = 2;
+  while (recordings.some(rec => rec.name === name)) name = `hardlylistening-mix-${stamp}-${n++}.webm`;
+  return name;
+}
+function recSize(bytes){
+  return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + " MB"
+                          : Math.max(1, Math.round(bytes / 1024)) + " KB";
+}
+function clock(seconds){
+  if (!isFinite(seconds) || seconds <= 0) return "—";
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function renderRecordings(){
+  const panel = $("#recpanel");
+  panel.hidden = recordings.length === 0;
+  $("#reclist").innerHTML = recordings.map(rec => `
+    <div class="recrow" data-rec="${rec.id}">
+      <div class="t">${escapeName(rec.name)}<div class="s">${recSize(rec.blob.size)} · kept in this tab</div></div>
+      <span class="s dur" data-dur="${rec.id}">${rec.duration ? clock(rec.duration) : "…"}</span>
+      <button class="small" data-play="${rec.id}">Play</button>
+      <a class="dl" data-download="${rec.id}" href="${rec.url}" download="${escapeName(rec.name)}">Download</a>
+      <button class="x" data-drop="${rec.id}" title="Discard this recording" aria-label="Discard">×</button>
+    </div>`).join("");
+  const total = recordings.reduce((sum, rec) => sum + rec.blob.size, 0);
+  $("#recstat").textContent = recordings.length
+    ? `${recordings.length} recording${recordings.length === 1 ? "" : "s"} · ${recSize(total)} in memory`
+    : "";
+  // A mix in memory is unsaved work: ask before a reload or tab close throws it away.
+  window.onbeforeunload = recordings.length ? () => true : null;
+}
+const escapeName = value => String(value ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function addRecording(blob){
+  const url = URL.createObjectURL(blob);
+  const rec = { id: ++recSeq, blob, url, name: recName(), duration: 0 };
+  recordings.push(rec);
+  renderRecordings();
+  // Duration comes from the browser decoding the blob — no network, no playback.
+  // Hold the probe on the record: a detached Audio element is collected before
+  // its metadata arrives, which leaves the duration stuck on "…".
+  const probe = new Audio();
+  rec.probe = probe;
+  probe.preload = "metadata";
+  probe.src = url;
+  const settle = () => {
+    const cell = document.querySelector(`[data-dur="${rec.id}"]`);
+    // A MediaRecorder webm normally reports its length; a stream-style blob can
+    // report Infinity, and an undecodable blob never resolves at all — say so
+    // instead of leaving "…" there forever.
+    if (cell) cell.textContent = rec.duration && isFinite(rec.duration) ? clock(rec.duration) : "—";
+    probe.removeAttribute("src");
+    probe.load();
+    delete rec.probe;
+  };
+  probe.addEventListener("loadedmetadata", () => {
+    rec.duration = probe.duration || 0;
+    settle();
+  }, { once: true });
+  probe.addEventListener("error", settle, { once: true });
+  setTimeout(() => { if (rec.probe) settle(); }, 4000);
+  return rec;
+}
+
+function dropRecording(id){
+  const index = recordings.findIndex(rec => rec.id === id);
+  if (index < 0) return;
+  const [rec] = recordings.splice(index, 1);
+  const player = $("#recplay");
+  if (player.dataset.rec === String(id)){
+    player.pause(); player.removeAttribute("src"); player.load(); delete player.dataset.rec;
+    $("#recnow").textContent = "Pick Play on a take to review it here — drag the bar to scrub.";
+  }
+  URL.revokeObjectURL(rec.url);
+  renderRecordings();
+}
+
+function toggleRecordingPlayback(id){
+  const rec = recordings.find(r => r.id === id);
+  const player = $("#recplay");
+  if (!rec) return;
+  if (player.dataset.rec === String(id) && !player.paused){
+    player.pause();
+    return;
+  }
+  if (player.dataset.rec !== String(id)){
+    player.src = rec.url;
+    player.dataset.rec = String(id);
+    $("#recnow").textContent = `Reviewing ${rec.name} — this is still only in the tab.`;
+  }
+  player.play();
+}
+
+const recPlayer = $("#recplay");
+recPlayer.addEventListener("play", () => {
+  document.querySelectorAll(".recrow").forEach(row =>
+    row.classList.toggle("playing", row.dataset.rec === recPlayer.dataset.rec));
+  document.querySelectorAll("button[data-play]").forEach(btn =>
+    btn.textContent = btn.dataset.play === recPlayer.dataset.rec ? "Pause" : "Play");
+});
+for (const event of ["pause", "ended"]){
+  recPlayer.addEventListener(event, () => {
+    document.querySelectorAll(".recrow").forEach(row => row.classList.remove("playing"));
+    document.querySelectorAll("button[data-play]").forEach(btn => btn.textContent = "Play");
+  });
+}
+// The cell shows the whole recording; the player's own bar is the scrub control.
+recPlayer.addEventListener("loadedmetadata", () => {
+  const id = recPlayer.dataset.rec;
+  const rec = recordings.find(r => r.id === Number(id));
+  const cell = id ? document.querySelector(`[data-dur="${id}"]`) : null;
+  if (rec && recPlayer.duration && !rec.duration) rec.duration = recPlayer.duration;
+  if (cell && rec && rec.duration) cell.textContent = clock(rec.duration);
+});
+
+$("#reclist").addEventListener("click", event => {
+  const play = event.target.closest("button[data-play]");
+  if (play){ toggleRecordingPlayback(Number(play.dataset.play)); return; }
+  const drop = event.target.closest("button[data-drop]");
+  if (drop){ dropRecording(Number(drop.dataset.drop)); return; }
+});
+$("#recclear").onclick = () => {
+  if (!recordings.length) return;
+  for (const rec of [...recordings]) dropRecording(rec.id);
+};
+
+$("#recbtn").onclick = async () => {
+  bootAudio(); await ctx.resume();
+  const btn = $("#recbtn");
+  if (recorder && recorder.state === "recording"){
+    recorder.stop(); btn.classList.remove("on"); btn.textContent = "Record";
+    return;
+  }
+  recChunks = [];
+  recorder = new MediaRecorder(recorderDest.stream, {mimeType: "audio/webm"});
+  recorder.ondataavailable = e => e.data.size && recChunks.push(e.data);
+  recorder.onstop = () => {
+    if (!recChunks.length) return;
+    addRecording(new Blob(recChunks, { type: "audio/webm" }));
+    recChunks = [];
+  };
+  recorder.start();
+  btn.classList.add("on"); btn.textContent = "Stop";
+};
+
+
+// ---------------------------------------------------------------- MIDI
+// The board talks MIDI in both directions: every fader sends a CC so a DAW or
+// lighting rig can follow the mix, and an incoming CC moves the matching control
+// so a hardware controller drives the decks. The browser cannot create a virtual
+// port — that is the OS's job (ALSA "Virtual Raw MIDI", IAC on macOS) — it can
+// only list and use the ports that already exist.
+const MIDI_DEFAULTS = {
+  "A.low":16, "A.mid":17, "A.high":18, "A.filter":19, "A.reverb":20, "A.delay":21, "A.pitch":22, "A.volume":23,
+  "B.low":24, "B.mid":25, "B.high":26, "B.filter":27, "B.reverb":28, "B.delay":29, "B.pitch":30, "B.volume":31,
+  "cross":2, "master":3
+};
+const MIDI_NOTES = { "A":36, "B":37 };          // play/pause as note on/off
+const MIDI_LABELS = { low:"LOW", mid:"MID", high:"HIGH", filter:"FILTER", reverb:"REVERB",
+                      delay:"DELAY", pitch:"PITCH", volume:"VOLUME" };
+
+function midiStore(key, value){
+  try { localStorage.setItem(key, value); } catch (e) { /* private mode: mapping is a convenience */ }
+}
+function midiJson(text){
+  try { return JSON.parse(text) || {}; } catch (e) { return {}; }
+}
+
+let midiAccess = null, midiOut = null, midiIn = null;
+let midiMap = Object.assign({}, MIDI_DEFAULTS, midiJson(localStorage.getItem("hl.midiMap")));
+let midiChannel = Math.min(16, Math.max(1, Number(localStorage.getItem("hl.midiChannel") || 1)));
+let midiLearning = null;
+let midiEcho = false;                            // incoming CC must not bounce straight back out
+const midiLast = {};
+
+const midiStatus = (text, on = false) => {
+  const node = $("#midistatus");
+  node.textContent = text;
+  node.classList.toggle("on", on);
+};
+
+function midiControl(el){
+  if (!el || el.tagName !== "INPUT" || el.type !== "range") return null;
+  if (el.id === "crossfader") return "cross";
+  if (el.id === "master") return "master";
+  const deck = el.closest(".deck");
+  if (deck && el.dataset.ctl) return deck.dataset.deck + "." + el.dataset.ctl;
+  return null;
+}
+function midiElement(key){
+  if (key === "cross") return $("#crossfader");
+  if (key === "master") return $("#master");
+  const [deck, ctl] = key.split(".");
+  return document.querySelector(`.deck[data-deck="${deck}"] [data-ctl="${ctl}"]`);
+}
+function midiNorm(el){
+  const min = Number(el.min || 0), max = Number(el.max || 100);
+  return Math.max(0, Math.min(1, (Number(el.value) - min) / (max - min || 1)));
+}
+function midiLabel(key){
+  if (key === "cross") return "CROSSFADER";
+  if (key === "master") return "MASTER";
+  const [deck, ctl] = key.split(".");
+  return deck + " · " + (MIDI_LABELS[ctl] || ctl.toUpperCase());
+}
+
+// Out: one CC per real change. Sending on every animation frame floods the
+// receiving device and makes automation look jittery.
+function midiSend(key, value01){
+  if (!midiOut || !key) return;
+  const cc = midiMap[key];
+  if (cc === undefined || cc === null || cc === "") return;
+  const value = Math.round(value01 * 127);
+  if (midiLast[key] === value) return;
+  midiLast[key] = value;
+  try { midiOut.send([0xB0 | (midiChannel - 1), Number(cc) & 0x7F, value]); } catch (e) { midiStatus("MIDI send failed: " + e.message); }
+}
+function midiNote(deck, down){
+  if (!midiOut) return;
+  const note = MIDI_NOTES[deck];
+  try { midiOut.send([0x90 | (midiChannel - 1), note, down ? 127 : 0]); } catch (e) { /* unplugged mid-mix */ }
+}
+
+document.addEventListener("input", event => {
+  const key = midiControl(event.target);
+  if (key && !midiEcho) midiSend(key, midiNorm(event.target));
+}, true);
+
+function renderMidiMap(){
+  const live = !!midiAccess;
+  $("#midimap").innerHTML = Object.keys(MIDI_DEFAULTS).map(key => `
+    <div class="midirow ${midiLearning === key ? "learning" : ""}" data-key="${key}">
+      <span title="${midiLabel(key)}">${midiLabel(key)}</span>
+      <input type="number" min="0" max="127" value="${midiMap[key] ?? ""}" data-cc="${key}" aria-label="CC for ${midiLabel(key)}">
+      <button class="small" data-learncc="${key}" ${live ? "" : "disabled"} title="${live ? "Move a knob to learn this one" : "Enable MIDI first"}">Learn</button>
+    </div>`).join("");
+}
+$("#midimap").addEventListener("change", event => {
+  const input = event.target.closest("input[data-cc]");
+  if (!input) return;
+  const value = input.value === "" ? null : Math.max(0, Math.min(127, Number(input.value)));
+  midiMap[input.dataset.cc] = value;
+  midiStore("hl.midiMap", JSON.stringify(midiMap));
+  midiLast[input.dataset.cc] = undefined;
+});
+$("#midimap").addEventListener("click", event => {
+  const button = event.target.closest("button[data-learncc]");
+  if (!button) return;
+  if (!midiAccess){ midiStatus("Enable MIDI first — watch for the browser prompt."); return; }
+  midiLearning = button.dataset.learncc;
+  renderMidiMap();
+  midiStatus("Move a knob or fader on your controller to assign " + midiLabel(midiLearning) + "…");
+});
+
+function midiPorts(){
+  if (!midiAccess) return;
+  const outs = [...midiAccess.outputs.values()];
+  const ins = [...midiAccess.inputs.values()];
+  const keepOut = midiOut ? midiOut.id : "";
+  const keepIn = midiIn ? midiIn.id : "";
+  $("#midiout").innerHTML = '<option value="">off</option>' +
+    outs.map(port => `<option value="${port.id}">${esc(port.name || port.id)}</option>`).join("");
+  $("#midiin").innerHTML = '<option value="">off</option>' +
+    ins.map(port => `<option value="${port.id}">${esc(port.name || port.id)}</option>`).join("");
+  if (keepOut) $("#midiout").value = keepOut;
+  if (keepIn) $("#midiin").value = keepIn;
+  midiStatus(outs.length || ins.length
+    ? `${outs.length} MIDI output(s), ${ins.length} input(s) available.`
+    : "MIDI access granted, but this machine exposes no MIDI ports.", true);
+}
+
+function midiBindIn(port){
+  if (midiIn) midiIn.onmidimessage = null;
+  midiIn = port;
+  if (!port) return;
+  port.onmidimessage = message => {
+    const [status, data1, data2] = message.data;
+    const type = status & 0xF0;
+    const channel = (status & 0x0F) + 1;
+    if (midiLearning && type === 0xB0){
+      const key = midiLearning;
+      midiLearning = null;
+      midiMap[key] = data1;
+      midiStore("hl.midiMap", JSON.stringify(midiMap));
+      renderMidiMap();
+      midiStatus(`Mapped ${midiLabel(key)} to CC ${data1}.`, true);
+      return;
+    }
+    if (type !== 0xB0 || channel !== midiChannel) return;
+    const key = Object.keys(midiMap).find(name => Number(midiMap[name]) === data1);
+    if (!key) return;
+    const el = midiElement(key);
+    if (!el) return;
+    const min = Number(el.min || 0), max = Number(el.max || 100);
+    midiEcho = true;
+    el.value = String(min + (data2 / 127) * (max - min));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    midiEcho = false;
+  };
+}
+
+$("#midiout").addEventListener("change", event => {
+  midiOut = midiAccess ? midiAccess.outputs.get(event.target.value) || null : null;
+  midiLast && Object.keys(midiLast).forEach(key => delete midiLast[key]);
+  midiStore("hl.midiout", event.target.value);
+  midiStatus(midiOut ? "Sending on " + (midiOut.name || midiOut.id) + ", channel " + midiChannel + "."
+                     : "MIDI output off.", !!midiOut);
+});
+$("#midiin").addEventListener("change", event => {
+  midiBindIn(midiAccess ? midiAccess.inputs.get(event.target.value) || null : null);
+  midiStore("hl.midiin", event.target.value);
+});
+$("#midich").addEventListener("change", event => {
+  midiChannel = Math.min(16, Math.max(1, Number(event.target.value)));
+  midiStore("hl.midiChannel", String(midiChannel));
+});
+$("#midireset").onclick = () => {
+  midiMap = Object.assign({}, MIDI_DEFAULTS);
+  midiStore("hl.midiMap", JSON.stringify(midiMap));
+  renderMidiMap();
+  midiStatus("Default CC map restored.", true);
+};
+$("#midibtn").onclick = () => {
+  const panel = $("#midipanel");
+  panel.hidden = !panel.hidden;
+  $("#midibtn").classList.toggle("on", !panel.hidden);
+};
+$("#midienable").onclick = async () => {
+  if (!navigator.requestMIDIAccess){
+    midiStatus("This browser has no Web MIDI. Chrome/Chromium supports it; Firefox needs a flag.");
+    return;
+  }
+  if (!window.isSecureContext){
+    midiStatus("Web MIDI needs a secure context — open http://127.0.0.1:8470/dj or an HTTPS address.");
+    return;
+  }
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+  } catch (error) {
+    midiStatus("MIDI permission refused: " + error.message);
+    return;
+  }
+  midiAccess.onstatechange = midiPorts;
+  midiPorts();
+  const savedOut = localStorage.getItem("hl.midiout");
+  const savedIn = localStorage.getItem("hl.midiin");
+  if (savedOut && midiAccess.outputs.get(savedOut)){
+    $("#midiout").value = savedOut;
+    midiOut = midiAccess.outputs.get(savedOut);
+  }
+  if (savedIn && midiAccess.inputs.get(savedIn)){
+    $("#midiin").value = savedIn;
+    midiBindIn(midiAccess.inputs.get(savedIn));
+  }
+  $("#midienable").textContent = "MIDI enabled";
+};
+$("#midich").innerHTML = Array.from({ length: 16 }, (_, i) =>
+  `<option value="${i + 1}" ${i + 1 === midiChannel ? "selected" : ""}>${i + 1}</option>`).join("");
+renderMidiMap();
+
+["A", "B"].forEach(deck => {
+  const audio = $("#audio" + deck);
+  audio.addEventListener("play", () => midiNote(deck, true));
+  audio.addEventListener("pause", () => midiNote(deck, false));
+});
+
+// ---------------------------------------------------------------- guided steps
+const STEPS = [
+  {title:"Queue your next tracks", body:"One search feeds both decks. Send tracks to A or B and they appear in that deck's queue; each one downloads ahead of time, so cueing it is instant.",
+   when:"Deck A is the one you start with. Deck B is what you mix into — queue two or three tracks ahead so you never stall mid-mix.", target:".queues"},
+  {title:"Set your levels", body:"Press Play on deck A. Keep MASTER out of the red — the meter should bounce around the green.",
+   when:"Loud and clipping sounds worse than quiet and clean, and a clipped recording cannot be fixed.",
+   target:".deck[data-deck='A'] [data-learn='volume']"},
+  {title:"Use the crossfader", body:"Load a second track on B, start it, then slide the crossfader slowly from A to B.",
+   when:"Move it over a phrase of 8 or 16 beats, not a single beat — that is what makes a mix sound intentional.",
+   target:"#crossfader"},
+  {title:"Fix the clash", body:"Both tracks have bass. Pull LOW down on the deck you are mixing in, then bring it back after the switch.",
+   when:"Two basslines at once is the most common beginner mud. Cut, switch, restore.", target:".deck[data-deck='B'] [data-learn='low']"},
+];
+let step = 0;
+function showStep(){
+  const s = STEPS[step];
+  $("#learn-title").textContent = s.title;
+  $("#learn-body").textContent = s.body;
+  $("#learn-when").textContent = s.when;
+  $$(".steps .dot").forEach((d, i) => d.classList.toggle("done", i <= step));
+  $$(".flash").forEach(el => el.classList.remove("flash"));
+  const target = document.querySelector(s.target);
+  if (target) { target.classList.add("flash"); target.scrollIntoView({block:"nearest", behavior:"smooth"}); }
+}
+$("#stepnext").onclick = () => { step = (step + 1) % STEPS.length; showStep(); };
+$("#stepnext").textContent = "Start the tour";
+showStep();
+
+wireDeck("A"); wireDeck("B");
+loadQueues();
+renderQueues();
+if (wantedOrder().length) pump();
+loadLibrary();
+
+// ---------------------------------------------------------------- shared room
+// The audio runs in this browser, but the board does not belong to it: controls,
+// decks and queues live in one server-side room, so two people on the page are
+// driving the same mixer. This layer mirrors the room onto the controls and
+// publishes local movement back, with a per-control "who is holding this" badge.
+const ROOM_URL = "/api/mixer";
+const MIXER_TAB = (() => {
+  // sessionStorage, not localStorage: two tabs are two participants locally, while
+  // signed-in members are one identity wherever they open the page.
+  let id = sessionStorage.getItem("hl.mixer.tab");
+  if (!id) { id = Math.random().toString(36).slice(2, 10); sessionStorage.setItem("hl.mixer.tab", id); }
+  return id;
+})();
+const ROOM_KEYS = Object.keys({
+  "A.low": 1, "A.mid": 1, "A.high": 1, "A.filter": 1, "A.reverb": 1, "A.delay": 1,
+  "A.pitch": 1, "A.volume": 1, "B.low": 1, "B.mid": 1, "B.high": 1, "B.filter": 1,
+  "B.reverb": 1, "B.delay": 1, "B.pitch": 1, "B.volume": 1, "cross": 1, "master": 1
+});
+let applyingRemote = false;      // a room update is painting the UI
+let roomLive = false;
+const draggingKeys = new Set();
+const pendingValues = {};
+let valueTimer = 0;
+let myId = "";
+
+function roomQuery(){
+  const q = new URLSearchParams({cid: MIXER_TAB, name: "Guest"});
+  return "?" + q.toString();
+}
+async function roomPost(payload, keepalive = false){
+  try {
+    const response = await fetch(ROOM_URL + roomQuery(), {
+      method: "POST", credentials: "same-origin", keepalive,
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    return response.ok;
+  } catch (error) { return false; }
+}
+
+function controlElement(key){
+  if (key === "cross") return $("#crossfader");
+  if (key === "master") return $("#master");
+  const [side, name] = key.split(".");
+  return document.querySelector(`.deck[data-deck="${side}"] [data-ctl="${name}"]`);
+}
+function keyOfControl(node){
+  if (!node || !node.closest) return "";
+  if (node.id === "crossfader") return "cross";
+  if (node.id === "master") return "master";
+  const deck = node.closest(".deck");
+  if (deck && node.dataset && node.dataset.ctl) return `${deck.dataset.deck}.${node.dataset.ctl}`;
+  return "";
+}
+
+// ---- local movement -> room ---------------------------------------------
+function sendValuesSoon(){
+  if (valueTimer) return;
+  valueTimer = setTimeout(() => {
+    valueTimer = 0;
+    const values = {};
+    for (const key of Object.keys(pendingValues)) values[key] = pendingValues[key];
+    for (const key of Object.keys(pendingValues)) delete pendingValues[key];
+    if (Object.keys(values).length) roomPost({op: "values", values});
+  }, 55);                                  // ~18 sends a second while dragging
+}
+document.addEventListener("input", event => {
+  if (applyingRemote) return;
+  const key = keyOfControl(event.target);
+  if (!key) return;
+  pendingValues[key] = +event.target.value;
+  sendValuesSoon();
+  if (key.endsWith(".pitch")) publishDeck(key.split(".")[0], {rate: 1 + (+event.target.value) / 100});
+}, true);
+
+document.addEventListener("pointerdown", event => {
+  const key = keyOfControl(event.target);
+  if (!key) return;
+  draggingKeys.add(key);
+  roomPost({op: "claim", keys: [key]});
+}, true);
+const endDrag = event => {
+  const key = keyOfControl(event.target) || [...draggingKeys][0];
+  if (!key) return;
+  setTimeout(() => draggingKeys.delete(key), 250);   // let the last value land first
+};
+document.addEventListener("pointerup", endDrag, true);
+document.addEventListener("pointercancel", endDrag, true);
+
+// ---- deck / queue actions -----------------------------------------------
+function publishDeck(side, payload){
+  if (applyingRemote) return;
+  localDeckClock[side] = true;
+  roomPost({op: "deck", side, ...payload});
+}
+function publishPosition(side){
+  if (applyingRemote) return;
+  const audio = $("#audio" + side);
+  if (!audio) return;
+  publishDeck(side, {position: audio.currentTime || 0, playing: !audio.paused});
+}
+function publishQueue(side){
+  if (applyingRemote) return;
+  roomPost({op: "queue", side, action: "set", ids: queues[side]});
+}
+
+// ---- room -> UI ----------------------------------------------------------
+function applyValues(values){
+  if (!values) return;
+  applyingRemote = true;
+  for (const key of Object.keys(values)) {
+    if (draggingKeys.has(key)) continue;      // never fight the hand on the control
+    const element = controlElement(key);
+    if (!element) continue;
+    if (String(element.value) === String(values[key])) continue;
+    element.value = values[key];
+    element.dispatchEvent(new Event("input", {bubbles: true}));
+  }
+  applyingRemote = false;
+}
+
+function roomNow(deck){
+  return deck.playing ? deck.pos + (Date.now() / 1000 - deck.at) * (deck.rate || 1) : deck.pos;
+}
+const lastDecks = {A: null, B: null};
+const localDeckClock = {A: false, B: false};
+let audioJoined = false;
+function applyRemoteDeck(side, deck){
+  if (!deck) return;
+  lastDecks[side] = deck;
+  localDeckClock[side] = false;
+  const audio = $("#audio" + side);
+  if (!audio) return;
+  if (deck.track_id != null){
+    const local = decks[side] && decks[side].track;
+    if (!local || local.id !== deck.track_id){
+      const track = trackById(deck.track_id);
+      if (track){ applyingRemote = true; loadTrack(side, track); applyingRemote = false; }
+      else return;
+    }
+  }
+  const target = roomNow(deck);
+  if (audio.duration && Math.abs((audio.currentTime || 0) - target) > 0.9){
+    applyingRemote = true;
+    audio.currentTime = Math.max(0, Math.min(audio.duration, target));
+    applyingRemote = false;
+  }
+  audio.playbackRate = deck.rate || 1;
+  const shouldPlay = !!deck.playing;
+  if (shouldPlay && !audioJoined){ $("#joinaudio").hidden = false; return; }
+  if (shouldPlay && audio.paused){
+    applyingRemote = true;
+    audio.play().then(() => { $("#play" + side).textContent = "Pause"; })
+      .catch(() => $("#joinaudio").hidden = false);      // autoplay needs a tap
+    applyingRemote = false;
+  } else if (!shouldPlay && !audio.paused){
+    applyingRemote = true;
+    audio.pause();
+    $("#play" + side).textContent = "Play";
+    applyingRemote = false;
+  }
+}
+
+function applyQueue(side, ids){
+  if (!Array.isArray(ids)) return;
+  const same = ids.length === queues[side].length && ids.every((id, i) => queues[side][i] === id);
+  if (same) return;
+  queues[side] = ids.slice(0, MAX_QUEUE);
+  saveQueues();
+  renderQueues();
+  pump();
+}
+
+function initials(name){
+  const parts = String(name || "?").trim().split(/\s+/);
+  return ((parts[0] || "?")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
+}
+
+function paintRoster(members){
+  const host = $("#roster");
+  if (!host) return;
+  host.innerHTML = members.map(member => {
+    const colour = member.colour || "#9595a4";
+    const me = member.id === myId ? " me" : "";
+    return `<span class="who${me}" style="color:${colour}" title="${esc(member.name)}${me ? " (you)" : ""}">
+      <span class="dui" style="background:${colour}">${esc(initials(member.name))}</span>
+      <span>${esc(member.name)}${me ? " · you" : ""}</span></span>`;
+  }).join("");
+}
+
+const claims = {};        // key -> claim (or null when released)
+function paintClaims(){
+  for (const key of ROOM_KEYS){
+    const element = controlElement(key);
+    if (!element) continue;
+    const host = element.closest(".ctl") || element.closest(".cross") || element.parentElement;
+    if (!host) continue;
+    const claim = claims[key];
+    const existing = host.querySelector(":scope > .claim");
+    if (claim){
+      const mine = claim.id === myId;
+      element.classList.add("claimed");
+      element.style.setProperty("--claim", claim.colour || "#58d3a8");
+      const badge = existing || document.createElement("span");
+      badge.className = "claim";
+      badge.style.setProperty("--claim", claim.colour || "#58d3a8");
+      badge.textContent = mine ? "you" : initials(claim.name).slice(0, 1);
+      badge.title = mine ? "You are holding this" : `${claim.name} is using this`;
+      if (!existing) host.appendChild(badge);
+    } else {
+      element.classList.remove("claimed");
+      element.style.removeProperty("--claim");
+      if (existing) existing.remove();
+    }
+  }
+}
+
+function mergeClaims(patch){
+  for (const key of Object.keys(patch || {})){
+    if (patch[key]) claims[key] = patch[key];
+    else delete claims[key];
+  }
+  paintClaims();
+}
+
+function roomEvent(event){
+  if (!event || typeof event !== "object") return;
+  if (autoOn && event.claims && Object.values(event.claims).some(c => c && c.id !== myId)) autoStop("Another DJ took manual control");
+  if (event.type === "state"){
+    myId = event.you || "";
+    applyValues(event.values);
+    claimsClear();
+    mergeClaims(event.claims);
+    paintRoster(event.members || []);
+    for (const side of SIDES) applyQueue(side, event.queues && event.queues[side]);
+    if (event.decks) for (const side of SIDES) applyRemoteDeck(side, event.decks[side]);
+    return;
+  }
+  if (event.values) applyValues(event.values);
+  if (event.claims) mergeClaims(event.claims);
+  if (event.members) paintRoster(event.members);
+  if (event.queues) for (const side of Object.keys(event.queues)) applyQueue(side, event.queues[side]);
+  if (event.decks) for (const side of Object.keys(event.decks)) applyRemoteDeck(side, event.decks[side]);
+}
+function claimsClear(){
+  for (const key of Object.keys(claims)) delete claims[key];
+  paintClaims();
+}
+
+function liveChip(text, state){
+  const chip = $("#livechip");
+  if (!chip) return;
+  chip.textContent = text;
+  chip.className = "livechip " + (state || "");
+}
+
+let roomStream = null;
+function joinRoom(){
+  if (roomStream) roomStream.close();
+  roomStream = new EventSource(ROOM_URL + "/stream" + roomQuery());
+  roomStream.onopen = () => { roomLive = true; liveChip("live", "on"); };
+  roomStream.onerror = () => {
+    roomLive = false;
+    liveChip("reconnecting", "off");        // EventSource retries on its own
+  };
+  roomStream.onmessage = message => {
+    let event = null;
+    try { event = JSON.parse(message.data); } catch (error) { return; }
+    roomEvent(event);
+  };
+}
+
+// A seek or a jog is a deliberate move: report it once it settles.
+for (const side of SIDES){
+  $("#seek" + side).addEventListener("pointerup", () => publishPosition(side));
+  $("#seek" + side).addEventListener("keyup", () => publishPosition(side));
+  $("#jog" + side).addEventListener("pointerup", () => publishPosition(side));
+  $("#play" + side).addEventListener("click", () => publishPosition(side));
+  $("#cue" + side).addEventListener("click", () => publishPosition(side));
+  $("#qclear" + side).addEventListener("click", () => publishQueue(side));
+}
+$("#joinaudio").onclick = async () => {
+  audioJoined = true;
+  bootAudio();
+  try { await ctx.resume(); } catch (error) { /* nothing else to do */ }
+  $("#joinaudio").hidden = true;
+  for (const side of SIDES){
+    const audio = $("#audio" + side);
+    const deck = lastDecks[side];
+    if (deck) applyRemoteDeck(side, deck);
+  }
+};
+
+// Presence: a listener who touches nothing still belongs on the roster.
+setInterval(() => { if (roomLive) roomPost({op: "ping"}); }, 12000);
+
+// Re-anchor the room's clock now and then, so late joiners land in the right bar.
+setInterval(() => {
+  if (!roomLive) return;
+  for (const side of SIDES){
+    const audio = $("#audio" + side);
+    if (localDeckClock[side] && audio && audio.src && !audio.paused) publishDeck(side, {playing: true, position: audio.currentTime || 0});
+  }
+}, 10000);
+
+// ---------------------------------------------------------------- Auto DJ
+// A lease is per page instance, not per member/sessionStorage (duplicated tabs).
+const AUTO_TOKEN = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now();
+let autoOn = false, autoUntil = 0, autoBusy = false, autoFade = null;
+function autoStatus(message){ $("#autodjstatus").textContent = message; }
+function autoStop(message = "Manual control — Auto DJ off"){
+  const wasOn = autoOn;
+  autoOn = false; autoFade = null; autoUntil = 0;
+  $("#autodj").textContent = "Auto DJ: off";
+  $("#autodj").setAttribute("aria-pressed", "false");
+  autoStatus(message);
+  if (wasOn) roomPost({op: "autodj", token: AUTO_TOKEN, enabled: false});
+}
+// Stable ties preserve A/B queue order. Unknown tempo = FIFO at original speed;
+// known but incompatible tracks are never silently pitch-clamped.
+function autoPick(target, candidates){
+  const compatible = candidates.map((c, index) => {
+    const bpm = Number(c.track.bpm);
+    const known = Number.isFinite(bpm) && bpm > 20;
+    const sync = target && known ? syncPercent(target, bpm) : null;
+    return {...c, order: index, pitch: sync ? sync.percent : 0,
+      score: sync && sync.inRange ? Math.abs(target - bpm) : Infinity,
+      fallback: !target || !known};
+  });
+  return compatible.filter(c => Number.isFinite(c.score)).sort((a,b) => a.score-b.score || a.order-b.order)[0]
+    || compatible.find(c => c.fallback) || null;
+}
+function autoControl(element, value){
+  element.value = String(value);
+  element.dispatchEvent(new Event("input", {bubbles: true}));
+}
+async function autoTick(now = performance.now()){
+  if (!autoOn || autoBusy) return;
+  if (!roomLive || now >= autoUntil){ autoStop("Controller connection lost — enable again"); return; }
+  if (autoFade){
+    const f = autoFade;
+    const progress = Math.min(1, Math.max(0, (now - f.at) / f.duration));
+    autoControl($("#crossfader"), Math.round(f.start + (f.end-f.start)*progress));
+    if (progress === 1){
+      decks[f.from].audio.pause();
+      $("#play" + f.from).textContent = "Play";
+      decks[f.from].audio.currentTime = 0;
+      publishPosition(f.from); autoFade = null;
+      autoStatus("Waiting for next ending");
+    }
+    return;
+  }
+  const playing = SIDES.filter(s => decks[s] && !decks[s].audio.paused && !decks[s].audio.ended);
+  if (playing.length !== 1){ autoStatus("Start one deck; leave the other idle"); return; }
+  const from = playing[0], to = from === "A" ? "B" : "A";
+  const audio = decks[from].audio;
+  const remaining = (audio.duration - audio.currentTime) / audio.playbackRate;
+  if (!Number.isFinite(remaining) || remaining > 10 || remaining <= 0) return;
+  // Do not overwrite a manually cued track on the idle deck.
+  if (decks[to] && decks[to].track && decks[to].audio.currentTime > 0){ autoStatus("Idle deck is cued — clear/cue it first"); return; }
+  const candidates = SIDES.flatMap(side => queues[side].map((id,index) => ({side,index,track:trackById(id)})))
+    .filter(c => c.track && c.track.id !== decks[from].track.id);
+  const pick = autoPick(liveBpm(from), candidates);
+  if (!pick){ autoStatus(candidates.length ? "No compatible BPM (±8%) — waiting" : "Queues empty"); return; }
+  autoBusy = true;
+  try {
+    autoControl($("#crossfader"), from === "A" ? 0 : 100);
+    loadTrack(to, pick.track);
+    autoControl(controlElement(to + ".pitch"), pick.pitch);
+    await decks[to].audio.play();
+    if (!autoOn || performance.now() >= autoUntil){ decks[to].audio.pause(); return; }
+    $("#play" + to).textContent = "Pause";
+    publishPosition(to);
+    queues[pick.side].splice(pick.index, 1);
+    saveQueues(); renderQueues(); publishQueue(pick.side);
+    autoFade = {from, to, at: performance.now(), duration: Math.max(500, Math.min(8000, remaining*1000)),
+      start: from === "A" ? 0 : 100, end: to === "A" ? 0 : 100};
+    autoStatus(pick.fallback ? "Blending · no BPM, original speed" : "Blending · tempo matched");
+  } catch (error){ autoStop("Playback blocked/unavailable — press Play and enable again"); }
+  finally { autoBusy = false; }
+}
+$("#autodj").onclick = async () => {
+  if (autoOn){ autoStop("Auto DJ off"); return; }
+  // This gesture unlocks Web Audio; enabling never starts an empty/paused board.
+  bootAudio(); await ctx.resume(); audioJoined = true;
+  if (!roomLive){ autoStatus("Connect to the room first"); return; }
+  if (!await roomPost({op: "autodj", token: AUTO_TOKEN, enabled: true})){
+    autoStatus("Another tab controls Auto DJ (or server unavailable)"); return;
+  }
+  autoOn = true; autoUntil = performance.now() + 4500;
+  $("#autodj").textContent = "Auto DJ: on · this tab";
+  $("#autodj").setAttribute("aria-pressed", "true");
+  autoStatus("Start one deck; queued tracks blend near its ending");
+};
+setInterval(async () => {
+  if (!autoOn) return;
+  const started = performance.now();
+  const ok = await roomPost({op: "autodj", token: AUTO_TOKEN, enabled: true});
+  if (!autoOn) return;
+  if (!ok || performance.now() - started > 1500) autoStop("Controller lease lost");
+  else autoUntil = started + 4500;
+}, 2000);
+setInterval(() => { autoTick().catch(() => autoStop("Auto DJ stopped")); }, 100);
+// Only genuine user input cancels; generated fade/rate inputs still publish normally.
+for (const type of ["pointerdown", "keydown", "input", "click"]){
+  document.addEventListener(type, event => {
+    if (!event.isTrusted || !autoOn || applyingRemote || event.target.closest("#autodj")) return;
+    if (event.target.closest(".deck, .cross, .queues, #resetbtn")) autoStop();
+  }, true);
+}
+for (const side of SIDES){
+  $("#audio" + side).addEventListener("loadedmetadata", () => {
+    if (lastDecks[side] && !localDeckClock[side]) applyRemoteDeck(side, lastDecks[side]);
+  });
+}
+joinRoom();
+
+</script>
+</body>
+</html>

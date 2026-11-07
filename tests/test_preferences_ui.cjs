@@ -1,0 +1,44 @@
+// Isolated DOM rendering and capture clicks; no audio/server or real records.
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const {JSDOM}=require('jsdom');
+const html=fs.readFileSync('web/index.html','utf8');
+const dom=new JSDOM('<div id="view-library"><div id="liblist"></div></div><input id="libsearch"><select id="libplaylist"></select><div id="libscopes"></div><div id="libtitle"></div><div id="libscopehelp"></div><div id="libcount"></div>',{runScripts:'outside-only',url:'https://music.example'});
+const w=dom.window,ctx=dom.getInternalVMContext();
+let data={favorites_id:'favorites',favorites:[1],pins:[{kind:'track',target:'1'},{kind:'album',target:'a'.repeat(64)},{kind:'playlist',target:'7'}]},calls=[];
+w.$=s=>w.document.querySelector(s) || {value:'',innerHTML:'',textContent:'',classList:{toggle(){}},querySelectorAll:()=>[]};
+w.esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');w.scrollTo=()=>{};w.showToast=e=>{throw Error(e)};
+w.fetch=async path=>({ok:true,json:async()=>structuredClone(path.endsWith('preferences')?data:{tracks:[1,2],playlists:[7],playlist_tracks:[{playlist_id:7,track_id:1,position:0}]})});
+w.api=async(path,body)=>{calls.push(body);if(body.action==='favorite')data.favorites=body.enabled?[body.id]:[];else data.pins=data.pins.filter(p=>!(p.kind===body.kind&&p.target===String(body.id)));return structuredClone(data)};
+vm.runInContext('let playerAudio={src:"",paused:true};',ctx);
+vm.runInContext(html.slice(html.indexOf('// Personal listening state'),html.indexOf('const playerAudio =')),ctx);
+vm.runInContext(`libAll=[{id:1,title:'Zulu <script>',artist_name:'Artist',album:'Pinned',album_id:'a'.repeat(64),added:1,playable:true,playlists:[{id:7,title:'Set',position:0}]},{id:2,title:'Alpha',artist_name:'Other',album:'Other',album_id:'b'.repeat(64),added:2,playable:true,playlists:[]}];lib=libAll;libPlaylists=[{id:7,title:'Set'}];libraryScope='mine';libSort='title';`,ctx);
+vm.runInContext(fs.readFileSync('web/preferences.js','utf8'),ctx);
+(async()=>{
+ await w.loadListeningSaves();w.renderLibrary();
+ assert.equal(w.document.querySelectorAll('.mixed-pinned').length,1);
+ assert.equal(w.document.querySelectorAll('.pinned-item').length,3);
+ assert.equal(w.document.querySelectorAll('.mixed-pinned script').length,0);
+ assert.equal(vm.runInContext('renderedAlbums[0].key',ctx),'a'.repeat(64));
+ vm.runInContext("libView='songs';renderLibrary()",ctx);
+ assert.equal(w.document.querySelector('.songrow').dataset.id,'1');
+ let audioClicks=0;w.document.querySelector('[data-pref-action="favorite"]').closest('.songrow').addEventListener('click',()=>audioClicks++);
+ w.document.querySelector('[data-pref-action="favorite"]').click();
+ await new Promise(r=>setTimeout(r,10));
+ assert.equal(audioClicks,0);assert.equal(calls.length,1);assert.equal(calls[0].enabled,false);
+ assert(!('member_id' in calls[0]));
+ // The pin control is an icon: same box in both states, no word label.
+ const pinBtn=w.document.querySelector('[data-pref-action="pin"]');
+ assert(pinBtn.querySelector('svg'), 'pin control has no icon');
+ assert.equal(pinBtn.textContent.trim(),'', 'pin control still prints a label');
+ assert.equal(pinBtn.getAttribute('aria-label'),'Unpin track');
+ w.document.querySelector('[data-open-favorites]').click();
+ assert(w.document.querySelector('#liblist').textContent.includes('0 liked songs'));
+ assert.equal(vm.runInContext('playerAudio.src',ctx),'');
+ w.document.querySelector('[data-close-favorites]').click();w.renderLibrary();w.renderLibrary();
+ assert.equal(w.document.querySelectorAll('.mixed-pinned').length,1);
+ vm.runInContext("libraryScope='shared';renderLibrary()",ctx);
+ assert.equal(w.document.querySelectorAll('.mixed-pinned').length,0);
+ assert.equal(w.PreferenceUI.rank('track',1,2),0);
+ console.log('Preferences DOM PASS: mixed pins, stable pinned sort, favorites derived, escaping, self payload, no playback/bubbling, repeat render');
+ dom.window.close();
+})().catch(e=>{console.error(e);dom.window.close();process.exitCode=1});

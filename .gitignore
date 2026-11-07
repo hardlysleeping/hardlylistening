@@ -1,0 +1,16 @@
+# runtime data - never in git
+*.db
+*.db-shm
+*.db-wal
+archive.txt
+.cache/
+backups/
+library/downloads/
+
+# python
+__pycache__/
+*.pyc
+
+# scratch / tooling caches
+node_modules/
+edge-fallback/.wrangler/

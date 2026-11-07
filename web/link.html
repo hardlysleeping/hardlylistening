@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5, user-scalable=yes">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Signing in · HardlyListening</title>
+<style>
+  :root{ --bg:#0b0b10; --panel:#15151c; --line:#2a2a35; --text:#ececf1;
+    --dim:#9595a4; --accent:#58d3a8; --err:#ff6b6b; }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);
+    color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px}
+  .card{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);
+    border-radius:18px;padding:24px}
+  .brand{font-size:20px;font-weight:700} .brand span{color:var(--accent)}
+  h1{font-size:15px;font-weight:600;margin:18px 0 6px}
+  p{margin:0;color:var(--dim);font-size:13px}
+  .msg{margin-top:12px;font-size:13px;color:var(--dim)}
+  .msg.err{color:var(--err)}
+  a{color:var(--accent)}
+  label{display:block;margin-top:14px}input,select,button{font:inherit;max-width:100%;padding:10px;width:100%;margin-top:6px}button{cursor:pointer}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">Hardly<span>Listening</span></div>
+  <h1 id="title">Signing you in…</h1>
+  <p id="body">One moment.</p>
+  <form id="profile" hidden><label for="name">Your display name</label><input id="name" required maxlength="100"><label for="icon">Profile icon</label><select id="icon"><option value="music">♫ Music</option><option value="headphones">🎧 Headphones</option><option value="star">★ Star</option><option value="sun">☀ Sun</option><option value="moon">☾ Moon</option></select><button type="submit">Join and sign in</button></form>
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+</main>
+<script>
+// Enrollment credential stays in the fragment, never the request URL.
+const title = document.getElementById("title");
+const body = document.getElementById("body");
+const msg = document.getElementById("msg");
+
+function fail(text, hint){
+  title.textContent = "Not signed in";
+  body.textContent = hint || "";
+  msg.className = "msg err";
+  msg.replaceChildren();            // clearing only, never markup
+  msg.textContent = text;
+  const back = document.createElement("a");
+  back.href = "/login";
+  back.textContent = " Try another link";
+  msg.appendChild(back);
+}
+
+const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+const token = params.get("invite");
+const error = params.get("error_description") || params.get("error");
+
+history.replaceState(null, "", location.pathname);   // drop the fragment at once
+
+if (error){ fail(decodeURIComponent(error).replace(/\+/g, " "), "The link was rejected."); }
+else if (!token){ fail("This link has no invitation in it.", "Ask an administrator for a new invitation."); }
+else { signIn(); }
+async function signIn(profile){
+  fetch("/api/auth/session", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({invite: token, ...profile}),
+  }).then(async response => {
+    const data = await response.json().catch(() => ({}));
+    if (response.ok){ location.replace("/"); return; }
+    if (response.status === 400){
+      title.textContent='Choose your profile'; body.textContent='Your name and icon are visible to the approved community.';
+      document.getElementById('profile').hidden=false; msg.textContent=data.error || '';
+      return;
+    }
+    if (response.status === 403){
+      fail(data.error || "Membership awaiting approval",
+           "This invitation cannot grant access. Contact an administrator.");
+      return;
+    }
+    fail(data.error || "Sign-in failed");
+  }).catch(() => fail("Could not reach the server"));
+}
+document.getElementById('profile').onsubmit = event => { event.preventDefault(); signIn({display_name:document.getElementById('name').value,profile_icon:document.getElementById('icon').value}); };
+</script>
+</body>
+</html>

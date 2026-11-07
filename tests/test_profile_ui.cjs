@@ -1,0 +1,23 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const html=fs.readFileSync('web/index.html','utf8'),link=fs.readFileSync('web/link.html','utf8');
+new vm.Script(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
+const nodes={}; const $=id=>nodes[id]||(nodes[id]={value:'',textContent:'',showModal(){this.open=true}});
+let payload;
+const c=vm.createContext({$,last:{viewer:{role:'admin'}},fetch:async()=>({json:async()=>({display_name:'Owner',profile_icon:'star'})}),api:async(p,b)=>{assert.equal(p,'/api/profile');payload=b;return b},showToast:()=>{}});
+vm.runInContext(html.slice(html.indexOf('function profileSymbol'),html.indexOf('let listeningSaves')),c);
+(async()=>{
+ await vm.runInContext('openProfile()',c);assert.equal($('#profile-name').value,'Owner');
+ $('#profile-name').value='<img onerror=bad>';$('#profile-icon').value='moon';
+ await vm.runInContext('saveProfile({preventDefault(){}})',c);assert.equal($('#who').textContent,'☾ <img onerror=bad>');assert.equal(payload.id,undefined);
+ assert(html.includes('aria-label="My profile"'));assert(!html.includes('id="new-person-name"'));
+ assert(html.includes('flex-wrap:wrap;min-width:0'));assert(html.includes('overflow-wrap:anywhere'));assert(html.includes('overflow-x:hidden'));
+ const list={};c.isAdmin=()=>true;c.esc=s=>String(s).replaceAll('<','&lt;');c.last.viewer.id='self';c.$=id=>id==='#memberlist'?list:$(id);
+ c.fetch=async()=>({json:async()=>({members:[{id:'self',role:'admin',display_name:'Owner'},{id:'other',role:'member',display_name:''}]})});
+ vm.runInContext(html.slice(html.indexOf('async function loadMembers'),html.indexOf('async function setMember')),c);
+ await vm.runInContext('loadMembers()',c);assert(list.innerHTML.includes('You'));assert(!list.innerHTML.includes('data-person-id="self"'));assert(list.innerHTML.includes('Not joined'));
+ const n={};const doc={getElementById:id=>n[id]||(n[id]={hidden:true,replaceChildren(){},appendChild(){}}),createElement:()=>({})};let calls=[];
+ const lc=vm.createContext({document:doc,URLSearchParams,location:{hash:'#invite=secret',pathname:'/auth/link',replace:p=>calls.push(p)},history:{replaceState(){}},fetch:async(p,b)=>{calls.push(JSON.parse(b.body));return {status:400,ok:false,json:async()=>({error:'Choose profile'})}}});
+ vm.runInContext(link.match(/<script>([\s\S]*?)<\/script>/)[1],lc);await new Promise(r=>setImmediate(r));assert.equal(n.profile.hidden,false);
+ doc.getElementById('name').value='Friend';doc.getElementById('icon').value='sun';n.profile.onsubmit({preventDefault(){}});await new Promise(r=>setImmediate(r));assert.equal(calls[1].display_name,'Friend');assert.equal(calls[1].profile_icon,'sun');
+ console.log('Profile DOM PASS: self edit, safe header, onboarding, self actions, responsive CSS');
+})().catch(e=>{console.error(e);process.exit(1)});
