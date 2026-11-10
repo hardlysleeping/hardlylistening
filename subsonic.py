@@ -1,0 +1,536 @@
+"""The Subsonic / OpenSubsonic surface, scoped to one device's member.
+
+`listening.rest()` authenticates the device, builds that member's catalogue and hands the
+endpoint here. Everything that maps onto real app data is implemented; the subsystems this
+app has no equivalent for (chat, jukebox, transcoding, sonic analysis, podcast downloads,
+user administration) answer Subsonic error 30 with a plain message, never a silent lie.
+"""
+from __future__ import annotations
+
+import base64
+import random
+import time
+
+from security import Denied
+
+BLANK_PNG = base64.b64decode(
+    b'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==')
+
+MUSIC_TYPES = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'flac': 'audio/flac',
+               'ogg': 'audio/ogg', 'opus': 'audio/ogg', 'wav': 'audio/wav', 'aiff': 'audio/aiff',
+               'aif': 'audio/aiff', 'wma': 'audio/x-ms-wma', 'alac': 'audio/mp4', 'webm': 'audio/webm'}
+
+NOT_IMPLEMENTED = {
+    'jukeboxControl', 'getTranscodeDecision', 'getTranscodeStream', 'hls',
+    'downloadPodcastEpisode',
+    'addChatMessage', 'getChatMessages',
+    'getSonicSimilarTracks', 'findSonicPath', 'getVideos', 'getVideoInfo', 'getCaptions',
+    'changePassword', 'createUser', 'updateUser', 'deleteUser', 'getNowPlaying', 'tokenInfo',
+}
+
+
+def schema(store):
+    with store.lock:
+        store.conn.executescript('''
+        CREATE TABLE IF NOT EXISTS listening_ratings (
+          member_id TEXT NOT NULL, track_id INTEGER NOT NULL, rating INTEGER NOT NULL,
+          PRIMARY KEY (member_id, track_id));
+        CREATE TABLE IF NOT EXISTS listening_plays (
+          member_id TEXT NOT NULL, track_id INTEGER NOT NULL, plays INTEGER NOT NULL DEFAULT 0,
+          last_played REAL NOT NULL DEFAULT 0, PRIMARY KEY (member_id, track_id));
+        ''')
+        store.conn.commit()
+
+
+def iso(seconds):
+    value = float(seconds or 0)
+    if value <= 0:
+        return '1970-01-01T00:00:00.000Z'
+    return time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime(value))
+
+
+def genre_of(track):
+    tags = track.get('genres')
+    if isinstance(tags, list) and tags:
+        return tags[0]
+    return track.get('genre') or ''
+
+
+def song(t, starred=(), ratings=None, bookmarks=None):
+    path = t.get('file') or ''
+    name = path.rsplit('/', 1)[-1]
+    suffix = name.rsplit('.', 1)[-1].lower() if '.' in name else 'mp3'
+    album_id = str(t.get('albumId') or '')
+    track_id = int(t['id'])
+    data = {
+        'id': str(track_id), 'parent': album_id, 'isDir': False, 'title': t.get('title') or '',
+        'album': t.get('album') or '', 'artist': t.get('artist_name') or '',
+        'albumArtist': t.get('artist_name') or '',
+        'artistId': t.get('artistId') or '', 'albumId': album_id,
+        'coverArt': album_id, 'duration': int(t.get('duration') or 0),
+        'track': int(t.get('track_number') or 0), 'discNumber': int(t.get('disc') or 0),
+        'suffix': suffix, 'contentType': MUSIC_TYPES.get(suffix, 'audio/mpeg'),
+        'size': int(t.get('size') or 0), 'created': iso(t.get('added')),
+        'type': 'music', 'bpm': int(t.get('bpm') or 0), 'genre': genre_of(t),
+    }
+    if track_id in starred:
+        data['starred'] = iso(t.get('added'))
+    if ratings and track_id in ratings:
+        data['userRating'] = ratings[track_id]
+    if bookmarks and track_id in bookmarks:
+        data['bookmarkPosition'] = int(bookmarks[track_id])
+    return data
+
+
+def handle(endpoint, params, multi, ctx):
+    """Return a payload dict; write and return None when the response is bytes or a redirect."""
+    store, uid, handler = ctx['store'], ctx['uid'], ctx['handler']
+    songs, albums, artists, tracks = ctx['songs'], ctx['albums'], ctx['artists'], ctx['tracks']
+    page, find, playlist_of = ctx['page'], ctx['find'], ctx['playlist']
+    identity = params.get('id', '')
+    schema(store)
+    import podcasts
+    import radio
+    radio.schema(store)
+    podcasts.schema(store)
+
+    def ids_of(key):
+        return multi.get(key) or ([params[key]] if params.get(key) else [])
+
+    with store.lock:
+        starred = {r[0] for r in store.conn.execute(
+            'SELECT track_id FROM listening_favorites WHERE member_id=?', (uid,))}
+        ratings = {r[0]: r[1] for r in store.conn.execute(
+            'SELECT track_id, rating FROM listening_ratings WHERE member_id=?', (uid,))}
+        plays = {r[0]: (r[1], r[2]) for r in store.conn.execute(
+            'SELECT track_id, plays, last_played FROM listening_plays WHERE member_id=?', (uid,))}
+        album_added = {(r[0] or '', r[1] or ''): r[2] for r in store.conn.execute(
+            'SELECT artist_name, album, MAX(added) FROM tracks GROUP BY artist_name, album')}
+
+    # ---- core -------------------------------------------------------------
+    if endpoint == 'ping':
+        return {}
+    if endpoint == 'getLicense':
+        return {'license': {'valid': True}}
+    if endpoint == 'getMusicFolders':
+        return {'musicFolders': {'musicFolder': [{'id': '1', 'name': 'Saved music'}]}}
+    if endpoint == 'getArtists':
+        return {'artists': {'ignoredArticles': '', 'index': [{'name': 'Saved', 'artist': list(artists.values())}]}}
+    if endpoint == 'getIndexes':
+        return {'indexes': {'ignoredArticles': '', 'lastModified': int(time.time() * 1000),
+                            'index': [{'name': 'Saved', 'artist': list(artists.values())}]}}
+    if endpoint == 'getArtist':
+        row = find(list(artists.values()))
+        row['album'] = [a for a in albums.values() if a['artistId'] == identity]
+        return {'artist': row}
+    if endpoint == 'getAlbum':
+        row = find(list(albums.values()))
+        row['song'] = [s for s in songs if s['albumId'] == identity]
+        return {'album': row}
+    if endpoint == 'getSong':
+        return {'song': find(songs)}
+    if endpoint == 'getPlaylists':
+        return {'playlists': {'playlist': [playlist_of(p, songs)[0] for p in ctx['playlists']]}}
+    if endpoint == 'getPlaylist':
+        row, entries = playlist_of(find(ctx['playlists']), songs)
+        row['entry'] = entries
+        return {'playlist': row}
+    if endpoint in ('search', 'search2', 'search3'):
+        term = params.get('query', '').casefold()
+        key = {'search': 'searchResult', 'search2': 'searchResult2', 'search3': 'searchResult3'}[endpoint]
+        return {key: {
+            'song': page([s for s in songs if term in s['title'].casefold()], 'songCount', 'songOffset'),
+            'album': page([a for a in albums.values() if term in a['name'].casefold()], 'albumCount', 'albumOffset'),
+            'artist': page([a for a in artists.values() if term in a['name'].casefold()], 'artistCount', 'artistOffset')}}
+
+    # ---- artwork ----------------------------------------------------------
+    if endpoint == 'getCoverArt':
+        art = ctx['art'].get(identity)
+        if not art:
+            track = next((t for t in tracks if str(t.get('id')) == identity), None)
+            if track is not None:
+                art = track.get('artwork')
+            else:
+                found = next((s for s in songs if s['id'] == identity), None)
+                if found is not None:
+                    art = ctx['art'].get(found['albumId'])
+        if art:
+            handler.send_response(302)
+            handler.send_header('Location', art)
+            handler.send_header('Cache-Control', 'public, max-age=86400')
+            handler.send_header('Content-Length', '0')
+            handler.end_headers()
+            return None
+        # An id that is not in this member's catalogue is a miss, not an empty image.
+        known = (identity in albums or identity in artists
+                 or any(s['id'] == identity for s in songs)
+                 or any(str(t.get('id')) == identity for t in tracks))
+        if not known:
+            raise Denied(404, 'Not found')
+        handler._send(200, BLANK_PNG, 'image/png')
+        return None
+    if endpoint == 'getAvatar':
+        handler.send_response(302)
+        handler.send_header('Location', '/icon-192.png')
+        handler.send_header('Content-Length', '0')
+        handler.end_headers()
+        return None
+
+    # ---- directories ------------------------------------------------------
+    if endpoint == 'getMusicDirectory':
+        if identity in ('', '1'):
+            rows = [dict(a, isDir=True, title=a['name'], parent='1') for a in albums.values()]
+            name = 'Saved music'
+        elif identity in artists:
+            rows = [dict(a, isDir=True, title=a['name'], parent=identity)
+                    for a in albums.values() if a['artistId'] == identity]
+            name = artists[identity]['name']
+        elif identity in albums:
+            rows = [dict(s, parent=identity) for s in songs if s['albumId'] == identity]
+            name = albums[identity]['name']
+        else:
+            raise Denied(404, 'Not found')
+        return {'directory': {'id': identity or '1', 'name': name, 'child': rows}}
+
+    # ---- album lists ------------------------------------------------------
+    if endpoint in ('getAlbumList', 'getAlbumList2'):
+        sort = params.get('type', 'alphabeticalByName')
+        rows = list(albums.values())
+        wanted = params.get('genre', '').casefold()
+        if wanted:
+            keep = {s['albumId'] for s, t in zip(songs, tracks) if genre_of(t).casefold() == wanted}
+            rows = [a for a in rows if a['id'] in keep]
+        if sort == 'alphabeticalByName':
+            rows.sort(key=lambda a: a['name'].casefold())
+        elif sort == 'alphabeticalByArtist':
+            rows.sort(key=lambda a: (a['artist'].casefold(), a['name'].casefold()))
+        elif sort in ('newest', 'recent'):
+            rows.sort(key=lambda a: album_added.get((a['artist'], a['name']), 0), reverse=True)
+        elif sort == 'random':
+            random.shuffle(rows)
+        elif sort == 'frequent':
+            def weight(album):
+                return sum(plays.get(int(s['id']), (0, 0))[0] for s in songs if s['albumId'] == album['id'])
+            rows.sort(key=weight, reverse=True)
+        elif sort in ('highest', 'byYear'):
+            rows.sort(key=lambda a: a['name'].casefold())
+        elif sort == 'byGenre':
+            if not wanted:
+                raise Denied(400, 'genre is required for byGenre')
+            rows.sort(key=lambda a: a['name'].casefold())
+        else:
+            raise Denied(400, 'Unsupported album list type')
+        key = 'albumList2' if endpoint == 'getAlbumList2' else 'albumList'
+        return {key: {'album': page(rows)}}
+
+    # ---- genres -----------------------------------------------------------
+    if endpoint in ('getGenres', 'getSongsByGenre'):
+        counts = {}
+        for track in tracks:
+            tag = genre_of(track)
+            if tag:
+                counts[tag] = counts.get(tag, 0) + 1
+        if endpoint == 'getGenres':
+            return {'genres': {'genre': [{'songCount': n, 'albumCount': 0, 'value': tag}
+                                         for tag, n in sorted(counts.items())]}}
+        wanted = params.get('genre', '').casefold()
+        rows = [s for s, t in zip(songs, tracks) if genre_of(t).casefold() == wanted]
+        return {'songsByGenre': {'song': page(rows)}}
+    if endpoint == 'getRandomSongs':
+        pool = list(songs)
+        random.shuffle(pool)
+        try:
+            size = max(1, min(int(params.get('size', 10)), 500))
+        except ValueError:
+            size = 10
+        return {'randomSongs': {'song': pool[:size]}}
+
+    # ---- stars, ratings, plays -------------------------------------------
+    if endpoint in ('star', 'unstar'):
+        handler.close_connection = True
+        on = endpoint == 'star'
+        for value in ids_of('id'):
+            try:
+                track_id = int(value)
+            except ValueError:
+                continue
+            with store.lock:
+                if on:
+                    store.conn.execute('INSERT OR IGNORE INTO listening_favorites VALUES(?,?)', (uid, track_id))
+                else:
+                    store.conn.execute('DELETE FROM listening_favorites WHERE member_id=? AND track_id=?',
+                                       (uid, track_id))
+                store.conn.commit()
+        for value in ids_of('albumId'):
+            album = albums.get(value)
+            if not album:
+                continue
+            key = album.get('key') or value
+            with store.lock:
+                if on:
+                    store.conn.execute('INSERT OR IGNORE INTO listening_album_likes VALUES(?,?)', (uid, key))
+                else:
+                    store.conn.execute('DELETE FROM listening_album_likes WHERE member_id=? AND album_key=?',
+                                       (uid, key))
+                store.conn.commit()
+        return {}
+    if endpoint in ('getStarred', 'getStarred2'):
+        starred_songs = [s for s in songs if int(s['id']) in starred]
+        album_ids = {s['albumId'] for s in starred_songs}
+        artist_ids = {s['artistId'] for s in starred_songs}
+        return {('getStarred2' if endpoint == 'getStarred2' else 'getStarred'): {
+            'song': starred_songs,
+            'album': [a for a in albums.values() if a['id'] in album_ids],
+            'artist': [a for a in artists.values() if a['id'] in artist_ids]}}
+    if endpoint == 'setRating':
+        try:
+            track_id = int(identity)
+            rating = max(0, min(int(params.get('rating', 0)), 5))
+        except ValueError:
+            raise Denied(400, 'Invalid rating')
+        with store.lock:
+            if rating:
+                store.conn.execute('INSERT OR REPLACE INTO listening_ratings VALUES(?,?,?)',
+                                   (uid, track_id, rating))
+            else:
+                store.conn.execute('DELETE FROM listening_ratings WHERE member_id=? AND track_id=?',
+                                   (uid, track_id))
+            store.conn.commit()
+        return {}
+    if endpoint in ('scrobble', 'reportPlayback'):
+        now = time.time()
+        with store.lock:
+            for value in ids_of('id'):
+                try:
+                    track_id = int(value)
+                except ValueError:
+                    continue
+                store.conn.execute(
+                    'INSERT INTO listening_plays (member_id,track_id,plays,last_played) VALUES (?,?,1,?)'
+                    ' ON CONFLICT(member_id,track_id) DO UPDATE SET plays=plays+1,'
+                    ' last_played=excluded.last_played', (uid, track_id, now))
+            store.conn.commit()
+        return {}
+    if endpoint == 'getTopSongs':
+        artist = params.get('artist', '').casefold()
+        pool = [s for s in songs if s['artist'].casefold() == artist]
+        pool.sort(key=lambda s: plays.get(int(s['id']), (0, 0))[0], reverse=True)
+        return {'topSongs': {'song': page(pool)}}
+
+    # ---- play queue -------------------------------------------------------
+    if endpoint in ('savePlayQueue', 'savePlayQueueByIndex'):
+        handler.close_connection = True
+        queue = [int(v) for v in ids_of('id') if str(v).isdigit()]
+        try:
+            current = int(params.get('current') or (queue[0] if queue else 0) or 0)
+            position = float(params.get('position') or 0) / 1000.0
+        except ValueError:
+            current, position = 0, 0.0
+        import nowplaying
+        nowplaying.put(store, uid, {'id': current or None, 'queue': queue, 'time': max(0.0, position)})
+        return {}
+    if endpoint in ('getPlayQueue', 'getPlayQueueByIndex'):
+        import nowplaying
+        state = nowplaying.get(store, uid) or {}
+        entry = [s for track_id in state.get('queue') or [] for s in songs if s['id'] == str(track_id)]
+        current = next((s for s in songs if s['id'] == str(state.get('id') or '')), None)
+        return {'playQueue': {'current': current['id'] if current else '',
+                              'position': int(float(state.get('time') or 0) * 1000),
+                              'username': uid, 'changed': iso(state.get('updated')),
+                              'entry': entry}}
+
+    # ---- bookmarks (Phase 1) ----------------------------------------------
+    if endpoint == 'getBookmarks':
+        out = []
+        with store.lock:
+            rows = [dict(r) for r in store.conn.execute(
+                'SELECT track_id,position_ms,comment,created,updated FROM listening_bookmarks '
+                'WHERE member_id=? ORDER BY updated DESC,track_id', (uid,))]
+        by_id = {s['id']: s for s in songs}
+        for row in rows:
+            entry = by_id.get(str(row['track_id']))
+            if entry is None:
+                continue                      # track left this member's catalogue
+            out.append({'entry': entry, 'position': int(row['position_ms']),
+                        'username': ctx.get('username') or uid,
+                        'comment': row['comment'] or '', 'created': iso(row['created']),
+                        'changed': iso(row['updated'])})
+        return {'bookmarks': {'bookmark': out}}
+    if endpoint == 'createBookmark':
+        entry = find(songs)
+        try:
+            position = int(params.get('position') or 0)
+        except ValueError:
+            raise Denied(400, 'position must be milliseconds')
+        if position < 0:
+            raise Denied(400, 'position must not be negative')
+        comment = params.get('comment', '')
+        if not isinstance(comment, str) or len(comment) > 500:
+            raise Denied(400, 'comment may be at most 500 characters')
+        now = time.time()
+        with store.lock:
+            exists = store.conn.execute(
+                'SELECT created FROM listening_bookmarks WHERE member_id=? AND track_id=?',
+                (uid, int(entry['id']))).fetchone()
+            if exists:
+                store.conn.execute(
+                    'UPDATE listening_bookmarks SET position_ms=?,comment=?,updated=? '
+                    'WHERE member_id=? AND track_id=?',
+                    (position, comment.strip(), now, uid, int(entry['id'])))
+            else:
+                store.conn.execute(
+                    'INSERT INTO listening_bookmarks(member_id,track_id,position_ms,comment,created,updated) '
+                    'VALUES(?,?,?,?,?,?)', (uid, int(entry['id']), position, comment.strip(), now, now))
+            store.conn.commit()
+        return {}
+    if endpoint == 'deleteBookmark':
+        try:
+            track_id = int(identity)
+        except ValueError:
+            raise Denied(400, 'Invalid bookmark id')
+        with store.lock:
+            store.conn.execute('DELETE FROM listening_bookmarks WHERE member_id=? AND track_id=?',
+                               (uid, track_id))
+            store.conn.commit()
+        return {}
+
+    # ---- public shares (Phase 2) ------------------------------------------
+    if endpoint == 'createShare':
+        import shares
+        kind = (params.get('kind') or '').strip().lower()
+        target = identity
+        if kind not in ('track', 'album', 'playlist'):
+            if target in albums:
+                kind = 'album'
+            elif any(s['id'] == target for s in songs):
+                kind = 'track'
+            elif any(str(p['id']) == target for p in ctx['playlists']):
+                kind = 'playlist'
+            else:
+                raise Denied(404, 'Not found')
+        if kind == 'track' and not any(s['id'] == target for s in songs):
+            raise Denied(404, 'Not found')
+        if kind == 'album' and target not in albums:
+            raise Denied(404, 'Not found')
+        if kind == 'playlist' and not any(str(p['id']) == target for p in ctx['playlists']):
+            raise Denied(404, 'Not found')
+        shares.create(store, {'id': uid, 'role': ctx.get('role', 'member')}, kind, target,
+                      note=params.get('description') or params.get('note') or '',
+                      expires=params.get('expires'), security=ctx.get('security'))
+        return {}
+    if endpoint == 'getShares':
+        import shares
+        with store.lock:
+            rows = [dict(r) for r in store.conn.execute(
+                'SELECT * FROM listening_shares WHERE member_id=? ORDER BY created DESC,id DESC',
+                (uid,))]
+        by_id = {s['id']: s for s in songs}
+        out = []
+        for row in rows:
+            entries = [by_id[str(t['id'])] for t in shares.tracks_for(store, row)
+                       if str(t['id']) in by_id]
+            out.append({'id': str(row['id']), 'description': row['note'] or '',
+                        'username': ctx.get('username') or uid,
+                        'created': iso(row['created']), 'expires': iso(row['expires']),
+                        'visitCount': int(row['hits']), 'entry': entries})
+        return {'shares': {'share': out}}
+    if endpoint in ('updateShare', 'deleteShare'):
+        import shares
+        try:
+            share_id = int(identity)
+        except ValueError:
+            raise Denied(400, 'Invalid share id')
+        member = {'id': uid, 'role': ctx.get('role', 'member')}
+        if endpoint == 'deleteShare':
+            shares.delete(store, member, share_id)
+        else:
+            shares.update(store, member, share_id,
+                          note=params.get('description') if 'description' in params else None,
+                          expires=params.get('expires'))
+        return {}
+
+    # ---- internet radio (Phase 3) -----------------------------------------
+    if endpoint == 'getInternetRadioStations':
+        return radio.list_stations(store, uid)
+    if endpoint == 'createInternetRadioStation':
+        radio.create(store, uid, params)
+        return {}
+    if endpoint == 'updateInternetRadioStation':
+        radio.update(store, uid, identity, params)
+        return {}
+    if endpoint == 'deleteInternetRadioStation':
+        radio.delete(store, uid, identity)
+        return {}
+
+    # ---- podcasts (Phase 4) -----------------------------------------------
+    if endpoint == 'createPodcastChannel':
+        podcasts.create_channel(store, uid, params.get('url') or identity,
+                                seed=params.get('title') or '')
+        return {}
+    if endpoint == 'getPodcasts':
+        return podcasts.get_podcasts(store, uid, params)
+    if endpoint == 'getNewestPodcasts':
+        return podcasts.newest(store, uid, params)
+    if endpoint == 'getPodcastEpisode':
+        return podcasts.get_episode(store, uid, identity)
+    if endpoint == 'refreshPodcasts':
+        podcasts.refresh(store, uid, params.get('id') or '')
+        return {}
+    if endpoint == 'deletePodcastChannel':
+        podcasts.delete_channel(store, uid, identity)
+        return {}
+    if endpoint == 'deletePodcastEpisode':
+        podcasts.delete_episode(store, uid, identity)
+        return {}
+
+    # ---- info, lyrics, plumbing ------------------------------------------
+    if endpoint in ('getArtistInfo', 'getArtistInfo2', 'getAlbumInfo', 'getAlbumInfo2'):
+        key = {'getArtistInfo': 'artistInfo', 'getArtistInfo2': 'artistInfo2',
+               'getAlbumInfo': 'albumInfo', 'getAlbumInfo2': 'albumInfo2'}[endpoint]
+        return {key: {'biography': '', 'musicBrainzId': '', 'smallImageUrl': '', 'mediumImageUrl': '',
+                      'largeImageUrl': '', 'similarArtist': [], 'notes': ''}}
+    if endpoint == 'getLyrics':
+        title = params.get('title', '').casefold()
+        artist = params.get('artist', '').casefold()
+        track = next((s for s in songs if s['title'].casefold() == title
+                      and (not artist or s['artist'].casefold() == artist)), None)
+        if not track:
+            return {'lyrics': {}}
+        data = ctx['lyrics'](int(track['id'])) or {}
+        return {'lyrics': {'artist': track['artist'], 'title': track['title'],
+                           'value': data.get('text') or ''}}
+    if endpoint == 'getLyricsBySongId':
+        track = next((s for s in songs if s['id'] == identity), None)
+        data = ctx['lyrics'](int(identity)) or {}
+        lines = [{'value': entry.get('text') or '', 'start': int(entry.get('time') or 0)}
+                 for entry in data.get('lines') or [] if isinstance(entry, dict)]
+        if not lines and data.get('text'):
+            lines = [{'value': line} for line in data['text'].splitlines() if line.strip()]
+        return {'lyricsList': {'structuredLyrics': [{
+            'displayArtist': track['artist'] if track else '',
+            'displayTitle': track['title'] if track else '',
+            'synced': bool(data.get('lines')), 'line': lines}]}}
+    if endpoint in ('getSimilarSongs', 'getSimilarSongs2'):
+        track = next((s for s in songs if s['id'] == identity), None)
+        pool = [s for s in songs if track and s['artist'] == track['artist'] and s['id'] != identity]
+        if not pool:
+            pool = list(songs)
+        random.shuffle(pool)
+        key = 'getSimilarSongs2' if endpoint == 'getSimilarSongs2' else 'getSimilarSongs'
+        return {key: {'song': page(pool)}}
+    if endpoint == 'getOpenSubsonicExtensions':
+        return {'openSubsonicExtensions': [{'name': 'formPost', 'versions': [1]}]}
+    if endpoint in ('getScanStatus', 'startScan'):
+        return {'scanStatus': {'scanning': False, 'count': len(tracks), 'folderCount': 1,
+                               'lastScan': iso(time.time())}}
+    if endpoint in ('getUsers', 'getUser'):
+        member = {'username': ctx.get('username') or uid, 'email': '', 'scrobblingEnabled': True, 'adminRole': False,
+                  'settingsRole': False, 'downloadRole': True, 'uploadRole': False,
+                  'playlistRole': True, 'coverArtRole': True, 'commentRole': False,
+                  'podcastRole': False, 'streamRole': True, 'jukeboxRole': False,
+                  'shareRole': False, 'videoConversionRole': False}
+        return {'users': {'user': [member]}} if endpoint == 'getUsers' else {'user': member}
+
+    if endpoint in NOT_IMPLEMENTED:
+        raise Denied(430, 'This server does not implement %s' % endpoint)
+    raise Denied(404, 'Unsupported endpoint')

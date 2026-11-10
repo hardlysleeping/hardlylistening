@@ -1,1 +1,9 @@
 body{margin:0;background:#101016;color:#eeeef4;font:16px system-ui,sans-serif}main{max-width:900px;margin:auto;padding:24px}a{color:#b8a4ff}section{background:#1a1a24;border:1px solid #343442;border-radius:16px;padding:20px;margin:16px 0}h1,h2,h3{margin:12px 0}p{color:#bcbccf;line-height:1.5}label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}form,.row,#controls{display:flex;gap:10px;flex-wrap:wrap;align-items:end}#controls{display:block}input,select,textarea,button{box-sizing:border-box;background:#252532;color:inherit;border:1px solid #515162;border-radius:9px;padding:11px;font:inherit;max-width:100%}input,textarea{width:100%}button{cursor:pointer}button:hover,button[aria-pressed=true]{background:#6245b1}button:disabled{opacity:.6;cursor:wait}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #b8a4ff;outline-offset:2px}.row{padding:12px 0;border-bottom:1px solid #343442;align-items:center}.row span{flex:1;min-width:100px;overflow-wrap:anywhere}.row strong{min-width:26px;text-align:center}#error{color:#ffb6bf;white-space:pre-wrap}#invitebox{padding:14px 0}audio{width:100%;margin:15px 0}#messages{height:240px;overflow:auto;overflow-wrap:anywhere;padding:8px;border:1px solid #343442;border-radius:9px}#messages p{margin:8px 0;color:#eeeef4}#chatbox{margin-top:24px}textarea{resize:vertical;min-height:70px}[hidden]{display:none!important}@media(max-width:500px){main{padding:12px}section{padding:14px}form{align-items:stretch}form label{flex-basis:100%}.row{gap:7px}button{min-height:44px}}#skiprow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0 4px}#skipcount{color:#bcbccf;font-size:14px}#nextup{font-size:14px;color:#9f9fb5}
+
+/* No zoom: a 16px field font stops iOS's focus zoom, touch-action stops pinch and
+   double-tap zoom. */
+html,body{touch-action:manipulation}
+@media (max-width:760px){
+  html,body{touch-action:pan-x pan-y}
+  input,select,textarea{font-size:16px!important}
+}

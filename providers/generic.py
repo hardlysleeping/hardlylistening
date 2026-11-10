@@ -30,7 +30,10 @@ class GenericProvider(Provider):
         return "generic"
 
     def resolve(self, url: str) -> Release:
-        info = ytdlp.json_info(url)
+        info = ytdlp.json_info(url, timeout=90)
+        if not info:
+            raise RuntimeError("yt-dlp could not read that link — it may be private, "
+                               "removed, or not a page it supports")
         entries = info.get("entries") or [info]
         name = self.provider_name(url)
         tracks: list[TrackRef] = []
@@ -48,9 +51,17 @@ class GenericProvider(Provider):
                 artwork=entry.get("thumbnail") or "",
                 source_url=entry.get("webpage_url") or entry.get("url") or url,
             ))
+        # The uploader's own page, so an artist pulled from a plain link still has a
+        # profile to follow. yt-dlp names it differently per site.
+        artist_url = (info.get("uploader_url") or info.get("channel_url")
+                      or entries[0].get("uploader_url") or entries[0].get("channel_url") or "")
+        artist_id = (info.get("uploader_id") or info.get("channel_id")
+                     or entries[0].get("uploader_id") or entries[0].get("channel_id") or "")
         return Release(provider=name, release_id=str(info.get("id") or url),
                        title=(info.get("title") or "Playlist").strip(),
                        artist=(info.get("uploader") or "").strip(),
+                       artist_id=str(artist_id),
+                       artist_url=artist_url,
                        release_type="playlist" if info.get("entries") else "track",
                        track_count=len(tracks), artwork=info.get("thumbnail") or "",
                        source_url=url, tracks=tracks)

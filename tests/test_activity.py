@@ -57,7 +57,7 @@ class Activity(unittest.TestCase):
         activity.record(self.store, activity.KIND_JOIN, member_id='m-boss')
         feed = activity.feed(self.store, now=start + 250)
         self.assertEqual([i['kind'] for i in feed[:2]], ['boost', 'boost'])
-        self.assertEqual(feed[2]['kind'], 'join')
+        self.assertEqual(feed[2]['kind'], 'day')
         self.assertEqual(feed[0]['member_id'], 'm-bob')
         self.assertEqual(feed[1]['track']['id'], second)
         self.assertEqual(activity.current_boost(self.store, 'm-ann', now=start + activity.BOOST_TTL - 1)['track_id'], second)
@@ -79,28 +79,32 @@ class Activity(unittest.TestCase):
         activity.record(self.store, activity.KIND_JOIN, member_id="m-ann", detail="Ann")
         activity.record(self.store, activity.KIND_NAME, member_id="m-ann", detail="Ann B")
         items = activity.feed(self.store)
-        kinds = [i["kind"] for i in items]
-        self.assertEqual(kinds[:2], ["name", "join"])
-        self.assertEqual(items[0]["member"], "Ann", "the new name comes from the member row")
-        self.assertEqual(items[0]["detail"], "Ann B")
+        self.assertEqual(len(items), 1, "one member, one day: one card")
+        card = items[0]
+        self.assertEqual(card["kind"], "day")
+        self.assertEqual(card["member"], "Ann", "the new name comes from the member row")
+        self.assertEqual([o["kind"] for o in card["groups"]["other"]], ["name", "join"])
+        self.assertEqual(card["groups"]["other"][0]["detail"], "Ann B")
+        self.assertEqual(card["counts"], {"other": 2})
 
-    def test_listens_stack_into_one_uncollapsed_entry(self):
+    def test_listens_fold_into_one_day_card(self):
         first, second, third = (self.track(t) for t in ("one", "two", "three"))
         for tid in (first, second, third):
             activity.listen(self.store, {"id": "m-ann"}, tid)
-        items = [i for i in activity.feed(self.store) if i["kind"] == "listen"]
-        self.assertEqual(len(items), 1, "one sitting is one entry")
-        self.assertEqual(items[0]["count"], 3)
-        self.assertEqual([t["title"] for t in items[0]["tracks"]], ["one", "two", "three"],
-                         "every song in the stack is listed, not hidden behind a group")
-        self.assertNotIn("collapsed", items[0], "a listen stack is never collapsible")
+        items = activity.feed(self.store)
+        self.assertEqual(len(items), 1, "one member's day is one card, not one per sitting")
+        card = items[0]
+        self.assertEqual(card["counts"], {"listen": 3})
+        self.assertEqual([t["title"] for t in card["groups"]["listen"]],
+                         ["three", "two", "one"], "newest first, all of them kept")
+        self.assertEqual(card["day"], activity.day_key(card["ts"]))
 
     def test_same_track_again_soon_is_not_a_second_event(self):
         tid = self.track("loop")
         activity.listen(self.store, {"id": "m-ann"}, tid)
         activity.listen(self.store, {"id": "m-ann"}, tid)
-        items = [i for i in activity.feed(self.store) if i["kind"] == "listen"]
-        self.assertEqual(items[0]["count"], 1)
+        items = activity.feed(self.store)
+        self.assertEqual(items[0]["counts"]["listen"], 1)
         # outside the repeat window it counts again
         with self.store.lock:
             self.store.conn.execute(
@@ -108,26 +112,40 @@ class Activity(unittest.TestCase):
                 (time.time() - activity.LISTEN_REPEAT - 5,))
             self.store.conn.commit()
         activity.listen(self.store, {"id": "m-ann"}, tid)
-        items = [i for i in activity.feed(self.store) if i["kind"] == "listen"]
-        self.assertEqual(items[0]["count"], 2)
+        items = activity.feed(self.store)
+        self.assertEqual(items[0]["counts"]["listen"], 2)
 
-    def test_a_long_gap_starts_a_new_entry(self):
+    def test_a_different_day_is_a_different_card(self):
         first, second = self.track("a"), self.track("b")
         activity.listen(self.store, {"id": "m-ann"}, first)
         with self.store.lock:
-            self.store.conn.execute("UPDATE activity SET ts=?", (time.time() - activity.LISTEN_GAP - 60,))
+            self.store.conn.execute("UPDATE activity SET ts=?", (time.time() - 2 * 86400,))
             self.store.conn.commit()
         activity.listen(self.store, {"id": "m-ann"}, second)
-        listens = [i for i in activity.feed(self.store) if i["kind"] == "listen"]
-        self.assertEqual(len(listens), 2)
+        cards = activity.feed(self.store)
+        self.assertEqual(len(cards), 2, "yesterday and today are separate cards")
+        self.assertEqual([c["counts"]["listen"] for c in cards], [1, 1])
+        self.assertNotEqual(cards[0]["day"], cards[1]["day"])
 
-    def test_other_members_do_not_join_your_stack(self):
+    def test_each_member_gets_its_own_card(self):
         first, second = self.track("a"), self.track("b")
         activity.listen(self.store, {"id": "m-ann"}, first)
         activity.listen(self.store, {"id": "m-bob"}, second)
-        listens = [i for i in activity.feed(self.store) if i["kind"] == "listen"]
-        self.assertEqual(len(listens), 2)
-        self.assertEqual({i["member"] for i in listens}, {"Ann", "Bob"})
+        cards = activity.feed(self.store)
+        self.assertEqual(len(cards), 2)
+        self.assertEqual({c["member"] for c in cards}, {"Ann", "Bob"})
+        self.assertEqual({c["counts"]["listen"] for c in cards}, {1})
+
+    def test_a_new_action_lifts_the_member_card_to_the_top(self):
+        first, second = self.track("a"), self.track("b")
+        activity.listen(self.store, {"id": "m-ann"}, first)
+        activity.listen(self.store, {"id": "m-bob"}, second)
+        self.assertEqual([c["member"] for c in activity.feed(self.store)], ["Bob", "Ann"])
+        activity.record(self.store, activity.KIND_ADD, member_id="m-ann", track_id=first)
+        cards = activity.feed(self.store)
+        self.assertEqual([c["member"] for c in cards], ["Ann", "Bob"])
+        self.assertEqual(cards[0]["counts"], {"listen": 1, "add": 1},
+                         "the new action joins the same day card")
 
 
 class Profiles(unittest.TestCase):

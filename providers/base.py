@@ -77,6 +77,13 @@ class Provider:
         """
         return None
 
+    def tracks(self, url: str) -> list[TrackRef]:
+        """The songs behind a release page, so one can be picked on its own.
+
+        Only called when a person opens an album — never on a poll.
+        """
+        return []
+
     def new_releases(self, artist_url: str, watermark: float,
                      limit: int = 60) -> list[Release]:
         """What this artist has published, newest first.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow,noarchive">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5, user-scalable=yes">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>HardlyListening — Mixer</title>
 <meta name="theme-color" content="#101014">
 <style>
@@ -395,6 +395,14 @@
   }
 
 footer{color:#5f5f72;font-size:12px;padding:0 14px 24px;text-align:center}
+
+  /* No zoom on a phone: 16px fields stop iOS's focus zoom, touch-action stops pinch
+     and double-tap zoom. */
+  html,body{touch-action:manipulation}
+  @media (max-width:900px){
+    html,body{touch-action:pan-x pan-y}
+    input,select,textarea{font-size:16px!important}
+  }
 </style>
 </head>
 <body>
@@ -430,7 +438,7 @@ footer{color:#5f5f72;font-size:12px;padding:0 14px 24px;text-align:center}
     <div class="midihead"><span>Control</span><span>CC</span></div>
     <div class="midimap" id="midimap"></div>
     <div class="midinote">Web MIDI needs a secure context: use <code>http://127.0.0.1:8470/dj</code>
-      or an HTTPS address. A plain http:// LAN address is blocked by the browser, not by the app.</div>
+      or an HTTPS address. A plain http:// tailnet URL is blocked by the browser, not by the app.</div>
   </section>
   <div class="learnbar" id="learnbar">
     <h3 id="learn-title">Start here</h3>
@@ -646,8 +654,9 @@ footer{color:#5f5f72;font-size:12px;padding:0 14px 24px;text-align:center}
 </main>
 
 <footer>
-  Headphone cue (splitting one deck to headphones) needs a second output device and
-  is not something a browser can do — use a real mixer or Mixxx for that.
+  Cue is pre-fader listen on the main output: press CUE on a deck and the room goes quiet
+  while that deck plays alone, so you can beat-match it. True headphone split needs a second
+  output device, which a browser cannot address — use a real mixer or Mixxx for that.
 </footer>
 
 <audio id="audioA" preload="metadata"></audio>
@@ -728,6 +737,10 @@ function buildDeck(id){
 
   src.connect(trim); trim.connect(low); low.connect(mid); mid.connect(high);
   high.connect(hpf); hpf.connect(lpf); lpf.connect(chan);
+  // Cue taps the channel before the crossfader, so a deck can be auditioned while the
+  // main output stays put — a basic pre-fader listen.
+  const cue = ctx.createGain(); cue.gain.value = 0;
+  chan.connect(cue); cue.connect(cueBus);
   chan.connect(xfade); xfade.connect(master);
   chan.connect(analyser);
 
@@ -737,11 +750,12 @@ function buildDeck(id){
   delay.connect(feedback); feedback.connect(delay);
   delay.connect(delWet); delWet.connect(xfade);
 
-  decks[id] = {audio, src, trim, low, mid, high, hpf, lpf, chan, xfade, analyser, buf,
+  decks[id] = {audio, src, trim, low, mid, high, hpf, lpf, chan, cue, xfade, analyser, buf,
                revSend, delSend, delay, feedback, rate: 1, track: null};
 }
 
 let master, masterAnalyser, recorderDest, recorder = null, recChunks = [];
+let monitor, cueBus; const cueOn = {A: false, B: false};
 
 function bootAudio(){
   if (ctx) return;
@@ -750,12 +764,41 @@ function bootAudio(){
   masterAnalyser = ctx.createAnalyser(); masterAnalyser.fftSize = 512;
   recorderDest = ctx.createMediaStreamDestination();
   master.connect(masterAnalyser);
-  master.connect(ctx.destination);
+  // Monitor is what the room hears; the recorder stays on master, so cueing never
+  // changes the recording.
+  monitor = ctx.createGain();
+  master.connect(monitor); monitor.connect(ctx.destination);
+  cueBus = ctx.createGain(); cueBus.gain.value = 0; cueBus.connect(ctx.destination);
   master.connect(recorderDest);
   buildDeck("A"); buildDeck("B");
   applyMaster();
   applyCross();
   requestAnimationFrame(meters);
+}
+
+// ---------------------------------------------------------------- cue
+function applyCue(){
+  const any = cueOn.A || cueOn.B;
+  if (monitor) monitor.gain.value = any ? 0 : 1;
+  if (cueBus) cueBus.gain.value = any ? 1 : 0;
+  for (const id of ["A", "B"]){
+    const d = decks[id]; if (d && d.cue) d.cue.gain.value = cueOn[id] ? 1 : 0;
+    const button = $("#cue" + id);
+    if (button){
+      button.classList.toggle("on", cueOn[id]);
+      button.setAttribute("aria-pressed", String(cueOn[id]));
+      button.title = cueOn[id] ? "Cue on — main output is silent, this deck is in your ears"
+                               : "Cue this deck (main out goes quiet while you listen)";
+    }
+  }
+}
+for (const id of ["A", "B"]){
+  const button = $("#cue" + id);
+  if (!button) continue;
+  button.addEventListener("click", () => {
+    cueOn[id] = !cueOn[id];
+    applyCue();
+  });
 }
 
 // ---------------------------------------------------------------- controls
@@ -1003,6 +1046,74 @@ function paintJog(id, radians, audio){
   disc.setAttribute("aria-valuenow", ready ? Math.round((now / audio.duration) * 100) : 0);
 }
 
+// ---------------------------------------------------------------- jog spin + scratch
+// The same behaviour as the library player's record: it turns at 33 1/3 RPM scaled by the
+// deck's playback rate, and while the hand moves it, the audio under the needle is read at
+// the hand's speed — pitched up going with the turn, backwards going against it.
+const JOG_SPIN_DEG = 200;             // 360 / 1.8 s = 33 1/3 RPM
+const jogScratch = new Map();          // id -> {buffer, voice, loading}
+
+function jogScratchFor(id){
+  if (!jogScratch.has(id)) jogScratch.set(id, {buffer: null, voice: null, loading: null, track: null});
+  return jogScratch.get(id);
+}
+async function jogScratchPrepare(id, audio){
+  const state = jogScratchFor(id);
+  const src = audio && audio.currentSrc || audio && audio.src;
+  if (!state || !src || state.track === src) return;
+  state.track = src; state.buffer = null;
+  state.loading = (async () => {
+    const response = await fetch(src);
+    if (!response.ok) throw new Error("scratch " + response.status);
+    state.buffer = await ctx.decodeAudioData(await response.arrayBuffer());
+  })().catch(() => {}).finally(() => { state.loading = null; });
+}
+function jogScratchSilence(id){
+  const state = jogScratch.get(id);
+  if (!state || !state.voice) return;
+  const voice = state.voice; state.voice = null;
+  try {
+    const now = ctx.currentTime;
+    voice.gain.gain.setTargetAtTime(0, now, 0.015);
+    voice.source.stop(now + 0.08);
+  } catch (_) {}
+}
+function jogScratchPlay(id, position, rate, dir){
+  const state = jogScratchFor(id);
+  if (!state || !state.buffer || !ctx || !master) return;
+  const buffer = state.buffer;
+  const offset = Math.max(0, Math.min(buffer.duration - 0.05,
+    dir < 0 ? buffer.duration - position : position));
+  jogScratchSilence(id);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = Math.max(0.0625, Math.min(4, rate));
+  const gain = ctx.createGain(); gain.gain.value = 0;
+  source.connect(gain); gain.connect(master);
+  const now = ctx.currentTime;
+  gain.gain.setTargetAtTime(0.9, now, 0.01);
+  source.start(now, offset);
+  state.voice = {source, gain};
+}
+
+let jogSpinLast = 0;
+function jogSpinTick(stamp){
+  requestAnimationFrame(jogSpinTick);
+  const dt = jogSpinLast ? Math.min(0.12, (stamp - jogSpinLast) / 1000) : 0;
+  jogSpinLast = stamp;
+  if (!dt) return;
+  for (const id of ["A", "B"]){
+    const audio = document.getElementById("audio" + id);
+    const disc = document.getElementById("jog" + id);
+    if (!audio || !disc || audio.paused || disc.classList.contains("dragging")) continue;
+    const rate = audio.playbackRate || 1;
+    const turned = (JOG_TURNS.get(id) || 0) + (JOG_SPIN_DEG * rate * Math.PI / 180) * dt;
+    JOG_TURNS.set(id, turned);
+    paintJog(id, turned, audio);
+  }
+}
+requestAnimationFrame(jogSpinTick);
+
 function wireJog(id){
   const disc = $("#jog" + id);
   if (!disc) return;
@@ -1012,7 +1123,7 @@ function wireJog(id){
     return Math.atan2(event.clientY - (box.top + box.height / 2),
                       event.clientX - (box.left + box.width / 2));
   };
-  let dragging = false, lastAngle = 0, baseTime = 0, baseTurned = 0;
+  let dragging = false, lastAngle = 0, baseTime = 0, baseTurned = 0, lastScratchAt = 0;
   let turned = JOG_TURNS.get(id) || 0;
   const remember = () => JOG_TURNS.set(id, turned);
 
@@ -1026,6 +1137,8 @@ function wireJog(id){
     baseTurned = turned;                 // each drag measures from where it started
     disc.setPointerCapture?.(event.pointerId);
     disc.classList.add("dragging");
+    jogScratchPrepare(id, a);
+    lastScratchAt = 0;
     event.preventDefault();
   });
   disc.addEventListener("pointermove", event => {
@@ -1038,11 +1151,20 @@ function wireJog(id){
     remember();
     if (a && a.duration) a.currentTime = jogTarget(baseTime, turned - baseTurned, a.duration);
     paintJog(id, turned, a);
+    // Read the record at the hand's speed, exactly like the library disc.
+    const stamp = performance.now();
+    const elapsed = lastScratchAt ? (stamp - lastScratchAt) / 1000 : 0;
+    lastScratchAt = stamp;
+    if (elapsed > 0 && Math.abs(delta) > 0.004 && a){
+      const perSecond = (Math.abs(delta) / elapsed) * JOG_TURN_SECONDS / (2 * Math.PI);
+      jogScratchPlay(id, a.currentTime || 0, perSecond, delta < 0 ? -1 : 1);
+    }
   });
   const release = event => {
     if (!dragging) return;
     dragging = false;
     disc.classList.remove("dragging");
+    jogScratchSilence(id);
     if (disc.hasPointerCapture?.(event.pointerId)) disc.releasePointerCapture(event.pointerId);
   };
   disc.addEventListener("pointerup", release);

@@ -2,10 +2,10 @@
 
 Written at the moment something happens (a play, a download, a playlist edit, a
 join, a rename). Plays are the noisy kind, so they are deduplicated on write and
-**stacked on read**: one member's consecutive listens inside
-`LISTEN_GAP` seconds become a single "played N songs" entry that always lists
-every song — it is not a collapsible group, because hiding the songs is exactly
-what makes a listening feed useless.
+**folded into a day card on read**: everything one member did between midnight and
+midnight is a single collapsed card carrying per-kind counts (played 12 · added 3 ·
+2 playlists) with every entry still inside it, revealed five at a time. An entry per
+sitting made an evening of listening look like a dozen separate people in the feed.
 
 Attribution comes from `member_items` (see library/quota.py), so a track's owner
 is whoever claimed it directly, else whoever claimed the playlist it came in with.
@@ -124,8 +124,31 @@ def active_boosts(store, limit: int = 80, now: float | None = None) -> list[dict
              'title': r['title'], 'artist_name': r['artist_name']}} for r in rows]
 
 
+def _group_for(kind: str) -> str:
+    """Which part of a day card an event belongs to."""
+    if kind == KIND_LISTEN:
+        return "listen"
+    if kind == KIND_ADD:
+        return "add"
+    if kind in (KIND_PLAYLIST_NEW, KIND_PLAYLIST_EDIT, KIND_PLAYLIST_DELETE):
+        return "playlist"
+    return "other"
+
+
+def day_key(ts: float) -> str:
+    return time.strftime("%Y-%m-%d", time.localtime(ts))
+
+
 def feed(store, limit: int = 80, now: float | None = None) -> list[dict]:
-    """Active boosts first, then newest activity with consecutive listens stacked."""
+    """Active boosts first, then one card per member per day.
+
+    A day card bundles everything that member did between midnight and midnight —
+    plays, additions, playlist work, joins and renames — with a count per kind and
+    the individual entries still inside it. One person listening all evening is a
+    single line in the feed instead of an entry per sitting; the UI collapses the
+    detail and reveals it five at a time. Cards are ordered by their newest event,
+    so any new action lifts that member's card to the top.
+    """
     boosts = active_boosts(store, limit, now)
     with store.lock:
         rows = [dict(r) for r in store.conn.execute(
@@ -133,43 +156,40 @@ def feed(store, limit: int = 80, now: float | None = None) -> list[dict]:
             " p.title AS playlist_title"
             " FROM activity a LEFT JOIN members m ON m.id=a.member_id"
             " LEFT JOIN playlists p ON p.id=a.playlist_id"
-            " ORDER BY a.ts DESC, a.id DESC LIMIT ?", (int(limit) * 3,)).fetchall()]
-        items: list[dict] = []
-        open_listen: dict | None = None
+            " ORDER BY a.ts DESC, a.id DESC LIMIT ?", (int(limit) * 12,)).fetchall()]
+        buckets: dict[tuple, dict] = {}
+        order: list[tuple] = []
         for row in rows:
-            name = (row["member_name"] or "").strip() or "Someone"
-            if row["kind"] == KIND_LISTEN:
+            ts = row["ts"]
+            key = (row["member_id"], day_key(ts))
+            card = buckets.get(key)
+            if card is None:
+                card = {
+                    "kind": "day", "member_id": row["member_id"],
+                    "member": (row["member_name"] or "").strip() or "Someone",
+                    "member_icon": row["member_icon"] or "",
+                    "day": key[1], "ts": ts, "first_ts": ts,
+                    "counts": {}, "groups": {"listen": [], "add": [],
+                                             "playlist": [], "other": []},
+                }
+                buckets[key] = card
+                order.append(key)
+            card["first_ts"] = ts          # rows arrive newest-first
+            group = _group_for(row["kind"])
+            if group in ("listen", "add"):
                 track = _track(store, row["track_id"])
                 if not track:
                     continue
-                if (open_listen and open_listen["member_id"] == row["member_id"]
-                        and open_listen["ts"] - row["ts"] <= LISTEN_GAP):
-                    open_listen["tracks"].append(track)
-                    open_listen["count"] = len(open_listen["tracks"])
-                    open_listen["ts"] = row["ts"]          # the stack's oldest edge
-                    continue
-                open_listen = {"kind": KIND_LISTEN, "member_id": row["member_id"],
-                               "member": name, "member_icon": row["member_icon"] or "",
-                               "ts": row["ts"], "count": 1, "tracks": [track]}
-                items.append(open_listen)
-                continue
-            open_listen = None
-            items.append({
-                "kind": row["kind"], "member_id": row["member_id"], "member": name,
-                "member_icon": row["member_icon"] or "", "ts": row["ts"],
-                "count": 1, "detail": row["detail"] or "",
-                "playlist": row["playlist_title"] or "",
-                "playlist_id": row["playlist_id"],
-                "track": _track(store, row["track_id"]),
-            })
-            if len(items) >= limit:
-                break
-    # Rows arrive newest-first; a stack reads best oldest-first, the way it was
-    # actually listened to.
-    for item in items:
-        if item.get("kind") == KIND_LISTEN:
-            item["tracks"].reverse()
-    return (boosts + items)[:limit]
+                entry = dict(track, ts=ts)
+            elif group == "playlist":
+                entry = {"ts": ts, "kind": row["kind"], "id": row["playlist_id"],
+                         "title": row["playlist_title"] or row["detail"] or ""}
+            else:
+                entry = {"ts": ts, "kind": row["kind"], "detail": row["detail"] or ""}
+            card["groups"][group].append(entry)
+            card["counts"][group] = card["counts"].get(group, 0) + 1
+        items = [buckets[k] for k in order][:max(1, int(limit))]
+    return boosts + items
 
 
 def listen(store, member: dict | None, track_id: int) -> None:

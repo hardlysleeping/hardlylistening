@@ -34,6 +34,11 @@ def schema(store):
           member_id TEXT NOT NULL, body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 2000),
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT);
         CREATE INDEX IF NOT EXISTS social_comment_target ON social_comments(kind,target,id);
+        CREATE TABLE IF NOT EXISTS social_comment_likes (
+          comment_id INTEGER NOT NULL REFERENCES social_comments(id) ON DELETE CASCADE,
+          member_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(comment_id, member_id));
+        CREATE INDEX IF NOT EXISTS social_comment_like_comment ON social_comment_likes(comment_id);
         CREATE TABLE IF NOT EXISTS social_votes (
           kind TEXT NOT NULL, target TEXT NOT NULL, member_id TEXT NOT NULL,
           value INTEGER NOT NULL CHECK(value IN (-1,1)), PRIMARY KEY(kind,target,member_id));
@@ -141,7 +146,7 @@ def dispatch(handler, store):
             raise Denied(400, 'Invalid latest count')
         handler.json({'items': batch(store, kind, targets, handler.member, latest=latest)})
         return
-    match = re.fullmatch(r'/api/social/(track|playlist|album)/([^/]+)(?:/(comments|vote)(?:/([1-9][0-9]{0,18}))?)?', path)
+    match = re.fullmatch(r'/api/social/(track|playlist|album)/([^/]+)(?:/(comments|vote|like)(?:/([1-9][0-9]{0,18}))?)?', path)
     if not match:
         raise Denied(404, 'Unknown social endpoint')
     kind, target, action, comment_id = match.groups()
@@ -166,7 +171,22 @@ def dispatch(handler, store):
                 (kind,target,after,PAGE_SIZE+1))]
             more = len(rows) > PAGE_SIZE
             rows = rows[:PAGE_SIZE]
+            liked = set()
+            if rows:
+                ids = [r['id'] for r in rows]
+                marks = ','.join('?' for _ in ids)
+                for like in store.conn.execute(
+                        f'SELECT comment_id FROM social_comment_likes WHERE member_id=?'
+                        f' AND comment_id IN ({marks})', (member['id'], *ids)):
+                    liked.add(like['comment_id'])
+                counts = {r['comment_id']: r['n'] for r in store.conn.execute(
+                    f'SELECT comment_id, COUNT(*) n FROM social_comment_likes'
+                    f' WHERE comment_id IN ({marks}) GROUP BY comment_id', ids)}
+            else:
+                counts = {}
             for row in rows:
+                row['likes'] = counts.get(row['id'], 0)
+                row['liked'] = row['id'] in liked
                 row['can_edit'] = member['role'] == 'admin' or row['member_id'] == member['id']
                 # Comments carry who wrote them, so the name opens their profile
                 # instead of printing a raw member id.
@@ -188,6 +208,25 @@ def dispatch(handler, store):
                     else:
                         store.conn.execute('''INSERT INTO social_votes VALUES(?,?,?,?)
                             ON CONFLICT(kind,target,member_id) DO UPDATE SET value=excluded.value''', (kind,target,member['id'],value))
+                elif action == 'like':
+                    if not comment_id:
+                        raise Denied(400, 'Comment id required')
+                    row = store.conn.execute(
+                        'SELECT id FROM social_comments WHERE id=? AND kind=? AND target=?',
+                        (int(comment_id), kind, target)).fetchone()
+                    if not row:
+                        raise Denied(404, 'Comment not found')
+                    exists = store.conn.execute(
+                        'SELECT 1 FROM social_comment_likes WHERE comment_id=? AND member_id=?',
+                        (int(comment_id), member['id'])).fetchone()
+                    if exists:
+                        store.conn.execute(
+                            'DELETE FROM social_comment_likes WHERE comment_id=? AND member_id=?',
+                            (int(comment_id), member['id']))
+                    else:
+                        store.conn.execute(
+                            'INSERT INTO social_comment_likes(comment_id, member_id) VALUES(?,?)',
+                            (int(comment_id), member['id']))
                 elif action == 'comments':
                     if comment_id:
                         row = store.conn.execute('SELECT member_id FROM social_comments WHERE id=? AND kind=? AND target=?', (int(comment_id),kind,target)).fetchone()

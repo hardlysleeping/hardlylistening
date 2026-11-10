@@ -59,7 +59,10 @@ class BrowserDownloads(unittest.TestCase):
                             self.assertIn('attachment;', response.headers['Content-Disposition'])
                             data = response.read()
                         with zipfile.ZipFile(io.BytesIO(data)) as z:
+                            # Audio plus the manifest only: the apple restore file is its
+                            # own button and never rides along in the playlist ZIP.
                             self.assertEqual(len(z.namelist()), 2)
+                            self.assertNotIn('apple-music.json', z.namelist())
                             name = next(n for n in z.namelist() if n != 'MANIFEST.txt')
                             self.assertNotIn('/', name)
                             self.assertNotIn('\\', name)

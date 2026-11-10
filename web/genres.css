@@ -1,1 +1,15 @@
 .genre-panel{margin:0 0 14px;padding:10px;border:1px solid var(--line);border-radius:10px}.genre-panel summary{cursor:pointer}.genre-panel label{display:inline-flex;align-items:center;gap:4px;margin:4px 10px 4px 0;font-size:12px}.genre-panel input[type=checkbox]{width:auto}.genre-panel p{font-size:12px;color:var(--muted)}.genre-panel>input{max-width:320px;margin:5px}.genre-panel button{margin:5px}
+
+/* Genres is a popup, opened from a chip beside the search box. */
+#genres-pop{width:min(560px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow:auto;
+  padding:18px;box-sizing:border-box;background:var(--panel);color:var(--text);
+  border:1px solid var(--line);border-radius:18px}
+#genres-pop h2{margin:0 0 6px;font-size:17px}
+#genres-pop .gnote{font-size:12px;line-height:1.45;color:var(--dim);margin:0 0 10px}
+#genres-pop .glabels{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 10px}
+#genres-pop .glabels label{display:inline-flex;align-items:center;gap:5px;font-size:12.5px}
+#genres-pop .glabels input{width:auto;margin:0}
+#genres-pop .gadmin{display:grid;gap:8px;margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line)}
+#genres-pop .gadmin[hidden]{display:none}
+#genres-pop .gadmin input,#genres-pop .gadmin select{width:100%;box-sizing:border-box}
+#genres-pop .gfoot{display:flex;justify-content:flex-end;margin:12px 0 0}

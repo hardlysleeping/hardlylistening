@@ -71,12 +71,14 @@ assert(!row({ id: 8, position: 5, title: 'T', artist: 'A', status: 'completed' }
 const nowbar = hosts['#nowbar'];
 
 run(`renderNow({stats:{running:1,queued:4,waiting:2,review:0,failed:1,paused:false},
-  current:{status:'downloading',title:'Song',artist:'Artist',progress:43.7,bytes:3120000,speed:845000,eta:97,attempts:1,max_attempts:4}})`);
+  current:{status:'downloading',title:'Song',artist:'Artist',progress:43.7,bytes:3120000,speed:845000,eta:97,attempts:1,max_attempts:4,playlist:'Shuffle'}})`);
 let out = nowbar.innerHTML;
 assert(out.includes('Song') && out.includes('44%') && out.includes('825 KB/s') && out.includes('1:37 left'));
 assert(out.includes('<i style="width:44%"></i>'), 'strip bar must follow progress');
 assert(out.includes('1 downloading') && out.includes('4 queued') && out.includes('2 retrying') && out.includes('1 failed'));
 assert(out.includes('attempt 1/4'));
+// The headline names the playlist it is filling, not just the track inside it.
+assert(out.includes('class="nfrom"') && out.includes('Shuffle'), 'now strip must name the playlist being downloaded');
 
 // The queue object uses `phase` for cooldown/disk, the persisted row uses `status`.
 run(`renderNow({stats:{running:0,queued:3},current:{phase:'cooldown',provider:'soundcloud'}})`);
@@ -91,8 +93,15 @@ assert(out.includes('1 retrying') && out.includes('6 failed') && out.includes('p
 // ---- playlist card ------------------------------------------------------
 const card = run(`playlistCard({id:1,title:'P',platform:'soundcloud',declared:260,added:0,count:4,done:2,failed:0,review:0,
   tracks:[{id:1,status:'completed',size:100},{id:2,status:'completed',size:100},
-          {id:3,status:'downloading',progress:50},{id:4,status:'retry_wait'}]})`);
-assert(card.includes('1 downloading') && card.includes('1 retrying'), 'card must name live and waiting rows');
+          {id:3,status:'downloading',progress:50,title:'Live track'},{id:4,status:'retry_wait'}]})`);
+assert(card.includes('Downloading now') && card.includes('1 retrying'), 'card must name live and waiting rows');
+// The active card says which track it is on, and carries the accent edge.
+assert(card.includes('class="card active"'), 'the downloading playlist must be marked');
+assert(card.includes('class="livenow"') && card.includes('Live track') && card.includes('50%'),
+  'the active card must name the track and its progress');
+const idle = run(`playlistCard({id:2,title:'Q',platform:'apple',count:2,done:0,failed:0,review:0,
+  tracks:[{id:5,status:'queued'},{id:6,status:'queued'}]})`);
+assert(!idle.includes('card active') && !idle.includes('Downloading now'), 'an idle playlist must not claim to be downloading');
 // 2 done + 0.5 in flight of 4 = 62.5% -> 63%
 assert(card.includes('style="width:63%"'), 'card bar must count work in progress');
 

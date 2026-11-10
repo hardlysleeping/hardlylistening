@@ -174,6 +174,82 @@ class JudgeSeesTheTaste(Case):
         self.assertIn("untrusted data", sent["messages"][0]["content"])
 
 
+class JudgeFeedback(Case):
+    """Corrections and hand replacements must reach the judge, not just the ranking."""
+
+    def job_and_track(self, title="New Day (Fredrick Remix)", artist="Alison Wonderland"):
+        tid = self.store.track("apple", "t" + title[:8], title, artist_name=artist)
+        jid = self.store.enqueue(tid, "soundcloud", "")
+        return self.store.job(jid), self.store.track_by_id(tid)
+
+    def test_an_accepted_pick_is_not_fed_back_as_a_reject(self):
+        import decisions
+        job, track = self.job_and_track()
+        decisions.record(self.store, job, track, dict(self.RIGHT, match=0.9),
+                         [dict(self.RIGHT, match=0.9)], "strong match", "selected")
+        self.assertEqual(ranking.rejected(self.store, track), [])
+
+    def test_a_review_entry_is_a_reject(self):
+        import decisions
+        job, track = self.job_and_track()
+        self.store.update_job(job["id"], resolved_url=self.WRONG["url"])
+        job = self.store.job(job["id"])
+        decisions.record(self.store, job, track, None, [dict(self.WRONG)], "wrong version", "review")
+        rejects = ranking.rejected(self.store, track)
+        self.assertEqual(rejects[0]["uploader"], self.WRONG["artist"])
+
+    def test_a_reversed_pick_rejects_the_pick_not_the_prior_source(self):
+        import decisions
+        job, track = self.job_and_track()
+        pool = [dict(self.RIGHT), dict(self.WRONG)]
+        decisions.record(self.store, job, track, dict(self.WRONG), pool, "auto", "selected")
+        row = self.store.conn.execute("SELECT id FROM match_decisions ORDER BY id DESC LIMIT 1").fetchone()
+        self.store.conn.execute("UPDATE match_decisions SET status='reversed' WHERE id=?", (row["id"],))
+        self.store.conn.commit()
+        rejects = ranking.rejected(self.store, track)
+        self.assertEqual([r["candidate_title"] for r in rejects], [self.WRONG["title"]])
+
+    def test_hand_replacement_rejects_the_old_source(self):
+        import replacements
+        job, track = self.job_and_track()
+        self.store.update_job(job["id"], resolved_url=self.RIGHT["url"],
+                              candidates=json.dumps([dict(self.RIGHT), dict(self.WRONG)]))
+        with self.store.lock:
+            replacements.schema(self.store)
+            self.store.conn.execute(
+                "INSERT INTO source_replacements (track_id,job_id,created,old_file,old_url,old_pinned,"
+                "new_url,new_file,status) VALUES (?,?,?,?,?,0,?,?,'completed')",
+                (track["id"], job["id"], 1.0, "/tmp/a", self.RIGHT["url"],
+                 "https://soundcloud.com/c/new", "/tmp/b"))
+            self.store.conn.commit()
+        rejects = ranking.rejected(self.store, track)
+        self.assertEqual([r["uploader"] for r in rejects], [self.RIGHT["artist"]])
+
+    def test_reversed_hand_replacement_rejects_the_replacement(self):
+        import replacements
+        job, track = self.job_and_track()
+        self.store.update_job(job["id"], resolved_url=self.WRONG["url"],
+                              candidates=json.dumps([dict(self.WRONG)]))
+        with self.store.lock:
+            replacements.schema(self.store)
+            self.store.conn.execute(
+                "INSERT INTO source_replacements (track_id,job_id,created,old_file,old_url,old_pinned,"
+                "new_url,new_file,status) VALUES (?,?,?,?,?,0,?,?,'reversed')",
+                (track["id"], job["id"], 1.0, "/tmp/a", "https://soundcloud.com/c/old",
+                 self.WRONG["url"], "/tmp/b"))
+            self.store.conn.commit()
+        rejects = ranking.rejected(self.store, track)
+        self.assertEqual([r["uploader"] for r in rejects], [self.WRONG["artist"]])
+
+    def test_trusted_channels_travel_to_an_unknown_artist(self):
+        for i in range(3):
+            ranking.record(self.store, self.track("Song", f"Artist {i}"),
+                           {"url": f"https://soundcloud.com/label/{i}", "artist": "labelchannel",
+                            "title": "Song"})
+        trusted = ranking.trusted_uploaders(self.store, self.track("New", "Someone New"))
+        self.assertIn("labelchannel", trusted)
+
+
 class RouteRecordsIt(Case):
     def test_using_a_candidate_records_the_pick(self):
         import re

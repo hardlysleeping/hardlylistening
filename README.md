@@ -2,7 +2,7 @@
 
 Paste a playlist, get every track on disk.
 
-Built off the part of [HardlyWatching](https://github.com/hardlysleeping/HardlyWatching) that already drives
+Built off the part of [HardlyWatching](../hardlywatching) that already drives
 `yt-dlp` — one SQLite database, one worker thread, one honest pace — with the
 Instagram machinery left behind.
 
@@ -61,9 +61,8 @@ service restart.
 ./install-service.sh remove
 ```
 
-Needs `yt-dlp` and `ffmpeg` on PATH. The service listens on `0.0.0.0:8470` so other devices on your network can
-reach it. It ships with auth disabled for local use — see `SECURITY.md` before
-exposing it beyond a trusted network.
+Needs `yt-dlp` and `ffmpeg` on PATH. The service listens on `0.0.0.0:8470` so the
+service hub and his phone can reach it over the tailnet; there is no auth.
 
 ## The queue
 
@@ -151,10 +150,3 @@ web/index.html         the whole UI — plain DOM, polls /api/state
 A track's status is its job's status — there is no second copy of it on the track
 row. `watches` and `feed_items` exist in the schema for the discovery layer;
 nothing writes them yet.
-
-## Licence
-
-PolyForm Noncommercial 1.0.0 — see [LICENSE](LICENSE). Use it, read it, change
-it for yourself or your friends; do not sell it. This is the licence of the
-project HardlyListening was built from (HardlyWatching), copied verbatim rather
-than picked fresh.

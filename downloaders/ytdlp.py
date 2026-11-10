@@ -102,6 +102,12 @@ VERSION_NOISE = {"official", "video", "audio", "lyric", "lyrics", "visualiser",
                  "mix", "mixes", "original", "radio", "clean", "explicit", "dirty",
                  "mono", "stereo", "album", "single", "track"}
 
+# Markers of a recording that is not the one being asked for, whatever the uploader
+# calls it. The AI check knows these; the plain scorer used to accept them.
+BAD_MARKERS = {"slowed", "spedup", "sped", "speedup", "nightcore", "8d", "bassboosted",
+               "bassboost", "karaoke", "instrumental", "acapella", "vocalsonly",
+               "cover", "reverb", "daycore", "chipmunk"}
+
 SC_TRUST = 0.60
 MIN_ACCEPT = 0.45
 
@@ -156,6 +162,12 @@ def hit_score(query: str, hit: dict) -> float:
         score *= 0.45
     # Which version this is: "New Day (Fredrick Remix)" must beat "New Day
     # (Bumpÿ Remix)" for a request that names Fredrick.
+    # A slowed/nightcore/karaoke upload is a different recording no matter how well the
+    # words match; only penalise when the request did not ask for it.
+    raw_q = _raw_tokens(query)
+    unwanted = {m for m in BAD_MARKERS if m in _raw_tokens(f"{artist} {offered}")} - raw_q
+    if unwanted:
+        score *= 0.35
     wanted, given = _version_tokens(query), _version_tokens(f"{artist} {offered}")
     if wanted:
         if not given:
@@ -248,6 +260,24 @@ def search_candidates(query: str, exclude: list[str] | None = None,
             if h["url"] and h["url"] not in exclude and h["match"] >= min_accept]
 
 
+def search_all(query: str, per_engine: int = 10) -> list[dict]:
+    """Both engines, SoundCloud first.
+
+    A search box wants to show what exists, not one judged winner, so nothing is
+    filtered here: `search_candidates` is for the queue's automatic picker, this is
+    for a person choosing. Duplicate URLs are dropped.
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+    for spec in (f"scsearch{per_engine}", f"ytsearch{per_engine}"):
+        for hit in _search(spec, query):
+            if not hit["url"] or hit["url"] in seen:
+                continue
+            seen.add(hit["url"])
+            out.append(hit)
+    return out
+
+
 def _search(spec: str, query: str) -> list[dict]:
     try:
         info = json_info(f"{spec}:{query}", timeout=180)
@@ -264,6 +294,9 @@ def _search(spec: str, query: str) -> list[dict]:
             "duration": entry.get("duration") or 0,
             "source_id": str(entry.get("id") or ""),
             "engine": re.sub(r"\d+$", "", spec),
+            "artwork": (entry.get("thumbnail")
+                        or next((t.get("url") for t in reversed(entry.get("thumbnails") or [])
+                                 if t and t.get("url")), "")),
         }
         if hit["url"]:
             hit["match"] = hit_score(query, hit)

@@ -83,15 +83,17 @@ assert(!/detaillist tracklist">\s*\n?\s*\$\{tracks\.length \? tracks\.map/.test(
 assert(/SONG_HEAD/.test(html.split('function renderSongs(')[1] || '') === false,
   'renderSongs must not repeat the header markup');
 
-// ---- the library save control keeps one box in both states ----------------
-assert(/\.lsave\{min-width:170px/.test(html),
-  'the save control must reserve the width of its longer label');
-assert(/@media \(max-width:760px\)\{ \.lsave\{min-width:170px/.test(html),
-  'and the same width on a phone, where the label is the same words');
+// ---- add/remove from library is one square icon, plus then check ---------
+assert(/\.ghost\.lsave\{[^}]*width:32px/.test(html), 'the save control is a fixed square');
+assert(/@media \(max-width:760px\)\{ \.ghost\.lsave\{width:34px/.test(html),
+  'and a touch-sized square on a phone');
 const control = html.slice(html.indexOf('function listeningSaveControl('),
                            html.indexOf('async function toggleListeningSave('));
-assert(control.includes('class="ghost lsave"'), 'the control must carry the .lsave sizing');
+assert(control.includes('class="ghost lsave'), 'the control must carry the .lsave sizing');
+assert(control.includes('aria-label="${label}"') && control.includes("saved ? SVG.check(14) : SVG.plus(14)"),
+  'a plus when it can be added, a check once it is in — never a minus');
 assert(control.includes("'Remove from library'") && control.includes("'Add to library'"),
-  'both labels come from the same control');
+  'both labels come from the same control, as its accessible name');
+assert(!control.includes('−'), 'no minus glyph in the control');
 
 console.log('Song table: one header definition, fixed columns, matching grid, detail pages covered, phone hides it PASS');

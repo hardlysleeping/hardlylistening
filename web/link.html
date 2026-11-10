@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5, user-scalable=yes">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>Signing in · HardlyListening</title>
 <style>
@@ -20,6 +20,9 @@
   .msg.err{color:var(--err)}
   a{color:var(--accent)}
   label{display:block;margin-top:14px}input,select,button{font:inherit;max-width:100%;padding:10px;width:100%;margin-top:6px}button{cursor:pointer}
+  html,body{touch-action:manipulation}
+  @media (max-width:760px){html,body{touch-action:pan-x pan-y}}
+  input,select,textarea{font-size:16px}
 </style>
 </head>
 <body>

@@ -193,7 +193,7 @@ class AppleMusicProvider(Provider):
     def _from_api(self, url: str, seen: set[str], declared: int) -> list[TrackRef]:
         """Only for playlists too long to fit on the page."""
         store = (STOREFRONT.search(url) or [None, "us"])[1]
-        playlist = re.search(r"/pl\.[0-9a-fA-F]+", url)
+        playlist = re.search(r"/pl\.[A-Za-z0-9._-]+", url)
         if not playlist:
             return []
         out: list[TrackRef] = []
@@ -221,6 +221,42 @@ class AppleMusicProvider(Provider):
         return out
 
     # -- following --
+    def tracks(self, url: str) -> list[TrackRef]:
+        """An album's songs, from the same public lookup the feed already uses.
+
+        One request, measured at ~0.4 s for a 15-track album; a single song link
+        comes back as its own one-entry list.
+        """
+        album = re.search(r"/album/(?:[^/]+/)?(\d{4,})", url)
+        song = re.search(r"/song/(?:[^/]+/)?(\d{4,})", url)
+        target = album or song
+        if not target:
+            return []
+        store = (STOREFRONT.search(url) or [None, "us"])[1].lower()
+        rows = _lookup(target.group(1), store,
+                       entity="" if song else "song", limit=200)
+        out: list[TrackRef] = []
+        for row in rows:
+            if row.get("wrapperType") != "track":
+                continue
+            title = (row.get("trackName") or "").strip()
+            if not title:
+                continue
+            art = str(row.get("artworkUrl100") or "")
+            out.append(TrackRef(
+                provider="apple",
+                provider_track_id=str(row.get("trackId") or ""),
+                title=title,
+                artist=(row.get("artistName") or "").strip(),
+                album=(row.get("collectionName") or "").strip(),
+                track_number=int(row.get("trackNumber") or 0),
+                duration=round((row.get("trackTimeMillis") or 0) / 1000.0, 1),
+                artwork=(art.replace("100x100", "600x600") if art else ""),
+                # The song's own page: queueing it downloads that one song.
+                source_url=str(row.get("trackViewUrl") or "")))
+        out.sort(key=lambda t: t.track_number)
+        return out
+
     def supports_follow(self) -> bool:
         return True
 

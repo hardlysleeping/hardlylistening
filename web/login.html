@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5, user-scalable=yes">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>Sign in · HardlyListening</title>
 <style>
@@ -30,12 +30,27 @@
   .msg.err{color:var(--err)}
   .msg.ok{color:var(--accent)}
   .fine{margin-top:18px;color:var(--dim);font-size:11.5px}
+  html,body{touch-action:manipulation}
+  @media (max-width:760px){html,body{touch-action:pan-x pan-y}}
+  input,select,textarea{font-size:16px}
 </style>
 </head>
 <body>
 <main class="card">
   <div class="brand">Hardly<span>Listening</span></div>
   <h1>Invitation required</h1>
-  <p>Ask an administrator for a one-time invitation link. Open it on this browser to sign in for 30 days. No email or password is required.</p>
+  <p>Ask an administrator for your personal invitation link. Open it once on this browser and it stays signed in. No email or password is required.</p>
   <p>Lost access? Ask an administrator for a new link. Do not share invitation links.</p>
-</main></body></html>
+</main>
+<script>
+// This page is only ever reached by a navigation the browser did not attach
+// the session cookie to (a link from another app, or a redirect chain that
+// started there). A same-site request from here does carry it, so a member who
+// is already signed in gets sent straight in instead of being told to find a
+// new invitation.
+fetch("/api/state", {headers: {"Accept": "application/json"}})
+  .then(r => r.ok ? r.json() : null)
+  .then(d => { if (d && d.viewer && d.viewer.display_name) location.replace("/"); })
+  .catch(() => {});
+</script>
+</body></html>

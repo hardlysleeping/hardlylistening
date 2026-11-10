@@ -117,3 +117,5 @@ def get(store, identity):
         store.conn.execute('INSERT OR REPLACE INTO lyrics_cache VALUES (?,?,?)', (key, time.time() if result['status'] != 'unavailable' else time.time() - 86340, json.dumps(result)))
         store.conn.commit()
     return result
+
+# autodeploy smoke test

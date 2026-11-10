@@ -42,6 +42,7 @@ const PAGE = 'file://' + path.resolve('web/index.html');
           actionLines: lines,
           pairIsOneBox: !!pair && pair.querySelectorAll('button').length === 2,
           saveWidth: Math.round(r(save).width),
+          saveHeight: Math.round(r(save).height),
           rowOverflow: row.scrollWidth > row.clientWidth + 1,
           docOverflow: document.documentElement.scrollWidth > innerWidth,
           pairInsideRow: r(pair).right <= r(row).right + 1,
@@ -57,9 +58,11 @@ const PAGE = 'file://' + path.resolve('web/index.html');
       assert(out.pairInsideRow, `${vp.width}px: pin runs past the row edge`);
       if (vp.width <= 760) assert(out.actionsAboveVotes, `${vp.width}px: actions are not on the row's own line`);
       if (vp.width > 760) {
-        assert.equal(out.saveWidth, 170, 'desktop save box must stay the fixed 170px box');
+        assert(out.saveWidth >= 28 && out.saveWidth <= 40 && out.saveWidth === out.saveHeight,
+          'desktop save box is a square icon button: ' + out.saveWidth + 'x' + out.saveHeight);
       } else {
-        assert(out.saveWidth >= 100, 'phone save box collapsed: ' + out.saveWidth);
+        assert(out.saveWidth >= 30 && out.saveWidth <= 40 && out.saveWidth === out.saveHeight,
+          'phone save box is a square icon button: ' + out.saveWidth + 'x' + out.saveHeight);
         assert(out.rowHeight <= 160, 'phone row too tall: ' + out.rowHeight);
       }
       await page.close();

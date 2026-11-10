@@ -99,12 +99,21 @@ class SecurityHTTP(unittest.TestCase):
             self.assertEqual(self.request('/api/auth/session','POST',{'Origin':origin},json.dumps({'invite':token}))[0],403)
         code,h,_=self.request('/api/auth/session','POST',{'Origin':'https://music.example'},json.dumps({'invite':token}))
         self.assertEqual(code,200)
-        self.assertIn('Secure; HttpOnly; SameSite=Strict',h['Set-Cookie'])
+        # Lax, deliberately: Strict withholds the cookie on a cross-site
+        # top-level navigation, so opening the site from a chat link or another
+        # app bounces a signed-in member to /login. CSRF is still enforced by
+        # the Origin check, which Lax cannot satisfy for cross-site POSTs.
+        self.assertIn('Secure; HttpOnly; SameSite=Lax',h['Set-Cookie'])
+        self.assertNotIn('SameSite=Strict',h['Set-Cookie'])
         cookie=h['Set-Cookie'].split(';')[0]
         headers={'Cookie':cookie,'Origin':'https://music.example'}
         self.assertEqual(self.request('/api/state',headers=headers)[0],200)
         for path in ('/api/settings','/api/import','/api/library/move','/api/pause','/api/track/1/source','/api/members/create','/api/members/invite','/api/members/revoke','/api/members'):
             self.assertEqual(self.request(path,'POST',headers,'{}')[0],403)
+        # /login is a public page but must never strand a member who is already
+        # signed in on this device.
+        self.assertEqual(self.request('/login',headers=headers)[0],303)
+        self.assertEqual(self.request('/login')[0],200)
         self.store.conn.execute("UPDATE members SET role='blocked'");self.store.conn.commit()
         self.assertEqual(self.request('/api/state',headers=headers)[0],403)
 

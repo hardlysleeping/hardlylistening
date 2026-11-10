@@ -47,7 +47,7 @@ const contextScript='// Song context actions:' + html.split('// Song context act
  const native=await row.locator('.lsave').evaluate(e=>{const event=new MouseEvent('contextmenu',{bubbles:true,cancelable:true});e.dispatchEvent(event);return event.defaultPrevented;});assert.equal(native,false);
  for(const name of ['Play now','Play next','Add to queue']){await row.focus();await page.keyboard.press('Shift+F10');await page.getByRole('menuitem',{name,exact:true}).click();}
  assert.deepEqual((await page.evaluate(()=>calls)).slice(1),[['now',1],['queue',1,true],['queue',1,false]]);
- await page.screenshot({path:`${require('os').tmpdir()}/hardlylistening-songs-${width}.png`,fullPage:true});await page.close();
+ await page.screenshot({path:`/tmp/hardlylistening-songs-${width}.png`,fullPage:true});await page.close();
  }
  console.log('Songs grid: persistence, shared/personal scope, search, sort, statuses, controls; Chromium 1280/390 no overflow, inert card click, context keyboard/right-click/touch/cancellation/native controls PASS');
  }finally{await browser.close();}

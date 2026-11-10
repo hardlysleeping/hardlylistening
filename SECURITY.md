@@ -42,9 +42,9 @@ health; APIs/audio/exports remain gated. Static files retain the exact allowlist
 Run privately in a terminal (not a shared chat or captured service log):
 
 ```sh
-cd /path/to/hardlylistening
+cd ~/apps/hardlylistening
 HARDLYLISTENING_PUBLIC_ORIGIN=https://YOUR-ACTUAL-HOST \
-  python3 auth_admin.py --db ./hardlylistening.db \
+  python3 auth_admin.py --db ~/apps/hardlylistening/hardlylistening.db \
   --name 'Owner'
 ```
 

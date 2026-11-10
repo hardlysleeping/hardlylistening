@@ -12,7 +12,7 @@ import secrets
 import re
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
-from security import Denied
+from security import SECURITY, Denied
 from library.browser_downloads import local_path
 
 
@@ -45,6 +45,14 @@ def schema(store, security):
           created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE(member_id,id),
           FOREIGN KEY(member_id,parent_id) REFERENCES listening_folders(member_id,id) ON DELETE CASCADE);
+        -- A download that should join someone's library once the file is
+        -- written. Filled when Download is pressed on the Feed, emptied by the
+        -- queue: a queued row would list a song that cannot play yet, and a
+        -- failed one would list a song that never will.
+        CREATE TABLE IF NOT EXISTS library_intents (
+          member_id TEXT NOT NULL REFERENCES members(id),
+          track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          PRIMARY KEY(member_id,track_id));
         CREATE TABLE IF NOT EXISTS listening_folder_tracks (
           member_id TEXT NOT NULL, folder_id INTEGER NOT NULL,
           track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
@@ -55,10 +63,63 @@ def schema(store, security):
         store.conn.commit()
 
 
+def want_playlist(store, member_id: str, playlist_id: int) -> int:
+    """Downloading from the Feed also puts the release in the library.
+
+    Songs the repository already holds go in straight away; the rest wait in
+    `library_intents` so the library is never given a placeholder row.
+    """
+    if not member_id or not playlist_id:
+        return 0
+    schema(store, SECURITY)
+    with store.lock:
+        rows = [dict(r) for r in store.conn.execute(
+            'SELECT t.* FROM tracks t JOIN playlist_tracks pt ON pt.track_id=t.id'
+            ' WHERE pt.playlist_id=?', (playlist_id,))]
+        for track in rows:
+            if local_path(store, track):
+                store.conn.execute(
+                    'INSERT OR IGNORE INTO listening_tracks(member_id,track_id) VALUES(?,?)',
+                    (member_id, track['id']))
+            else:
+                store.conn.execute(
+                    'INSERT OR IGNORE INTO library_intents(member_id,track_id) VALUES(?,?)',
+                    (member_id, track['id']))
+        store.conn.commit()
+    return len(rows)
+
+
+def deliver_track(store, track_id: int) -> int:
+    """The queue wrote this track: hand it to everyone who pressed Download."""
+    schema(store, SECURITY)
+    with store.lock:
+        members = [r[0] for r in store.conn.execute(
+            'SELECT member_id FROM library_intents WHERE track_id=?', (track_id,))]
+        for member_id in members:
+            store.conn.execute(
+                'INSERT OR IGNORE INTO listening_tracks(member_id,track_id) VALUES(?,?)',
+                (member_id, track_id))
+        store.conn.execute('DELETE FROM library_intents WHERE track_id=?', (track_id,))
+        store.conn.commit()
+    return len(members)
+
+
+def forget_track(store, track_id: int) -> None:
+    """The download ended without a file; drop the promise rather than save it."""
+    schema(store, SECURITY)
+    with store.lock:
+        store.conn.execute('DELETE FROM library_intents WHERE track_id=?', (track_id,))
+        store.conn.commit()
+
+
 def browser(handler, store, security):
     if handler.command == 'POST':
         handler.close_connection = True
-    if urlparse(handler.path).path.startswith('/api/listening/preferences'):
+    if urlparse(handler.path).path == '/api/listening/now':
+        import nowplaying
+        return nowplaying.dispatch(handler, store, security)
+    if urlparse(handler.path).path.startswith('/api/listening/preferences') \
+            or urlparse(handler.path).path == '/api/listening/pin-order':
         import preferences
         return preferences.browser(handler, store, security)
     schema(store, security)
@@ -66,6 +127,42 @@ def browser(handler, store, security):
     handler.member = member
     uid = member['id']
     path = urlparse(handler.path).path
+    if path == '/api/listening/export.zip':
+        if handler.command != 'GET':
+            raise Denied(405, 'Method not allowed')
+        import os
+        from urllib.parse import parse_qs, quote as _quote
+        import zip_export
+        security.limit(uid, 'export-zip', 6)
+        raw = (parse_qs(urlparse(handler.path).query).get('playlist') or [''])[0]
+        playlist_id = int(raw) if raw.isdigit() else None
+        try:
+            archive, name, count = zip_export.build(store, uid, playlist_id)
+        except ValueError as error:
+            raise Denied(400, str(error))
+        size = os.path.getsize(archive)
+        handler.send_response(200)
+        handler.send_header('Content-Type', 'application/zip')
+        handler.send_header('Content-Disposition',
+                            'attachment; filename="export.zip"; filename*=UTF-8\'\'' + _quote(name, safe=''))
+        handler.send_header('Content-Length', str(size))
+        handler.send_header('Cache-Control', 'no-store')
+        handler.send_header('X-Content-Type-Options', 'nosniff')
+        handler.end_headers()
+        try:
+            with open(archive, 'rb') as source:
+                while True:
+                    chunk = source.read(256 * 1024)
+                    if not chunk:
+                        break
+                    handler.wfile.write(chunk)
+        finally:
+            try:
+                os.unlink(archive)
+            except OSError:
+                pass
+        handler.close_connection = True
+        return
     with store.lock:
         if handler.command == 'GET':
             if path == '/api/listening/devices':
@@ -202,6 +299,15 @@ def song(t):
             'type': 'music'}
 
 
+def lyrics_for(store, track_id):
+    """Raw lyrics payload for a track id: {'text', 'lines', ...}; empty when unavailable."""
+    try:
+        import lyrics
+        return lyrics.get(store, track_id) or {}
+    except Exception:
+        return {}
+
+
 def envelope(handler, params, payload=None, error=None):
     data = {'status': 'failed' if error else 'ok', 'version': '1.16.1',
             'type': 'HardlyListening', 'serverVersion': 'scoped-1'}
@@ -240,9 +346,12 @@ def rest(handler, store, security):
             if set(form) & set(query):
                 raise Denied(400, 'Duplicate parameter')
             query.update(form)
-        if any(len(v) != 1 for v in query.values()):
+        # Subsonic repeats `id` / `songId` for multi-item operations (star, scrobble, queue).
+        repeated = {'id', 'songId', 'albumId', 'artistId'}
+        if any(len(v) != 1 for k, v in query.items() if k not in repeated):
             raise Denied(400, 'Duplicate parameter')
         params = {k: v[0] for k, v in query.items()}
+        multi = {k: v for k, v in query.items() if len(v) > 1}
         if params.get('f', 'xml') not in ('xml', 'json'):
             raise Denied(400, 'Unsupported response format')
         schema(store, security)
@@ -258,14 +367,38 @@ def rest(handler, store, security):
                 raise Denied(401, 'Invalid device credentials')
             uid = device['member_id']
             security.limit(uid, 'device-requests', 240)
+            import subsonic
             tracks = catalog(store, uid)
-            songs = [song(t) for t in tracks]
-            albums, artists = {}, {}
-            for s in songs:
-                a = albums.setdefault(s['albumId'], {'id': s['albumId'], 'name': s['album'] or 'Unknown album', 'artist': s['artist'], 'artistId': s['artistId'], 'songCount': 0, 'duration': 0})
+            try:
+                import genres
+                genres.annotate(store, tracks)
+            except Exception:
+                pass
+            import subsonic as _subsonic
+            _subsonic.schema(store)
+            with store.lock:
+                starred = {r[0] for r in store.conn.execute(
+                    'SELECT track_id FROM listening_favorites WHERE member_id=?', (uid,))}
+                ratings = {r[0]: r[1] for r in store.conn.execute(
+                    'SELECT track_id, rating FROM listening_ratings WHERE member_id=?', (uid,))}
+                bookmarks = {r[0]: r[1] for r in store.conn.execute(
+                    'SELECT track_id, position_ms FROM listening_bookmarks WHERE member_id=?', (uid,))}
+            songs, albums, artists, artwork = [], {}, {}, {}
+            for t in tracks:
+                t['albumId'] = key('al_', t.get('artist_name') or '', t.get('album') or '')
+                t['artistId'] = key('ar_', t.get('artist_name') or '')
+                s = subsonic.song(t, starred, ratings, bookmarks)
+                songs.append(s)
+                a = albums.setdefault(s['albumId'], {'id': s['albumId'], 'name': s['album'] or 'Unknown album',
+                                                     'artist': s['artist'], 'artistId': s['artistId'],
+                                                     'songCount': 0, 'duration': 0,
+                                                     'coverArt': s['albumId']})
                 a['songCount'] += 1
                 a['duration'] += s['duration']
-                artists.setdefault(s['artistId'], {'id': s['artistId'], 'name': s['artist'], 'albumCount': 0})
+                if t.get('artwork') and s['albumId'] not in artwork:
+                    artwork[s['albumId']] = t['artwork']
+                artists.setdefault(s['artistId'], {'id': s['artistId'], 'name': s['artist'],
+                                                   'albumCount': 0, 'coverArt': s['artistId']})
             for a in albums.values():
                 artists[a['artistId']]['albumCount'] += 1
             playlists = [dict(r) for r in store.conn.execute('SELECT p.id,p.title FROM playlists p JOIN listening_playlists s ON p.id=s.playlist_id WHERE s.member_id=? ORDER BY p.id', (uid,))]
@@ -275,53 +408,43 @@ def rest(handler, store, security):
             favorites = [dict(r) for r in store.conn.execute('SELECT t.* FROM tracks t JOIN listening_favorites f ON t.id=f.track_id WHERE f.member_id=? ORDER BY t.id', (uid,))]
             playlists.append({'id': preferences.FAVORITES_ID, 'title': 'Favorites'})
         endpoint = urlparse(handler.path).path.removeprefix('/rest/').removesuffix('.view')
-        identity = params.get('id', '')
         def find(rows):
-            result = next((r for r in rows if str(r['id']) == identity), None)
+            result = next((r for r in rows if str(r['id']) == params.get('id', '')), None)
             if result is None:
                 raise Denied(404, 'Not found')
             return dict(result)
         def page(rows, count='size', offset='offset', default=20):
-            n, start = int(params.get(count, default)), int(params.get(offset, 0))
-            if not 0 <= n <= 500 or not 0 <= start <= 1000000:
+            n, start_at = int(params.get(count, default)), int(params.get(offset, 0))
+            if not 0 <= n <= 500 or not 0 <= start_at <= 1000000:
                 raise Denied(400, 'Invalid pagination')
-            return rows[start:start+n]
-        def playlist(p):
-            entries = ([song(t) for t in favorites] if p['id'] == preferences.FAVORITES_ID else
-                       [s for link in links if link['playlist_id'] == p['id'] for s in songs if str(link['track_id']) == s['id']])
-            return {'id': str(p['id']), 'name': p['title'], 'public': False, 'songCount': len(entries), 'duration': sum(s['duration'] for s in entries)}, entries
+            return rows[start_at:start_at + n]
+        def playlist(row, entries):
+            by_id = {s['id']: s for s in entries}
+            chosen = ([by_id[str(t['id'])] for t in favorites if str(t['id']) in by_id]
+                      if row['id'] == preferences.FAVORITES_ID else
+                      [by_id[str(link['track_id'])] for link in links
+                       if link['playlist_id'] == row['id'] and str(link['track_id']) in by_id])
+            return ({'id': str(row['id']), 'name': row['title'], 'public': False,
+                     'songCount': len(chosen), 'duration': sum(s['duration'] for s in chosen)}, chosen)
         if endpoint in ('stream', 'download'):
             selected = find(tracks)
             if local_path(store, selected) is None:
                 raise Denied(404, 'Media unavailable')
-            # The existing handler resolves the canonical DB path and serves bytes;
-            # only the scoped ID above can reach it. No transcoding or acquisition.
+            # Only the scoped id above can reach a file; no transcoding or acquisition.
             handler.stream_audio(selected['id'])
             return
-        if endpoint == 'ping': payload = {}
-        elif endpoint == 'getLicense': payload = {'license': {'valid': True}}
-        elif endpoint == 'getMusicFolders': payload = {'musicFolders': {'musicFolder': [{'id': '1', 'name': 'Saved music'}]}}
-        elif endpoint == 'getArtists': payload = {'artists': {'index': [{'name': 'Saved', 'artist': list(artists.values())}]}}
-        elif endpoint == 'getArtist':
-            row = find(artists.values()); row['album'] = [a for a in albums.values() if a['artistId'] == identity]; payload = {'artist': row}
-        elif endpoint == 'getAlbum':
-            row = find(albums.values()); row['song'] = [s for s in songs if s['albumId'] == identity]; payload = {'album': row}
-        elif endpoint == 'getSong': payload = {'song': find(songs)}
-        elif endpoint == 'getPlaylists': payload = {'playlists': {'playlist': [playlist(p)[0] for p in playlists]}}
-        elif endpoint == 'getPlaylist':
-            row, entries = playlist(find(playlists)); row['entry'] = entries; payload = {'playlist': row}
-        elif endpoint == 'search3':
-            term = params.get('query', '').casefold()
-            payload = {'searchResult3': {kind: page([r for r in rows if term in r[field].casefold()], kind+'Count', kind+'Offset') for kind, rows, field in [('song', songs, 'title'), ('album', list(albums.values()), 'name'), ('artist', list(artists.values()), 'name')]}}
-        elif endpoint == 'getAlbumList2':
-            sort = params.get('type', 'alphabeticalByName')
-            if sort not in ('alphabeticalByName', 'alphabeticalByArtist'):
-                raise Denied(400, 'Unsupported album list type')
-            payload = {'albumList2': {'album': page(sorted(albums.values(), key=lambda a: (a['name'] if sort == 'alphabeticalByName' else a['artist']).casefold()))}}
-        else: raise Denied(404, 'Unsupported endpoint')
-        envelope(handler, params, payload)
+        payload = subsonic.handle(endpoint, params, multi, {
+            'store': store, 'uid': uid, 'username': params.get('u', ''), 'role': device['role'],
+            'handler': handler, 'security': security,
+            'tracks': tracks, 'songs': songs, 'albums': albums, 'artists': artists,
+            'favorites': favorites, 'playlists': playlists, 'links': links, 'art': artwork,
+            'find': find, 'page': page, 'playlist': playlist,
+            'lyrics': lambda track_id: lyrics_for(store, track_id)})
+        if payload is not None:
+            envelope(handler, params, payload)
     except Denied as exc:
-        envelope(handler, params, error=(40 if exc.code in (401, 403) else 70 if exc.code == 404 else 10, exc.message))
+        code = 40 if exc.code in (401, 403) else 70 if exc.code == 404 else 30 if exc.code == 430 else 10
+        envelope(handler, params, error=(code, exc.message))
     except (ValueError, UnicodeError):
         envelope(handler, params, error=(10, 'Invalid parameters'))
     except OSError:

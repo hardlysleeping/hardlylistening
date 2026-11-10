@@ -151,6 +151,31 @@ def has_history(store, query: str) -> bool:
     return bool(history(store, query))
 
 
+def _artist_key(name: str) -> str:
+    """Compare artists by their normalised spelling: "FREDRICK." and "Fredrick" are one
+    artist, and their history must pool instead of splitting in two."""
+    try:
+        from downloaders.ytdlp import norm
+        return norm(name or "")
+    except Exception:
+        return (name or "").strip().lower()
+
+
+def _global_trusted(store, minimum: int = 3) -> set[str]:
+    """Channels accepted repeatedly across different artists.
+
+    A label channel that posts the right version for one artist is usually also right
+    for the next; counting only same-artist picks left those channels looking unknown
+    every time a new artist appeared.
+    """
+    totals = {}
+    for pick in history(store):
+        uploader = (pick.get("uploader") or "").strip()
+        if uploader:
+            totals[uploader] = totals.get(uploader, 0) + 1
+    return {name for name, n in totals.items() if n >= minimum}
+
+
 def _signals(store, query: str) -> dict:
     rows = history(store, query)
     artist = ""
@@ -159,8 +184,12 @@ def _signals(store, query: str) -> dict:
         artist, title = rows[0].get("artist", ""), rows[0].get("track_title", "")
     # Uploader affinity is per artist, not per song: the same channel posts the
     # right versions across a discography.
-    trusted = {r["uploader"] for r in history(store) if artist and r.get("artist") == artist
-               and r.get("uploader")}
+    key = _artist_key(artist)
+    rows_all = history(store)
+    trusted = {r["uploader"] for r in rows_all
+               if key and _artist_key(r.get("artist", "")) == key and r.get("uploader")}
+    # A channel that has been right for other artists is still evidence.
+    trusted |= _global_trusted(store)
     wanted = _version_tokens(query)
     matched = [r for r in rows if r.get("version_match")]
     mismatched = [r for r in rows if wanted and not r.get("version_match")]
@@ -216,7 +245,121 @@ def taste(store, track: dict, limit: int = 5) -> list[dict]:
     artist = (track or {}).get("artist_name") or ""
     if not artist:
         return []
-    return [r for r in history(store) if r.get("artist") == artist][:limit]
+    key = _artist_key(artist)
+    return [r for r in history(store)
+            if _artist_key(r.get("artist", "")) == key][:limit]
+
+
+def _candidate_meta(store, urls: set[str]) -> dict:
+    """Title/uploader for URLs already seen in the audit trail.
+
+    A replacement only stores URLs, and the judge needs the metadata of the thing it is
+    being told not to propose again. Both audits keep the candidate pool they judged.
+    """
+    if not urls:
+        return {}
+    found = {}
+    try:
+        with store.lock:
+            rows = store.conn.execute(
+                "SELECT candidates FROM match_decisions ORDER BY id DESC LIMIT 500").fetchall()
+            rows += store.conn.execute(
+                "SELECT candidates FROM download_jobs WHERE candidates<>''"
+                " ORDER BY id DESC LIMIT 500").fetchall()
+    except Exception:                                  # no audit tables yet
+        return {}
+    for row in rows:
+        try:
+            pool = json.loads(row["candidates"] or "[]")
+        except ValueError:
+            continue
+        for c in pool:
+            if not isinstance(c, dict) or c.get("url") not in urls or c["url"] in found:
+                continue
+            found[c["url"]] = {
+                "title": str(c.get("title") or ""),
+                "uploader": str(c.get("artist") or c.get("uploader") or c.get("channel") or "")}
+    return found
+
+
+def rejected(store, track: dict, limit: int = 5) -> list[dict]:
+    """Recent candidates this listener turned down for the same artist.
+
+    The judge already sees accepted picks; without the rejects it keeps proposing the
+    same wrong channels. Three things count as a rejection: nothing passed the judge
+    (a review), an automatic pick was reversed, or the source was changed by hand —
+    including a hand replacement that was itself reversed. Accepted picks never do.
+    """
+    artist = (track or {}).get("artist_name") or ""
+    if not artist:
+        return []
+    seen = []                                          # (url, reason, status)
+    import decisions
+    import replacements
+    try:
+        with store.lock:
+            decisions.schema(store)
+            replacements.schema(store)
+            rows = store.conn.execute(
+                "SELECT prior_url, chosen_url, candidates, reason, status FROM match_decisions"
+                " WHERE lower(trim(artist))=lower(trim(?))"
+                " AND status IN ('review','reversed') ORDER BY id DESC LIMIT ?",
+                (artist, max(limit * 4, 20))).fetchall()
+            swaps = store.conn.execute(
+                "SELECT r.old_url, r.new_url, r.status FROM source_replacements r"
+                " JOIN tracks t ON t.id=r.track_id"
+                " WHERE lower(trim(t.artist_name))=lower(trim(?))"
+                " AND r.status IN ('completed','reversed') ORDER BY r.id DESC LIMIT ?",
+                (artist, max(limit * 4, 20))).fetchall()
+    except Exception:                                  # no audit tables yet
+        return []
+    for row in rows:
+        if row["status"] == "reversed":
+            # The automatic pick is what he undid; the prior source is still up to him.
+            url = row["chosen_url"] or ""
+            why = "automatic pick reversed by administrator"
+        else:
+            url = row["prior_url"] or ""
+            why = str(row["reason"] or "")
+        if url:
+            seen.append((url, why, str(row["status"] or "")))
+    for row in swaps:
+        if row["status"] == "reversed":
+            seen.append((row["new_url"] or "", "hand replacement reversed", "replacement: reversed"))
+        else:
+            seen.append((row["old_url"] or "", "source replaced by hand", "replacement: completed"))
+    meta = _candidate_meta(store, {url for url, _, _ in seen if url})
+    out = []
+    for url, why, status in seen:
+        item = meta.get(url)
+        if not item or not (item["title"] or item["uploader"]):
+            continue
+        out.append({"candidate_title": item["title"], "uploader": item["uploader"],
+                    "reason": why[:200], "status": status})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def trusted_uploaders(store, track: dict, minimum: int = 1) -> list[str]:
+    """Channels this listener has repeatedly accepted, for this artist or for others.
+
+    Same-artist picks rank first; a channel accepted three or more times anywhere is
+    still worth telling the judge about when the artist is new.
+    """
+    artist = (track or {}).get("artist_name") or ""
+    if not artist:
+        return []
+    key = _artist_key(artist)
+    counts = {}
+    for pick in history(store):
+        if _artist_key(pick.get("artist", "")) != key:
+            continue
+        uploader = (pick.get("uploader") or "").strip()
+        if uploader:
+            counts[uploader] = counts.get(uploader, 0) + 1
+    local = [name for name, n in sorted(counts.items(), key=lambda kv: -kv[1]) if n >= minimum]
+    return (local + [name for name in sorted(_global_trusted(store)) if name not in local])[:3]
 
 
 def explain(store, query: str) -> dict:

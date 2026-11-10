@@ -125,6 +125,7 @@ class Queue:
             kind="url", artwork=release.artwork)
 
         queued = 0
+        reused = 0
         for position, track in enumerate(release.tracks, start=1):
             track_id = self.store.track(
                 track.provider, track.provider_track_id, track.title,
@@ -133,17 +134,23 @@ class Queue:
                 duration=track.duration, artwork=track.artwork,
                 source_url=track.source_url, release_id=release_row,
                 artist_id=artist_id, isrc=track.isrc)
-            self.store.add_to_playlist(playlist_id, track_id, position)
             row = self.store.track_by_id(track_id)
-            if row and row["file"] and Path(row["file"]).is_file():
-                continue          # already on disk: membership only, no second copy
+            already = bool(row and row["file"] and Path(row["file"]).is_file())
+            # Membership first, always: a song we already have is still part of
+            # this playlist — it links the existing file instead of copying it.
+            self.store.add_to_playlist(playlist_id, track_id, position, reused=already)
+            if already:
+                reused += 1
+                continue            # already on disk: membership only, no second copy
             if self.store.enqueue(track_id, track.provider, track.source_url):
                 queued += 1
-        self.store.log(f"queued {queued} of {len(release.tracks)} tracks"
-                       f" from “{release.title}”", "ok", f"playlist:{playlist_id}")
+        self.store.log(
+            f"queued {queued} of {len(release.tracks)} tracks"
+            + (f", {reused} already in the library" if reused else "")
+            + f" from “{release.title}”", "ok", f"playlist:{playlist_id}")
         self.wake()
         return {"playlist_id": playlist_id, "title": release.title,
-                "tracks": len(release.tracks), "queued": queued}
+                "tracks": len(release.tracks), "queued": queued, "reused": reused}
 
     # -- per-job work --
     def _collection(self, track: dict) -> str:
@@ -251,6 +258,11 @@ class Queue:
             remaining = list(hits[:6])
             expanded = False
             accepted = False
+            # The listener's history does not change between candidates of one track;
+            # scanning the audit tables again for each judgment only cost time.
+            examples = ranking.taste(self.store, track)
+            rejects = ranking.rejected(self.store, track)
+            trusted = ranking.trusted_uploaders(self.store, track)
             while remaining and len(considered) < 6:
                 candidate = remaining.pop(0)
                 if candidate['url'] in {h['url'] for h in considered}:
@@ -259,7 +271,7 @@ class Queue:
                 judgment = ai_match.judge(track, candidate,
                     self.store.setting("ai_model", ai_match.DEFAULT_MODEL),
                     base_url=self.store.setting("ai_base_url", "https://openrouter.ai/api/v1"),
-                    examples=ranking.taste(self.store, track))
+                    examples=examples, rejected=rejects, trusted=trusted)
                 considered[-1] = dict(candidate, metadata_decision=judgment.decision,
                                       metadata_reason=judgment.reason)
                 if judgment.decision == "accept":
@@ -431,6 +443,13 @@ class Queue:
             self._finish(job, "completed", "", "",
                          size=written.stat().st_size if written else 0)
             self.store.set_provider(job["provider"], last_success=time.time())
+            # The file carries the uploader's genre; keep it as a label right away so the
+            # library does not depend on the AI pass to have genres at all.
+            try:
+                import genres
+                genres.save_from_file(self.store, track["id"], str(written))
+            except Exception:
+                pass
             return
 
         kind = ytdlp.classify(output)
@@ -502,6 +521,45 @@ class Queue:
                                     track_id=job["track_id"])
             except Exception:
                 pass
+            self._remember_artist_art(job["track_id"])
+        # A download started from the Feed was meant for someone's library. The
+        # file exists now, so it can join — a failed or cancelled track is dropped
+        # instead of leaving a row that can never play.
+        try:
+            import listening
+            if status == "completed":
+                listening.deliver_track(self.store, job["track_id"])
+            else:
+                listening.forget_track(self.store, job["track_id"])
+        except Exception:                           # noqa: BLE001
+            self.store.log("could not update the library for this download",
+                           "warn", f"job:{job['id']}")
+
+    def _remember_artist_art(self, track_id: int) -> None:
+        """One picture per artist, off the worker thread. A stored or manual picture
+        means no request, so this never repeats for the same artist."""
+        try:
+            with self.store.lock:
+                row = self.store.conn.execute(
+                    "SELECT artist_name, provider, source_url FROM tracks WHERE id=?",
+                    (track_id,)).fetchone()
+            track = dict(row) if row else None
+        except Exception:
+            track = None
+        if not track or not track.get("artist_name"):
+            return
+        def run():
+            try:
+                from library import artist_art
+                url = ""
+                if track["provider"] == "soundcloud":
+                    from providers.soundcloud import _artist_url
+                    url = _artist_url(track.get("source_url") or "")
+                artist_art.fetch(self.store, track["artist_name"],
+                                 track["provider"], url)
+            except Exception:
+                pass
+        threading.Thread(target=run, daemon=True).start()
 
     # -- loop --
     def _loop(self) -> None:

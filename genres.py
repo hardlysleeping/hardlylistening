@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 import queue
+import re
+import subprocess
 import threading
 import time
 from urllib import request
@@ -66,13 +68,106 @@ def annotate(store, rows):
         row['genre_metadata']={k:label[k] for k in ('source','model','manual','updated')} if valid else None
     return rows
 
-def save(store, track, tags, model='', manual=False):
+# A tag the downloader embedded came from the source itself, so it outranks a guess and
+# only a human correction outranks it.
+SOURCE_PRIORITY = {'ai-metadata': 1, 'metadata': 2, 'manual': 3}
+
+# Uploader genres are free text: normalise, then keep what the taxonomy actually knows.
+ALIASES = {
+    'drum and bass': 'drum-and-bass', 'drum n bass': 'drum-and-bass', 'drum & bass': 'drum-and-bass',
+    'd and b': 'drum-and-bass', 'dnb': 'drum-and-bass', 'd&b': 'drum-and-bass',
+    'liquid drum and bass': 'liquid-dnb', 'liquid dnb': 'liquid-dnb',
+    'tech house': 'tech-house', 'deep house': 'deep-house', 'progressive house': 'progressive-house',
+    'electro house': 'electro-house', 'bass house': 'bass-house', 'future house': 'future-house',
+    'afro house': 'afro-house', 'melodic house': 'melodic-house', 'melodic techno': 'melodic-techno',
+    'hard techno': 'hard-techno', 'progressive trance': 'progressive-trance',
+    'psy trance': 'psytrance', 'psy-trance': 'psytrance', 'melodic dubstep': 'melodic-dubstep',
+    'future bass': 'future-bass', 'nu disco': 'nu-disco', 'uk garage': 'uk-garage',
+    'post dubstep': 'dubstep', 'glitch hop': 'breaks', 'big room': 'house', 'mainstage': 'house',
+    'bass music': 'bass', 'wook trap': 'trap', 'melodic bass': 'future-bass',
+}
+
+
+def map_tags(raw):
+    """Uploader free text -> taxonomy labels. Nothing outside the taxonomy is kept."""
+    if isinstance(raw, (list, tuple)):
+        parts = [str(x) for x in raw]
+    else:
+        parts = re.split(r'[,;/|]+', str(raw or ''))
+    out = []
+    for part in parts:
+        text = re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9& ]+', ' ', part.lower())).strip()
+        if not text:
+            continue
+        slug = text.replace(' ', '-')
+        for candidate in (slug, ALIASES.get(text), ALIASES.get(slug)):
+            if candidate and candidate in TAXONOMY and candidate not in out:
+                out.append(candidate)
+                break
+    return out[:5]
+
+
+def embedded(path):
+    """The genre tag(s) the downloader wrote into the file, as taxonomy labels."""
+    try:
+        out = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-print_format', 'json',
+             '-show_entries', 'format_tags=genre', str(path)],
+            capture_output=True, text=True, timeout=20).stdout
+        tags = (json.loads(out or '{}').get('format') or {}).get('tags') or {}
+    except Exception:
+        return []
+    grade = next((v for k, v in tags.items() if k.lower() == 'genre'), '')
+    return map_tags(grade)
+
+
+def save(store, track, tags, model='', manual=False, source=None):
+    origin = 'manual' if manual else (source or 'ai-metadata')
     with store.lock:
         schema(store)
-        old=store.conn.execute('SELECT manual FROM genre_labels WHERE track_id=?',(track['id'],)).fetchone()
-        if old and old[0] and not manual: return
-        store.conn.execute('INSERT OR REPLACE INTO genre_labels VALUES (?,?,?,?,?,?,?)',(track['id'],json.dumps(validate(tags)),fingerprint(track),'manual' if manual else 'ai-metadata',model,int(manual),time.time()))
+        old = store.conn.execute('SELECT source, manual FROM genre_labels WHERE track_id=?',
+                                 (track['id'],)).fetchone()
+        if old:
+            current = 'manual' if old['manual'] else (old['source'] or 'ai-metadata')
+            if SOURCE_PRIORITY.get(current, 0) > SOURCE_PRIORITY.get(origin, 0):
+                return                     # an embedded genre beats a guess; a correction beats both
+        store.conn.execute('INSERT OR REPLACE INTO genre_labels VALUES (?,?,?,?,?,?,?)',
+                           (track['id'], json.dumps(validate(tags)), fingerprint(track), origin,
+                            model, int(manual), time.time()))
         store.conn.commit()
+
+
+def save_from_file(store, track_id, path):
+    """Called when a download finishes: keep the file's own genre, if it has one."""
+    tags = embedded(path)
+    if not tags:
+        return []
+    with store.lock:
+        row = store.conn.execute('SELECT * FROM tracks WHERE id=?', (track_id,)).fetchone()
+    if not row:
+        return []
+    save(store, dict(row), tags, model='embedded', source='metadata')
+    return tags
+
+
+def backfill(store, limit=None):
+    """Read every downloaded file that has no label yet (or only an AI one)."""
+    schema(store)
+    with store.lock:
+        rows = store.conn.execute(
+            'SELECT t.* FROM tracks t LEFT JOIN genre_labels g ON g.track_id=t.id'
+            ' WHERE t.file IS NOT NULL AND t.file<>\'\''
+            ' AND (g.track_id IS NULL OR (g.manual=0 AND g.source<>\'metadata\'))'
+            + (' LIMIT %d' % int(limit) if limit else '')).fetchall()
+    written = 0
+    for row in rows:
+        track = dict(row)
+        tags = embedded(track['file'])
+        if not tags:
+            continue
+        save(store, track, tags, model='embedded', source='metadata')
+        written += 1
+    return {'scanned': len(rows), 'tagged': written}
 
 class Worker:
     def __init__(self,store):

@@ -4,7 +4,7 @@ const fs = require('fs'), assert = require('assert'), { chromium } = require('pl
 const html = fs.readFileSync('web/index.html', 'utf8'), css = fs.readFileSync('web/polish.css', 'utf8');
 const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
 const playerBar = html.slice(html.indexOf('<div id="player">'), html.indexOf('<audio id="player-audio"'));
-const overlay = html.slice(html.indexOf('<div id="player-full"'), html.indexOf('<dialog id="dlg-lyrics"'));
+const overlay = html.slice(html.indexOf('<div id="player-full"'), html.indexOf('<dialog id="dlg-path"'));
 const playerScript = html.slice(html.indexOf('// ------------------------------------------------------------------ playback'), html.indexOf('// ------------------------------------------------------------------ init'))
   // The real element is replaced by the fixture so nothing can play; keep one owner.
   .replace('const playerAudio = $("#player-audio");', 'const playerAudio = window.__fakeAudio;');

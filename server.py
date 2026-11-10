@@ -41,6 +41,7 @@ ROUTES = [
     ("POST", r"^/api/settings$", "settings"),
     ("POST", r"^/api/import$", "import_paths"),
     ("POST", r"^/api/import/upload$", "import_upload"),
+    ("POST", r"^/api/artist/art$", "artist_art"),
     ("POST", r"^/api/library/move$", "library_move"),
     ("POST", r"^/api/track/(\d+)/retry$", "track_retry"),
     ("POST", r"^/api/track/(\d+)/skip$", "track_skip"),
@@ -58,12 +59,14 @@ ROUTES = [
     ("POST", r"^/api/track/(\d+)/bpm$", "track_bpm"),
     ("POST", r"^/api/activity/listen$", "activity_listen"),
     ("POST", r"^/api/members$", "members_update"),
-    ("POST", r"^/api/follows$", "follow_add"),
-    ("POST", r"^/api/follows/(\d+)/check$", "follow_check"),
-    ("POST", r"^/api/follows/(\d+)/toggle$", "follow_toggle"),
-    ("POST", r"^/api/follows/(\d+)/remove$", "follow_remove"),
+    ("POST", r"^/api/subscriptions$", "subscription_add"),
+    ("POST", r"^/api/subscriptions/(\d+)/check$", "subscription_check"),
+    ("POST", r"^/api/subscriptions/(\d+)/toggle$", "subscription_toggle"),
+    ("POST", r"^/api/subscriptions/(\d+)/remove$", "subscription_remove"),
+    ("POST", r"^/api/subscriptions/(\d+)/unsubscribe$", "subscription_leave"),
     ("POST", r"^/api/feed/refresh-all$", "feed_refresh_all"),
     ("POST", r"^/api/feed/(\d+)/queue$", "feed_queue"),
+    ("POST", r"^/api/track/queue$", "track_queue"),
     ("POST", r"^/api/feed/(\d+)/ignore$", "feed_ignore"),
     ("POST", r"^/api/feed/(\d+)/seen$", "feed_seen"),
 ]
@@ -91,7 +94,11 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
-        if self.path.startswith(('/party', '/api/party', '/auth/', '/api/auth/', '/api/members', '/rest/', '/api/listening/')):
+        # A keep-alive timeout can log before parse_request set self.path.
+        if not getattr(self, "path", ""):
+            print(f"{self.address_string()} {fmt % args}", flush=True)
+            return
+        if self.path.startswith(('/party', '/api/party', '/auth/', '/api/auth/', '/api/members', '/rest/', '/api/listening/', '/s/')):
             return  # Never log OAuth callback codes.
         if self.path.startswith("/api/state"):
             return                       # 1.5 s polling would drown the log
@@ -125,6 +132,12 @@ class Handler(BaseHTTPRequestHandler):
                 import party
                 party.dispatch(self, boot()[0], SECURITY)
                 return False
+            # Shares are member-only. Guests hold just the party cookie and are
+            # refused; the capability URL itself is served publicly by do_GET.
+            if path == '/api/shares' or path.startswith('/api/shares/'):
+                import shares
+                shares.dispatch(self, boot()[0], SECURITY)
+                return False
             # Temporary party credentials NEVER enable the legacy local bypass.
             # A real independent browser membership may still use its own scope.
             if SECURITY.cookie(self, '__Host-hl_party') and path not in ('/login', '/auth/link', '/api/health', '/api/auth/session', '/api/auth/logout'):
@@ -137,6 +150,18 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/playlists' or path.startswith('/api/playlists/'):
                 import user_playlists
                 user_playlists.dispatch(self, boot()[0], SECURITY)
+                return False
+            if path == '/api/artist/art/candidates':
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                SECURITY.admin(self.member)
+                if self.command != 'GET':
+                    raise Denied(405, 'Method not allowed')
+                name = (parse_qs(urlparse(self.path).query).get('name') or [''])[0].strip()
+                if not name:
+                    raise Denied(400, 'name is required')
+                from library import artist_art
+                self.json(artist_art.candidates(store, name))
                 return False
             if path.startswith('/api/listening/'):
                 import listening
@@ -162,6 +187,33 @@ class Handler(BaseHTTPRequestHandler):
                     self.json({'ok': True})
                 else:
                     raise Denied(404, 'Not found')
+                return False
+            if path.startswith('/api/swipe'):
+                import swipe
+                swipe.dispatch(self, boot()[0], SECURITY)
+                return False
+            if path == '/api/search':
+                # A member searches and downloads a single song the same way they may add
+                # a playlist; the hit is pinned so the queue fetches that exact upload.
+                store, queue = boot()
+                self.member = SECURITY.authenticate(self, store)
+                import search
+                if self.command == 'GET':
+                    SECURITY.limit(self.member['id'], 'songsearch', 30)
+                    query = (parse_qs(urlparse(self.path).query).get('q') or [''])[0]
+                    try:
+                        self.json({'results': search.find(query)})
+                    except ValueError as exc:
+                        raise Denied(400, str(exc))
+                elif self.command == 'POST':
+                    SECURITY.csrf(self)
+                    SECURITY.limit(self.member['id'], 'songsearch-add', 20)
+                    try:
+                        self.json(search.queue_hit(store, queue, self.body()))
+                    except (ValueError, TypeError) as exc:
+                        raise Denied(400, str(exc))
+                else:
+                    raise Denied(405, 'Method not allowed')
                 return False
             if path == '/api/genres' or path.startswith('/api/genres/'):
                 import genres
@@ -211,6 +263,19 @@ class Handler(BaseHTTPRequestHandler):
                 return False
             # Sign-in is the one thing that has to work before a session exists.
             if self.command == 'GET' and path in ('/login', '/auth/link', '/api/health'):
+                # A signed-in member must never be parked on the invitation
+                # screen. Arriving at "/" from another site (a chat link, a
+                # bookmark in another app) is a cross-site navigation, and the
+                # session cookie is SameSite=Lax — Lax is what keeps that
+                # navigation signed in instead of bouncing it to /login.
+                if path == '/login' and SECURITY.required:
+                    try:
+                        self.member = SECURITY.authenticate(self, boot()[0])
+                    except Denied:
+                        pass
+                    else:
+                        self.redirect('/')
+                        return False
                 return True     # health is a liveness ping, not data
             if self.command == 'POST' and path == '/api/auth/session':
                 SECURITY.csrf(self)
@@ -219,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
                 sid = SECURITY.exchange(boot()[0], payload.get('invite'), payload.get('display_name'), payload.get('profile_icon'))
                 self.send_response(200)
                 self.send_header('Cache-Control', 'no-store')
-                self.send_header('Set-Cookie', f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age={SECURITY.SESSION_TTL}')
+                self.send_header('Set-Cookie', f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={SECURITY.SESSION_TTL}')
                 self.send_header('Content-Length', '0')
                 self.end_headers()
                 return False
@@ -251,7 +316,7 @@ class Handler(BaseHTTPRequestHandler):
                     store.conn.execute('DELETE FROM browser_sessions WHERE digest=?', (SECURITY.digest(SECURITY.cookie(self, '__Host-hl_session')),))
                     store.conn.commit()
                 self.send_response(200)
-                self.send_header('Set-Cookie', '__Host-hl_session=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0')
+                self.send_header('Set-Cookie', '__Host-hl_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0')
                 self.send_header('Content-Length', '0')
                 self.end_headers()
                 return False
@@ -376,6 +441,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/party', '/party.html', '/party.js', '/party.css'):
             self.static('party.html' if path in ('/party', '/party.html') else path.lstrip('/'))
             return
+        # The Swipe shell holds no catalog: its data comes from authenticated /api/swipe.
+        if path in ('/swipe', '/swipe.html', '/swipe.js', '/swipe.css'):
+            self.static('swipe.html' if path in ('/swipe', '/swipe.html') else path.lstrip('/'))
+            return
         # Public, non-personal PWA assets only; no boot, session or database access.
         if path in ('/app.webmanifest', '/icon-192.png', '/icon-512.png',
                     '/genres.js', '/genres.css', '/polish.css', '/preferences.js', '/preferences.css', '/lifecycle.js', '/sw.js', '/offline.html'):
@@ -383,6 +452,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == '/robots.txt':
             self._send(200, b'User-agent: *\nDisallow: /\n', 'text/plain')
+            return
+        # Public share pages are capability URLs: no session, no catalogue.
+        if path.startswith('/s/'):
+            import shares
+            try:
+                shares.public(self, boot()[0], SECURITY)
+            except Denied as exc:
+                self._send(exc.code, exc.message.encode(), 'text/plain; charset=utf-8')
             return
         if not self.boundary(path):
             return
@@ -395,6 +472,11 @@ class Handler(BaseHTTPRequestHandler):
         store, _ = boot()
         if path == "/api/state":
             snapshot = store.state()
+            # The snapshot's own list is the raw table, so it has no idea who owns
+            # what. The UI adopts this on every poll: handing it the bare rows is
+            # what emptied the member's own list and hid the follow seat.
+            snapshot["subscriptions"] = self.subscriptions_with_ownership(store)
+            snapshot.pop("follows", None)
             # QUEUE.current is live (sub-second, straight from yt-dlp); the
             # snapshot's own copy is the last persisted row, which is all there is
             # after a restart or while the worker is between tracks.
@@ -480,8 +562,38 @@ class Handler(BaseHTTPRequestHandler):
             from discovery.artist_profile import profile
             self.json(profile(store, name))
             return
-        if path == "/api/follows":
-            self.json({"follows": store.watches()})
+        if path == "/api/tracks":
+            # The songs inside one album. Read-only and user-initiated: the Feed
+            # asks only when somebody opens a row.
+            from urllib.parse import parse_qs as _qs, urlparse as _up
+            raw = (_qs(_up(self.path).query).get("url") or [""])[0].strip()
+            if not raw:
+                self.json({"error": "url is required"}, 400)
+                return
+            from discovery import tracklist
+            try:
+                self.json({"tracks": tracklist.tracks(raw)})
+            except ValueError as error:
+                self.json({"error": str(error)}, 400)
+            except Exception as error:                      # noqa: BLE001
+                self.json({"error": f"Could not read that tracklist ({error})"}, 502)
+            return
+        if path == "/api/catalogue":
+            from urllib.parse import parse_qs as _qs, urlparse as _up
+            raw = (_qs(_up(self.path).query).get("watch") or [""])[0].strip()
+            if not raw.isdigit():
+                self.json({"error": "watch is required"}, 400)
+                return
+            from discovery import tracklist
+            try:
+                self.json(tracklist.catalogue(store, int(raw)))
+            except ValueError as error:
+                self.json({"error": str(error)}, 400)
+            except Exception as error:                      # noqa: BLE001
+                self.json({"error": f"Could not read that catalogue ({error})"}, 502)
+            return
+        if path == "/api/subscriptions":
+            self.json({"subscriptions": self.subscriptions_with_ownership(store)})
             return
         if path == "/api/titles/status":
             from library import metadata_repair
@@ -493,7 +605,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/library":
             from social import annotate
-            self.json({"tracks": annotate(store.library()), "all_tracks": annotate(store.library(include_pending=True)), "playlists": [dict(r) for r in store.conn.execute("SELECT id,title FROM playlists ORDER BY position,id")]})
+            try:
+                from library import artist_art
+                artist_art.warm(store)
+            except Exception:
+                pass
+            self.json({"tracks": annotate(store.library()), "all_tracks": annotate(store.library(include_pending=True)), "artist_art": store.artist_art_map(), "playlists": [dict(r) for r in store.conn.execute("SELECT id,title,provider,source_url FROM playlists ORDER BY position,id")]})
             return
         if path == "/api/library/export":
             # Hand-off to DJ software, not an audio download: m3u8 for anything
@@ -522,6 +639,29 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
             return
+        backup = re.fullmatch(r"/api/playlist/(\d+)/apple-backup", path)
+        if backup:
+            # One restore file per playlist: ordered catalog IDs, no audio, no auth
+            # beyond the session that can already read this playlist.
+            from library import playlist_backup
+            from urllib.parse import quote as _quote
+            try:
+                body = playlist_backup.dumps(store, int(backup[1]))
+                name = playlist_backup.filename(store, int(backup[1]))
+            except ValueError as error:
+                self.json({"error": str(error)}, 404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             "attachment; filename=\"playlist.hardlyplaylist.json\"; filename*=UTF-8''"
+                             + _quote(name, safe=""))
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         # All browser exports pass through one boundary; future shared auth must
         # guard this dispatcher alongside audio and the rest of the API.
         if self.browser_download(path, store):
@@ -544,6 +684,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "public, max-age=86400")
             self.end_headers()
             self.wfile.write(payload)
+            return
+        artist_art = re.match(r"^/api/artist/art/([a-f0-9]{24})$", path)
+        if artist_art:
+            folder = APP_DIR / "artist-art"
+            for suffix, ctype in (("png","image/png"), ("jpg","image/jpeg"),
+                                  ("jpeg","image/jpeg"), ("gif","image/gif"),
+                                  ("webp","image/webp")):
+                target = folder / f"{artist_art.group(1)}.{suffix}"
+                if target.is_file():
+                    self._send(200, target.read_bytes(), ctype)
+                    return
+            self._send(404, b"no art", "text/plain")
             return
         if path in ("/", "/index.html"):
             self.static("index.html")
@@ -677,6 +829,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, target.read_bytes(), ctype)
                 return
         self._send(404, b"not found", "text/plain")
+
+    def do_DELETE(self) -> None:
+        path = urlparse(self.path).path
+        if not self.boundary(path):
+            return
+        self.json({"error": "no such endpoint"}, 404)
 
     def do_POST(self) -> None:
         self._body = None  # Handler instances survive HTTP keep-alive requests.
@@ -854,46 +1012,89 @@ class Handler(BaseHTTPRequestHandler):
                 out.append({"url": one, "error": str(exc)})
         self.json({"added": out})
 
-    # -- following / feed --
-    def do_follow_add(self) -> None:
-        url = (self.body().get("url") or "").strip()
-        store, _ = boot()
-        from discovery import follows
-        self.json(follows.follow(store, url))
+    # -- subscriptions / feed --
+    def subscriptions_with_ownership(self, store) -> list[dict]:
+        """Subscriptions, each marked with whether this member may call it theirs.
 
-    def do_follow_check(self, watch_id: int) -> None:
+        One made before ownership existed has no owner. It belongs to nobody until
+        somebody asks for it again — inheriting it here is what made every artist
+        look subscribed as soon as one of them was.
+        """
+        member = getattr(self, "member", None) or {}
+        uid = str(member.get("id") or "")
+        rows = store.watches()
+        for row in rows:
+            owner = str(row.get("member_id") or "")
+            row["mine"] = True if not uid else bool(owner and owner == uid)
+        return rows
+
+    def do_subscription_add(self) -> None:
+        body = self.body()
+        store, _ = boot()
+        from discovery import subscriptions
+        member_id = str((getattr(self, "member", None) or {}).get("id") or "")
+        url = (body.get("url") or "").strip()
+        if url:
+            self.json(subscriptions.subscribe(store, url, member_id=member_id))
+            return
+        # From an artist page: it may have no known link, so the artist is named
+        # and the subscribable source is resolved from the library.
+        self.json(subscriptions.subscribe_by_name(
+            store, str(body.get("name") or "").strip(),
+            str(body.get("provider") or ""), member_id=member_id))
+
+    def do_subscription_check(self, watch_id: int) -> None:
         store, _ = boot()
         watch = store.watch_get(watch_id)
         if not watch:
-            raise ValueError("no such follow")
-        from discovery import follows
-        self.json(follows.check(store, watch))
+            raise ValueError("no such subscription")
+        from discovery import subscriptions
+        self.json(subscriptions.check(store, watch))
 
-    def do_follow_toggle(self, watch_id: int) -> None:
+    def do_subscription_toggle(self, watch_id: int) -> None:
         store, _ = boot()
         watch = store.watch_get(watch_id)
         if not watch:
-            raise ValueError("no such follow")
+            raise ValueError("no such subscription")
         enabled = not bool(watch["enabled"])
         store.watch_mark(watch_id, enabled=enabled)
         self.json({"id": watch_id, "enabled": enabled})
 
-    def do_follow_remove(self, watch_id: int) -> None:
+    def do_subscription_remove(self, watch_id: int) -> None:
         store, _ = boot()
         store.watch_remove(watch_id)
         self.json({"removed": watch_id})
 
-    def do_feed_refresh_all(self) -> None:
-        """Manual sweep: every enabled follow once, bounded so a click cannot
-        turn into fifty yt-dlp calls."""
+    def do_subscription_leave(self, watch_id: int) -> None:
+        """Stop calling this artist one of mine — without stopping the tracking.
+
+        The row stays, the artist stays on the feed for everybody else, and the
+        seat goes back to the "+" so it can be picked up again.
+        """
         store, _ = boot()
-        from discovery import follows
+        if not store.watch_get(watch_id):
+            raise ValueError("no such subscription")
+        member_id = str((getattr(self, "member", None) or {}).get("id") or "")
+        mine = store.watch_release(watch_id, member_id)
+        if not mine:
+            raise ValueError("that is not one of your subscriptions")
+        self.json({"unsubscribed": watch_id})
+
+    def do_feed_refresh_all(self) -> None:
+        """Manual sweep: every enabled follow, once, in order.
+
+        Sequential on purpose — one provider request at a time is what keeps a
+        big list from getting rate-limited — so a long list means a long wait,
+        with the button spinning until the last artist answers.
+        """
+        store, _ = boot()
+        from discovery import subscriptions
         done = []
-        for watch in store.watches()[:5]:
+        for watch in store.watches():
             if not watch["enabled"]:
                 continue
             try:
-                done.append(follows.check(store, watch))
+                done.append(subscriptions.check(store, watch))
             except Exception as exc:                    # noqa: BLE001
                 done.append({"artist": watch["artist_name"], "error": str(exc)})
         self.json({"checked": done})
@@ -905,6 +1106,9 @@ class Handler(BaseHTTPRequestHandler):
         if not item:
             raise ValueError("no such feed item")
         if item["decision"] == "queued":
+            # Already queued by someone — pressing Download again still claims it
+            # for this person's library.
+            self.want_in_library(item["playlist_id"])
             self.json({"ok": True, "already": True, "playlist_id": item["playlist_id"]})
             return
         try:
@@ -915,7 +1119,37 @@ class Handler(BaseHTTPRequestHandler):
         store.feed_mark(item_id, decision="queued",
                         outcome="running" if result.get("queued") else "complete",
                         playlist_id=result.get("playlist_id"))
+        self.want_in_library(result.get("playlist_id"))
         self.json({"ok": True, **result})
+
+    def do_track_queue(self) -> None:
+        """Download one song from an opened album, not the whole release.
+
+        The album stays in the Feed afterwards: only the download button on the
+        release row takes it out of the list.
+        """
+        body = self.body()
+        url = str(body.get("url") or "").strip()
+        if not url:
+            raise ValueError("nothing to download")
+        _, queue = boot()
+        result = queue.ingest(url)
+        self.want_in_library(result.get("playlist_id"))
+        self.json({"ok": True, **result})
+
+    def want_in_library(self, playlist_id) -> None:
+        """A download from the Feed joins the library of whoever pressed it, once
+        the file is there — not before, or the library lists songs that cannot play."""
+        member = getattr(self, "member", None)
+        if not member or not playlist_id:
+            return
+        import listening
+        try:
+            listening.want_playlist(boot()[0], member["id"], int(playlist_id))
+        except Exception:                              # noqa: BLE001
+            # A library row is a convenience; a failure here must not fail the
+            # download the person just asked for.
+            pass
 
     def do_feed_ignore(self, item_id: int) -> None:
         store, _ = boot()
@@ -1261,6 +1495,51 @@ class Handler(BaseHTTPRequestHandler):
         self._claim_import(store, result)
         queue.wake()
         self.json(result)
+
+    def do_artist_art(self) -> None:
+        """Admin: set an artist's picture by hand. Manual art is never overwritten
+        by the automatic fetch."""
+        import base64
+        import hashlib
+        store, _ = boot()
+        self.member = SECURITY.authenticate(self, store)
+        SECURITY.admin(self.member)
+        SECURITY.csrf(self)
+        body = self.body()
+        name = str(body.get("name") or "").strip()
+        if not name:
+            raise ValueError("artist name required")
+        chosen = str(body.get("url") or "").strip()
+        if chosen:
+            if not chosen.startswith(("http://", "https://")):
+                raise ValueError("invalid image url")
+            store.set_artist_art(name, chosen, manual=True, provider="manual")
+            self.json({"ok": True, "artwork": chosen})
+            return
+        data = str(body.get("data") or "")
+        if not data:
+            raise ValueError("artist name and image required")
+        raw = base64.b64decode(data.split(",")[-1])
+        if not raw:
+            raise ValueError("empty image")
+        if len(raw) > 8_000_000:
+            raise ValueError("image too large (8 MB)")
+        suffix = "png"
+        if raw[:3] == b"\xff\xd8\xff":
+            suffix = "jpg"
+        elif raw[:4] == b"GIF8":
+            suffix = "gif"
+        elif raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+            suffix = "webp"
+        digest = hashlib.sha256(store._artist_key(name).encode()).hexdigest()[:24]
+        folder = APP_DIR / "artist-art"
+        folder.mkdir(exist_ok=True)
+        for old in folder.glob(digest + ".*"):
+            old.unlink(missing_ok=True)
+        (folder / f"{digest}.{suffix}").write_bytes(raw)
+        url = f"/api/artist/art/{digest}"
+        store.set_artist_art(name, url, manual=True, provider="manual")
+        self.json({"ok": True, "artwork": url})
 
     def _claim_import(self, store, result) -> None:
         """Imported tracks and their playlist belong to the member who imported."""

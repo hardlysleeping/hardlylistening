@@ -60,7 +60,17 @@ CREATE TABLE IF NOT EXISTS artists (
   artist_id TEXT NOT NULL,
   name TEXT NOT NULL,
   url TEXT DEFAULT '',
+  artwork TEXT DEFAULT '',
   UNIQUE(provider, artist_id)
+);
+
+CREATE TABLE IF NOT EXISTS artist_art (
+  name_key TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  artwork TEXT NOT NULL DEFAULT '',
+  manual INTEGER NOT NULL DEFAULT 0,
+  provider TEXT NOT NULL DEFAULT '',
+  fetched REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS releases (
@@ -120,6 +130,9 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
   playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
   track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
   position INTEGER NOT NULL DEFAULT 0,
+  -- 1 = the recording was already in the library when this playlist was added,
+  -- so it is a membership link to the existing file, not a second copy.
+  reused INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (playlist_id, track_id)
 );
 
@@ -166,6 +179,9 @@ CREATE TABLE IF NOT EXISTS watches (
   artist_id TEXT NOT NULL,
   artist_name TEXT DEFAULT '',
   artist_url TEXT DEFAULT '',
+  -- Who followed them. Empty on follows made before the Feed knew about
+  -- members, and on installs with sign-in turned off.
+  member_id TEXT DEFAULT '',
   interval REAL DEFAULT 21600,
   last_checked REAL DEFAULT 0,
   watermark REAL NOT NULL,             -- a new follow never backfills
@@ -232,6 +248,33 @@ CREATE TABLE IF NOT EXISTS song_boosts (
   boosted_at REAL NOT NULL,
   expires_at REAL NOT NULL
 );
+
+-- Subsonic bookmarks: one resumable position per member and track.
+CREATE TABLE IF NOT EXISTS listening_bookmarks (
+  member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  position_ms INTEGER NOT NULL DEFAULT 0,
+  comment TEXT NOT NULL DEFAULT '',
+  created REAL NOT NULL,
+  updated REAL NOT NULL,
+  PRIMARY KEY (member_id, track_id)
+);
+CREATE INDEX IF NOT EXISTS listening_bookmarks_member ON listening_bookmarks(member_id, updated DESC);
+
+-- Public share links. Only the SHA-256 of the bearer token is stored, so a
+-- database leak cannot mint a working link. Every row expires.
+CREATE TABLE IF NOT EXISTS listening_shares (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash TEXT NOT NULL UNIQUE,
+  member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('track', 'album', 'playlist')),
+  target TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  created REAL NOT NULL,
+  expires REAL NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS listening_shares_member ON listening_shares(member_id, created DESC);
 """
 
 
@@ -280,6 +323,24 @@ def disk_usage(path: str | Path) -> tuple[float, float, float]:
 #: touches an existing table, so every new column has to be listed here or an
 #: upgraded install silently loses it.
 ADDED_COLUMNS = {
+    "watches": {
+        # Who followed this artist, so "My" can mean this member's own follows.
+        "member_id": "TEXT DEFAULT ''",
+    },
+    "artists": {
+        # A real profile picture (SoundCloud avatar), fetched once. Empty falls
+        # back to an album cover in the UI.
+        "artwork": "TEXT DEFAULT ''",
+    },
+    "listening_pins": {
+        # Pins are dragged into an order the member chose; the number is that order.
+        "position": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "playlist_tracks": {
+        # 1 = already in the library when this playlist was added: the row is a
+        # link to the existing file, and it counts as grabbed straight away.
+        "reused": "INTEGER NOT NULL DEFAULT 0",
+    },
     "download_jobs": {
         "progress": "REAL DEFAULT 0",
         "bytes": "INTEGER DEFAULT 0",
@@ -483,17 +544,57 @@ class Store:
         return 0.0, ""
 
     # -- artists / releases / tracks --
-    def artist(self, provider: str, artist_id: str, name: str, url: str = "") -> int:
+    def artist(self, provider: str, artist_id: str, name: str, url: str = "",
+               artwork: str = "") -> int:
         with self.lock:
             self.conn.execute(
-                "INSERT INTO artists (provider,artist_id,name,url) VALUES (?,?,?,?)"
+                "INSERT INTO artists (provider,artist_id,name,url,artwork) VALUES (?,?,?,?,?)"
                 " ON CONFLICT(provider,artist_id) DO UPDATE SET"
-                " name=excluded.name, url=COALESCE(NULLIF(excluded.url,''),artists.url)",
-                (provider, artist_id or "", name or "", url or ""))
+                " name=excluded.name, url=COALESCE(NULLIF(excluded.url,''),artists.url),"
+                " artwork=COALESCE(NULLIF(excluded.artwork,''),artists.artwork)",
+                (provider, artist_id or "", name or "", url or "", artwork or ""))
             self.conn.commit()
             return self.conn.execute(
                 "SELECT id FROM artists WHERE provider=? AND artist_id=?",
                 (provider, artist_id or "")).fetchone()["id"]
+
+    def set_artist_artwork(self, artist_id: int, artwork: str) -> None:
+        with self.lock:
+            self.conn.execute("UPDATE artists SET artwork=? WHERE id=?", (artwork or "", artist_id))
+            self.conn.commit()
+
+    @staticmethod
+    def _artist_key(name: str) -> str:
+        return " ".join((name or "").casefold().split())
+
+    def artist_art_map(self) -> dict[str, str]:
+        with self.lock:
+            return {row["name_key"]: row["artwork"] for row in self.conn.execute(
+                "SELECT name_key, artwork FROM artist_art WHERE artwork<>''")}
+
+    def set_artist_art(self, name: str, artwork: str, *, manual: bool = False,
+                       provider: str = "") -> None:
+        key = self._artist_key(name)
+        if not key or not artwork:
+            return
+        with self.lock:
+            if manual:
+                self.conn.execute(
+                    "INSERT INTO artist_art(name_key,name,artwork,manual,provider,fetched)"
+                    " VALUES(?,?,?,1,?,?) ON CONFLICT(name_key) DO UPDATE SET"
+                    " artwork=excluded.artwork, manual=1, provider=excluded.provider,"
+                    " fetched=excluded.fetched",
+                    (key, name or "", artwork, provider or "", time.time()))
+            else:
+                # Never overwrite a manual upload, and fetch only when empty.
+                self.conn.execute(
+                    "INSERT INTO artist_art(name_key,name,artwork,manual,provider,fetched)"
+                    " VALUES(?,?,?,0,?,?) ON CONFLICT(name_key) DO UPDATE SET"
+                    " artwork=excluded.artwork, provider=excluded.provider,"
+                    " fetched=excluded.fetched"
+                    " WHERE artist_art.manual=0 AND artist_art.artwork=''",
+                    (key, name or "", artwork, provider or "", time.time()))
+            self.conn.commit()
 
     def release(self, provider: str, release_id: str, title: str, *,
                 artist_id: int | None = None, release_type: str = "",
@@ -564,11 +665,13 @@ class Store:
             self.conn.commit()
             return cur.lastrowid
 
-    def add_to_playlist(self, playlist_id: int, track_id: int, position: int) -> None:
+    def add_to_playlist(self, playlist_id: int, track_id: int, position: int,
+                        reused: bool = False) -> None:
         with self.lock:
             self.conn.execute(
-                "INSERT OR IGNORE INTO playlist_tracks VALUES (?,?,?)",
-                (playlist_id, track_id, position))
+                "INSERT OR IGNORE INTO playlist_tracks"
+                " (playlist_id,track_id,position,reused) VALUES (?,?,?,?)",
+                (playlist_id, track_id, position, 1 if reused else 0))
             self.conn.commit()
 
     # -- jobs --
@@ -682,16 +785,22 @@ class Store:
 
     # -- following / discovery --
     def watch_add(self, provider: str, artist_id: str, artist_name: str,
-                  artist_url: str, interval: float = 0) -> int:
+                  artist_url: str, interval: float = 0, member_id: str = "") -> int:
         with self.lock:
+            # A follow is shared: the second person to follow an artist joins the
+            # existing watch, and the first one keeps the credit for it.
             self.conn.execute(
                 "INSERT INTO watches (provider,artist_id,artist_name,artist_url,"
-                "interval,last_checked,watermark,enabled,added)"
-                " VALUES (?,?,?,?,?,0,?,1,?)"
+                "member_id,interval,last_checked,watermark,enabled,added)"
+                " VALUES (?,?,?,?,?,?,0,?,1,?)"
                 " ON CONFLICT(provider,artist_id) DO UPDATE SET"
                 " artist_name=excluded.artist_name,"
-                " artist_url=excluded.artist_url, enabled=1",
-                (provider, artist_id, artist_name, artist_url,
+                " artist_url=excluded.artist_url, enabled=1,"
+                # A follow made before ownership existed belongs to nobody, so
+                # the first person to ask for it again claims it.
+                " member_id=CASE WHEN COALESCE(watches.member_id,'')=''"
+                " THEN excluded.member_id ELSE watches.member_id END",
+                (provider, artist_id, artist_name, artist_url, member_id or "",
                  interval or self.setting_float("poll_interval", 21600),
                  time.time(), time.time()))
             self.conn.commit()
@@ -712,6 +821,20 @@ class Store:
                 " AND f.decision='new') AS new_items FROM watches w ORDER BY w.added"
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def watch_release(self, watch_id: int, member_id: str = "") -> bool:
+        """Drop this member's claim on a follow. The follow itself stays, so the
+        artist is still tracked and still listed for everybody else."""
+        with self.lock:
+            if member_id:
+                cur = self.conn.execute(
+                    "UPDATE watches SET member_id='' WHERE id=? AND member_id=?",
+                    (int(watch_id), member_id))
+            else:
+                cur = self.conn.execute(
+                    "UPDATE watches SET member_id='' WHERE id=?", (int(watch_id),))
+            self.conn.commit()
+            return cur.rowcount > 0
 
     def watch_due(self, now: float | None = None) -> list[dict]:
         now = now or time.time()
@@ -806,7 +929,7 @@ class Store:
         """
         with self.lock:
             rows = [dict(r) for r in self.conn.execute(
-                "SELECT t.*, j.status FROM tracks t LEFT JOIN (SELECT track_id, MAX(id) AS latest FROM download_jobs GROUP BY track_id) latest ON latest.track_id=t.id LEFT JOIN download_jobs j ON j.id=latest.latest "
+                "SELECT t.*, j.status, j.resolved_url FROM tracks t LEFT JOIN (SELECT track_id, MAX(id) AS latest FROM download_jobs GROUP BY track_id) latest ON latest.track_id=t.id LEFT JOIN download_jobs j ON j.id=latest.latest "
                 + ("" if include_pending else "WHERE t.file<>'' ") +
                 "ORDER BY t.artist_name, t.album, t.track_number").fetchall()]
             links = self.conn.execute(
@@ -847,7 +970,8 @@ class Store:
             out = []
             for playlist in playlists:
                 rows = self.conn.execute(
-                    "SELECT t.*, pt.position AS list_position FROM playlist_tracks pt"
+                    "SELECT t.*, pt.position AS list_position, pt.reused AS list_reused"
+                    " FROM playlist_tracks pt"
                     " JOIN tracks t ON t.id = pt.track_id WHERE pt.playlist_id=?"
                     " ORDER BY pt.position, t.id", (playlist["id"],)).fetchall()
                 tracks = []
@@ -876,6 +1000,10 @@ class Store:
                         "title": track["title"],
                         "artist": track["artist_name"],
                         "duration": track["duration"],
+                        # Already in the library when this playlist was added: a
+                        # link to the existing file, so it was never downloaded
+                        # again but it still counts as grabbed.
+                        "reused": 1 if track["list_reused"] else 0,
                         # No job left (finished jobs may be cleared) but the file
                         # is on disk: that track is done, not queued.
                         "status": job.get("status") or ("completed" if track["file"] else "queued"),
@@ -906,6 +1034,11 @@ class Store:
                         "pinned": 1 if job.get("pinned") else 0,
                     })
                 done = sum(1 for t in tracks if t["status"] == "completed")
+                # Of those, how many were already on disk when the playlist was
+                # added. They count as grabbed (they are in `done`); this number
+                # exists so the card can say why they did not download.
+                reused = sum(1 for t in tracks
+                             if t["reused"] and t["status"] == "completed")
                 # Waiting tracks first, in the order the worker will actually run
                 # them; finished ones stay in playlist order underneath. Without
                 # this the reorder arrows change the run order but the list never
@@ -922,7 +1055,8 @@ class Store:
                     "platform": playlist["provider"], "title": playlist["title"],
                     "artwork": playlist_art, "status": "ready", "error": "",
                     "declared": len(tracks), "added": playlist["added"],
-                    "folder": "", "done": done,
+                    "folder": "", "done": done, "reused": reused,
+                    "queued": sum(1 for t in tracks if t["status"] == "queued"),
                     "failed": sum(1 for t in tracks
                                   if t["status"] in ("failed", "unavailable")),
                     "review": sum(1 for t in tracks if t["status"] == "review"),
@@ -966,6 +1100,14 @@ class Store:
                 row = self.conn.execute(
                     "SELECT title, artist_name FROM tracks WHERE id=?",
                     (job["track_id"],)).fetchone()
+                # The queue's headline is useless without saying which playlist it is
+                # filling: the track belongs to a collection, and that is what a person
+                # pasted and is waiting for.
+                owner = self.conn.execute(
+                    "SELECT p.id, p.title FROM playlist_tracks pt JOIN playlists p"
+                    " ON p.id=pt.playlist_id WHERE pt.track_id=?"
+                    " ORDER BY pt.playlist_id, pt.position LIMIT 1",
+                    (job["track_id"],)).fetchone()
                 current = {
                     "track_id": job["track_id"],
                     "title": (row["title"] if row else "") or job.get("resolved_title", ""),
@@ -979,6 +1121,8 @@ class Store:
                     "max_attempts": job.get("max_attempts", 4),
                     "started": job.get("started", 0),
                     "provider": job.get("provider", ""),
+                    "playlist": (owner["title"] if owner else "") or "",
+                    "playlist_id": (owner["id"] if owner else 0),
                 }
         deadline, provider = self.cooldown()
         stats = self.stats()
@@ -992,6 +1136,10 @@ class Store:
                 else "HARDLYLISTENING_AI_API_KEY", "").strip()),
             "ai_metadata_only": True, "playlist_projection_error": self.projection_error,
             "now": time.time(), "version": VERSION,
+            # Shared restore Shortcut (iCloud link). Empty when unset, and the UI then
+            # hides the button instead of offering a dead one.
+            "apple_restore_shortcut": os.environ.get(
+                "HARDLYLISTENING_APPLE_RESTORE_SHORTCUT_URL", "").strip(),
             "yt_dlp": __import__("downloaders.ytdlp", fromlist=["x"]).YTDLP,
             "review_strong": strong_review,
             "ranking_picks": ranking_picks,

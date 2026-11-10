@@ -100,7 +100,7 @@ membership/guest auth, and presenting a party cookie cannot activate that bypass
 
 `python3 -m unittest discover -s tests -p test_party.py -v`
 
-`NODE_PATH=<dir with jsdom>/node_modules node tests/test_party_ui.cjs`
+`NODE_PATH=<NODE_PATH> node tests/test_party_ui.cjs`
 
 Dedicated HTTP fixtures use temporary SQLite, fake unplayed media bytes, patched
 boot and no workers. Test current order, stable ties, repeat/retract votes,

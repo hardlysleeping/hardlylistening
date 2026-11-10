@@ -67,7 +67,7 @@ class ArtistAndGrab(unittest.TestCase):
         rss = [p["rss"] for p in data["providers"] if p["rss"]]
         self.assertEqual(
             rss, ["https://feeds.soundcloud.com/users/soundcloud:users:12345/sounds.rss"])
-        self.assertFalse(data["following"])
+        self.assertFalse(data["subscribed"])
         apple = [p for p in data["providers"] if p["provider"] == "apple"][0]
         self.assertEqual(apple["rss"], "")      # Apple publishes no artist feed
 
@@ -81,7 +81,7 @@ class ArtistAndGrab(unittest.TestCase):
         self.store.feed_add(wrong, 'soundcloud', 'wrong', 'Wrong artist')
         self.store.log('check failed for Renamed Artist: fixture error', 'error', f'watch:{right}')
         before = self.store.conn.execute('SELECT COUNT(*) FROM download_jobs').fetchone()[0]
-        with patch('discovery.follows.check', side_effect=AssertionError('must not check')), patch('discovery.follows.follow', side_effect=AssertionError('must not follow')):
+        with patch('discovery.subscriptions.check', side_effect=AssertionError('must not check')), patch('discovery.subscriptions.subscribe', side_effect=AssertionError('must not follow')):
             status, data = self.get_json('/api/artist?name=DJ%20Test', AUTH)
         self.assertEqual(status, 200)
         self.assertEqual([w['id'] for w in data['watches']], [right])

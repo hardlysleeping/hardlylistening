@@ -11,6 +11,7 @@ const queueSong=html.slice(html.indexOf('function queueSong('),html.indexOf('fun
  const memory={};const localStorage={getItem:k=>memory[k]??null,setItem:(k,v)=>memory[k]=v};
  let libAll=[1,2,3,4].map(id=>({id,title:'Song '+id,artist_name:'Artist',playable:id!==4})),currentRows=libAll,libQueue=[],playingId=null,libIndex=-1,playbackQueueEdited=false;
  let playerAudio={src:'',play(){throw Error('Media forbidden')}},calls=[],posts=[],conflict=false;
+ let aheadAudio=new Map(),aheadJobs=new Set();
  function esc(s){return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')}
  function showToast(){} function playTrackNow(id){calls.push(['now',id])}
  let fixture={id:8,title:'Mine',can_edit:true,track_ids:[1,2],owner_id:'me'};
@@ -37,9 +38,12 @@ const queueSong=html.slice(html.indexOf('function queueSong('),html.indexOf('fun
  await hold(false);assert.equal(await run('libQueue.map(t=>t.id).join()'),'1,3,2');
  await run(`playingId=3;queueMove(3,'remove')`);assert.equal(await run('playingId'),3);assert.equal(await run('libIndex'),-1);
  await run(`memory['hl.playbackQueue.v1']='[3,4,999,1,1]';libQueue=[];queueRestorePending=true;syncPlaybackQueue()`);assert.equal(await run('libQueue.map(t=>t.id).join()'),'3,1');assert.equal(await run('playerAudio.src'),'');
+ await run("delete document.querySelector('#playback-items').dataset.justDragged"); // the swallow after a drag is by design
  await page.locator('#playback-items .pq-row').first().click();assert.deepEqual(await run('calls'),[['now',3]],'tapping a row plays it');
  assert(await run('document.documentElement.scrollWidth<=innerWidth'));
- await page.getByRole('button',{name:'Create / edit playlists'}).click();await page.locator('#playlist-choice').selectOption('8');
+ // The drawer no longer offers the playlist editor (it is a library concern); the same
+// dialog is reached from the library tools row.
+await page.evaluate(()=>openPlaylistEditor());await page.locator('#playlist-choice').selectOption('8');
  await page.locator('#playlist-members [data-id="2"] [data-action="top"]').click();await page.waitForTimeout(30);
  assert.deepEqual(await run('posts.at(-1)[1]'),{track_ids:[2,1],expected_track_ids:[1,2]});assert.equal(await page.locator('#playlist-members .pq-row').first().getAttribute('data-id'),'2');
  await page.locator('#playlist-candidates .pq-row').filter({hasText:'Song 4'}).getByRole('button').click();await page.waitForTimeout(30);assert.deepEqual(await run('fixture.track_ids'),[2,1,4]);

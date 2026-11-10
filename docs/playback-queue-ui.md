@@ -11,7 +11,7 @@
 
 ## Verification
 
-Run with `NODE_PATH=<dir with jsdom>/node_modules`:
+Run with `NODE_PATH=<NODE_PATH>`:
 
 ```
 node tests/test_playback_queue_ui.cjs

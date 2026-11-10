@@ -20,8 +20,14 @@ def profile(store, name):
             watches = [dict(r) for r in store.conn.execute("SELECT * FROM watches")
                        if (r['provider'], str(r['artist_id'])) in identities]
         else:
-            # Without a catalog identity a name cannot safely disambiguate watches.
-            watches = []
+            # Without a catalog identity the artist has no `artists` row at all
+            # (most SoundCloud artists: the catalog row is the set's uploader,
+            # not the track's artist), so a follow made from the artist link is
+            # only reachable by name. Matching nothing would show "not followed"
+            # for an artist that is followed.
+            watches = [dict(r) for r in store.conn.execute(
+                "SELECT * FROM watches WHERE lower(trim(artist_name))=lower(trim(?))",
+                (name,))]
         items = []
         if watches:
             ids = [w['id'] for w in watches]
@@ -48,6 +54,6 @@ def profile(store, name):
     for item in items:
         item['source_url'] = safe_url(item['source_url'])
         item['artwork'] = safe_url(item['artwork'])
-    return {'name': name, 'providers': providers, 'following': bool(watches),
+    return {'name': name, 'providers': providers, 'subscribed': bool(watches),
             'watches': watches, 'feed': items, 'tracks': counts['n'] or 0,
             'downloaded': counts['downloaded'] or 0}

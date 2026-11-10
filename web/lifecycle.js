@@ -61,6 +61,25 @@ reducedMotion.addEventListener('change',syncBubbleVisibility);
 // Tab hiding immediately pauses existing covers even before another library paint.
 new MutationObserver(syncBubbleVisibility).observe(document.querySelector('#view-library'),{attributes:true,attributeFilter:['hidden']});
 foregroundLifecycle();
+// A page can outlive a deploy. Its poll keeps running against newer server code, and
+// anything the newer API invented — a new activity kind, a new card shape — renders in
+// the old shell as a shrug ("… did something"). Remember the server version this shell
+// booted against and reload once when the server moves on.
+async function watchServerVersion(){
+  try {
+    const response = await fetch('/api/health', {cache:'no-store'});
+    const version = (await response.json()).version;
+    if (!version) return;
+    const booted = sessionStorage.getItem('hl.shellVersion');
+    if (!booted){ sessionStorage.setItem('hl.shellVersion', version); return; }
+    if (booted !== version){
+      sessionStorage.setItem('hl.shellVersion', version);
+      location.reload();
+    }
+  } catch (_) { /* offline: keep running the shell we have */ }
+}
+watchServerVersion();
+setInterval(watchServerVersion, 60000);
 if ('serviceWorker' in navigator && window.isSecureContext){
   // Do not skipWaiting/force reload: updates apply on the next normal launch.
   navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(() => {});

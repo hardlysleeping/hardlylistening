@@ -52,3 +52,68 @@ class GenreTests(unittest.TestCase):
         handler.body.assert_not_called()
 
 if __name__=='__main__': unittest.main()
+
+
+class EmbeddedGenreTests(unittest.TestCase):
+    """The downloader writes the uploader's genre into the file; read it back."""
+
+    def setUp(self):
+        self.store = MagicMock()
+        self.store.lock = threading.RLock()
+        self.store.conn = sqlite3.connect(':memory:')
+        self.store.conn.row_factory = sqlite3.Row
+        self.store.conn.execute('CREATE TABLE tracks(id INTEGER PRIMARY KEY, title TEXT, artist_name TEXT, album TEXT, file TEXT)')
+        self.store.conn.execute("INSERT INTO tracks VALUES(1,'Title','Artist','Album','/tmp/one.mp3')")
+        self.store.conn.execute("INSERT INTO tracks VALUES(2,'Two','Artist','Album','')")
+        self.store.conn.commit()
+        self.track = {'id': 1, 'title': 'Title', 'artist_name': 'Artist', 'album': 'Album'}
+
+    def tearDown(self):
+        self.store.conn.close()
+
+    def label(self, track_id=1):
+        row = self.store.conn.execute('SELECT * FROM genre_labels WHERE track_id=?', (track_id,)).fetchone()
+        return dict(row) if row else None
+
+    def test_mapping_keeps_only_taxonomy_words(self):
+        self.assertEqual(genres.map_tags('Dubstep'), ['dubstep'])
+        self.assertEqual(genres.map_tags('Drum & Bass'), ['drum-and-bass'])
+        self.assertEqual(genres.map_tags('Techno, House'), ['techno', 'house'])
+        self.assertEqual(genres.map_tags('Electronic'), [])
+        self.assertEqual(genres.map_tags(''), [])
+        self.assertEqual(genres.map_tags('totally invented'), [])
+
+    def test_embedded_outranks_ai_but_not_a_correction(self):
+        genres.save(self.store, self.track, ['house'], 'model')                        # ai
+        genres.save(self.store, self.track, ['dubstep'], 'embedded', source='metadata')  # file
+        self.assertEqual(self.label()['source'], 'metadata')
+        self.assertEqual(genres.annotate(self.store, [dict(self.track)])[0]['genres'], ['dubstep'])
+        genres.save(self.store, self.track, ['techno'], 'model')                       # ai again
+        self.assertEqual(self.label()['source'], 'metadata')                            # not overwritten
+        genres.save(self.store, self.track, ['tech-house'], manual=True)                 # human wins
+        self.assertEqual(self.label()['source'], 'manual')
+        genres.save(self.store, self.track, ['dubstep'], 'embedded', source='metadata')
+        self.assertEqual(self.label()['source'], 'manual')
+
+    def test_save_from_file_reads_the_tag(self):
+        with patch.object(genres, 'embedded', return_value=['techno']):
+            tags = genres.save_from_file(self.store, 1, '/tmp/one.mp3')
+        self.assertEqual(tags, ['techno'])
+        self.assertEqual(self.label()['source'], 'metadata')
+        with patch.object(genres, 'embedded', return_value=[]):
+            self.assertEqual(genres.save_from_file(self.store, 1, '/tmp/one.mp3'), [])
+
+    def test_backfill_only_touches_downloaded_untagged_files(self):
+        genres.save(self.store, self.track, ['house'], 'model')      # ai-labelled, may be replaced
+        with patch.object(genres, 'embedded', return_value=['dubstep']):
+            result = genres.backfill(self.store)
+        self.assertEqual(result['scanned'], 1)                       # only track 1 has a file
+        self.assertEqual(result['tagged'], 1)
+        self.assertEqual(self.label()['source'], 'metadata')
+
+    def test_backfill_leaves_a_correction_alone(self):
+        genres.save(self.store, self.track, ['tech-house'], manual=True)
+        with patch.object(genres, 'embedded', return_value=['dubstep']):
+            result = genres.backfill(self.store)
+        self.assertEqual(result['scanned'], 0)
+        self.assertEqual(self.label()['tags'], '["tech-house"]')
