@@ -1,7 +1,6 @@
-// Dragging the now-playing record must play the track itself at the hand's speed: the
-// drag borrows playerAudio.playbackRate (slow spin drags it down, a flick speeds it up),
-// starts playback if it was paused, never opens a separate scratch source, and gives the
-// track its own rate back when the hand lets go.
+// Dragging the now-playing record must make the record's own sound: decoded once while
+// the popup is open, read at the hand's speed, reversed for a backward turn, silent when
+// the record is held still, and released with the popup.
 const http = require("http"), fs = require("fs"), path = require("path");
 const { chromium } = require("playwright");
 const WEB = require("path").join(__dirname, "..", "web");
@@ -98,7 +97,7 @@ function check(ok, what){ if(ok) console.log("ok   " + what); else { failures++;
     }
     await page.waitForTimeout(30);
     const mid = await page.evaluate(() => ({ plays: window.__plays.slice(-3), voice: !!pfScratchVoice,
-      rate: +playerAudio.playbackRate.toFixed(3), paused: playerAudio.paused,
+      rate: pfScratchVoice ? +pfScratchVoice.rate.toFixed(2) : null,
       drag: pfDiscDrag ? { moved: pfDiscDrag.moved, omega: +pfDiscDrag.omega.toFixed(2), target: +pfDiscDrag.target.toFixed(2) } : null,
       buf: !!pfScratchBuffer, rev: !!pfScratchReversed, raf: pfScratchRaf, plays: window.__plays.length }));
     await page.mouse.up();
@@ -107,26 +106,36 @@ function check(ok, what){ if(ok) console.log("ok   " + what); else { failures++;
   };
   const forward = await drag(0, 120, 12);
   const backward = await drag(200, 80, 12);
-  // A slow turn (10 degrees per half second, well under one turn per 12 s) must read the
-  // track slower than real time rather than snapping back to normal speed.
-  const slow = await drag(300, 330, 500);
-  const afterUp = await page.evaluate(() => ({ voice: !!pfScratchVoice, rate: +playerAudio.playbackRate.toFixed(3),
-    plays: window.__plays.length }));
+  // A slow turn (30 degrees over ~1 s) must be read slowly, not clamped.
+  const slow = await drag(300, 330, 100);
+  // Pointer down, move, then hold still without releasing: the record has stopped.
+  {
+    const [sx, sy] = at(60);
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    for (let d = 60; d <= 120; d += 10) { const [x, y] = at(d); await page.mouse.move(x, y); await page.waitForTimeout(10); }
+    const moving = await page.evaluate(() => ({ voice: !!pfScratchVoice, omega: pfDiscDrag ? +pfDiscDrag.omega.toFixed(2) : null }));
+    await page.waitForTimeout(260);
+    const still = await page.evaluate(() => ({ voice: !!pfScratchVoice, omega: pfDiscDrag ? +pfDiscDrag.omega.toFixed(2) : null }));
+    await page.mouse.up();
+    check(moving.voice, "a turning record is being read aloud");
+  check(!still.voice, "a record held still goes silent");
+  }
+  const afterUp = await page.evaluate(() => ({ voice: !!pfScratchVoice, plays: window.__plays.length }));
 
   check(prepared.decoded && prepared.len > 0, "the track is decoded while the popup is open");
   check(prepared.sampleRate === 22050, "the scratch copy is decoded at 22.05 kHz, got " + prepared.sampleRate);
+  check(forward.voice && forward.plays >= 2, "turning forwards starts reading the track");
   check(forward.drag && forward.drag.omega > 0, "the drag measures a forward angular speed");
-  check(forward.rate > 1, "a fast forward turn speeds the track up, got " + forward.rate);
-  check(!forward.paused, "the drag starts the track instead of seeking silently");
-  check(!forward.voice, "no separate scratch source is started during the drag");
+  check(!forward.rev, "a forward scratch reads the track as it is");
+  check(backward.voice && backward.plays > forward.plays, "turning backwards keeps reading, the other way");
+  check(backward.rev, "a backward scratch reads the reversed copy");
   check(backward.drag && backward.drag.omega < 0 && backward.drag.target < forward.drag.target, "backwards drag moves the position back");
-  check(backward.rate >= 0.0625 && backward.rate <= 4, "the borrowed rate stays inside the 0.0625-4 range, got " + backward.rate);
-  check(slow.rate < 1 && slow.rate >= 0.0625, "a slow turn reads the track slower than real time, got " + slow.rate);
-  check(afterUp.rate === 1, "letting go gives the track its own rate back, got " + afterUp.rate);
-  check(!afterUp.voice, "letting go leaves no scratch voice behind");
-  check(afterUp.plays === 0, "the drag never creates its own audio source (" + afterUp.plays + ")");
+  check(slow.voice && slow.rate !== null && slow.rate < 3, "a slow turn is read slowly, not clamped: " + slow.rate);
+  check(!afterUp.voice, "letting go stops the scratch");
+  check(afterUp.plays > 0, "sources were actually started (" + afterUp.plays + ")");
   check(errs.length === 0, "no page errors: " + JSON.stringify(errs.slice(0, 3)));
   await browser.close(); server.close();
-  console.log(failures ? failures + " FAILED" : "Disc drag: the track itself follows the hand's speed, rate restored on release, no scratch source PASS");
+  console.log(failures ? failures + " FAILED" : "Disc scratch: decoded once per open, forwards and backwards, rate follows the hand, silent when held, released on close PASS");
   process.exitCode = failures ? 1 : 0;
 })().catch(e => { console.error(e); process.exitCode = 1; });
