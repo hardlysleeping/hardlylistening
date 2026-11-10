@@ -1,6 +1,6 @@
 # Plan — Subsonic surface: completeness, bookmarks, shares, jukebox, sonic, radio, podcasts, chat
 
-Status: **decided, not started**. Owner: bazzite-1 `~/apps/hardlylistening`. Decisions are locked by the owner; do not re-open them while building.
+Status: **decided, not started**. Decisions are locked; do not re-open them while building.
 
 ## Locked decisions
 
