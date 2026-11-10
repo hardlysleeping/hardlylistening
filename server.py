@@ -140,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
                 return False
             # Temporary party credentials NEVER enable the legacy local bypass.
             # A real independent browser membership may still use its own scope.
-            if SECURITY.cookie(self, '__Host-hl_party') and path not in ('/login', '/auth/link', '/api/health', '/api/auth/session', '/api/auth/logout'):
+            if SECURITY.cookie(self, '__Host-hl_party') and path not in ('/login', '/auth/link', '/signup', '/api/health', '/api/auth/session', '/api/auth/logout', '/api/auth/signup', '/api/auth/signup/begin', '/api/auth/signup/password', '/api/auth/login/password'):
                 SECURITY.authenticate(self, boot()[0])
             # Device auth is independent of browser/email login, never the local bypass.
             if path.startswith('/rest/'):
@@ -255,14 +255,17 @@ class Handler(BaseHTTPRequestHandler):
                 store, _ = boot()
                 self.member = SECURITY.authenticate(self, store)
                 if self.command == 'GET':
-                    self.json({k: self.member[k] for k in ('display_name', 'profile_icon')})
+                    # The account row rides with the profile: the dialog shows one panel, and the
+                    # email is safe metadata (no hashes, salts or tokens ever leave here).
+                    self.json({**SECURITY.account(store, self.member),
+                               **{k: self.member[k] for k in ('display_name', 'profile_icon')}})
                 elif self.command == 'POST':
                     self.json(SECURITY.profile(store, self.member, self.body()))
                 else:
                     raise Denied(405, 'Method not allowed')
                 return False
             # Sign-in is the one thing that has to work before a session exists.
-            if self.command == 'GET' and path in ('/login', '/auth/link', '/api/health'):
+            if self.command == 'GET' and path in ('/login', '/auth/link', '/signup', '/api/health'):
                 # A signed-in member must never be parked on the invitation
                 # screen. Arriving at "/" from another site (a chat link, a
                 # bookmark in another app) is a cross-site navigation, and the
@@ -282,11 +285,69 @@ class Handler(BaseHTTPRequestHandler):
                 SECURITY.limit(self.client_address[0], 'enrollment', 15)
                 payload = self.body()
                 sid = SECURITY.exchange(boot()[0], payload.get('invite'), payload.get('display_name'), payload.get('profile_icon'))
-                self.send_response(200)
-                self.send_header('Cache-Control', 'no-store')
-                self.send_header('Set-Cookie', f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={SECURITY.SESSION_TTL}')
-                self.send_header('Content-Length', '0')
-                self.end_headers()
+                self.signed_in(sid)
+                return False
+            # -- accounts ------------------------------------------------------
+            # Signup and password login are the only paths that mint a session without one, the
+            # same shape as the login-link exchange above.
+            if path in ('/api/auth/signup', '/api/auth/signup/begin', '/api/auth/signup/password'):
+                store, _ = boot()
+                if path == '/api/auth/signup' and self.command == 'GET':
+                    # Does this browser still hold a validated signup link?
+                    self.json(SECURITY.signup_state(store, SECURITY.cookie(self, '__Host-hl_signup')))
+                    return False
+                if self.command != 'POST':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.csrf(self)
+                SECURITY.limit(self.client_address[0], 'signup', 20)
+                if path == '/api/auth/signup/begin':
+                    self.signup_flow(SECURITY.open_signup(store, self.body().get('token')))
+                    return False
+                payload = self.body()
+                sid = SECURITY.signup(
+                    store, SECURITY.cookie(self, '__Host-hl_signup'),
+                    payload.get('display_name'), payload.get('profile_icon'),
+                    payload.get('email'), payload.get('password'))
+                self.signed_in(sid, clear_signup=True)
+                return False
+            if self.command == 'POST' and path == '/api/auth/login/password':
+                store, _ = boot()
+                SECURITY.csrf(self)
+                SECURITY.limit(self.client_address[0], 'login', 20)
+                payload = self.body()
+                member = SECURITY.authenticate_password(store, payload.get('email'), payload.get('password'))
+                self.signed_in(SECURITY.create_session(store, member['id'], 'password'))
+                return False
+            if path in ('/api/account', '/api/account/password'):
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if path == '/api/account' and self.command == 'GET':
+                    self.json(SECURITY.account(store, self.member))
+                elif path == '/api/account/password' and self.command == 'POST':
+                    SECURITY.limit(self.member['id'], 'password-change', 10)
+                    self.json(SECURITY.change_password(store, self.member, self.body()))
+                else:
+                    raise Denied(405, 'Method not allowed')
+                return False
+            if path == '/api/signup-invite':
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if self.command == 'GET':
+                    # Active and when, never the link: the secret is shown once, when minted.
+                    self.json(SECURITY.signup_invite_state(store, self.member))
+                elif self.command == 'POST':
+                    self.json(SECURITY.mint_member_signup(store, self.member))
+                elif self.command == 'DELETE':
+                    self.json({'ok': SECURITY.revoke_member_signup(store, self.member)})
+                else:
+                    raise Denied(405, 'Method not allowed')
+                return False
+            if self.command == 'POST' and path == '/api/admin/signup-invite':
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                SECURITY.admin(self.member)
+                token, expires = SECURITY.mint_signup(store, self.member['id'])
+                self.json({'url': SECURITY.signup_url(token), 'expires_at': expires})
                 return False
             if path.startswith('/api/members'):
                 store, _ = boot()
@@ -706,6 +767,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/auth/link", "/auth/link.html"):
             self.static("link.html")
             return
+        if path in ("/signup", "/signup.html"):
+            self.static("signup.html")
+            return
         if path in ("/dj", "/dj.html"):
             self.static("dj.html")
             return
@@ -732,7 +796,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 query = parse_qs(urlparse(self.path).query)
                 title, tracks = selection(store, 'playlist' if playlist else 'ids', int(playlist[1]) if playlist else query.get('ids', [''])[0])
-                handle = archive(store, tracks)
+                handle = archive(store, tracks, title)
                 name = safe_name(title) + '.zip'
                 ctype = 'application/zip'
         except ValueError:
@@ -814,6 +878,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Location', location)
         self.send_header('Content-Length', '0')
         self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+
+    def signed_in(self, sid: str, clear_signup: bool = False) -> None:
+        """A session was minted: hand over the cookie, and end the signup flow if there was one."""
+        self.send_response(200)
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Set-Cookie', f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={SECURITY.SESSION_TTL}')
+        if clear_signup:
+            self.send_header('Set-Cookie', '__Host-hl_signup=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def signup_flow(self, digest: str) -> None:
+        """A validated signup link becomes a short-lived cookie; the page erases the fragment."""
+        self.send_response(200)
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Set-Cookie', f'__Host-hl_signup={digest}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={SECURITY.SIGNUP_FLOW_TTL}')
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def static(self, name: str) -> None:

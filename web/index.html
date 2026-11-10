@@ -1254,11 +1254,40 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   </form>
 </dialog>
 
-<dialog id="dlg-profile"><form onsubmit="saveProfile(event)"><h2>My profile</h2>
+<dialog id="dlg-profile" aria-label="My profile"><form onsubmit="saveProfile(event)"><h2>My profile</h2>
 <label for="profile-name">Display name</label><input id="profile-name" required maxlength="100">
 <label for="profile-icon">Profile icon</label><select id="profile-icon"><option value="music">♫ Music</option><option value="headphones">🎧 Headphones</option><option value="star">★ Star</option><option value="sun">☀ Sun</option><option value="moon">☾ Moon</option></select>
 <p id="profile-status" role="status"></p><button type="submit">Save profile</button><button type="button" onclick="$('#dlg-profile').close()">Close</button>
-<button type="button" onclick="openListening()">Player connections</button></form></dialog>
+<button type="button" onclick="openListening()">Player connections</button></form>
+<section id="account-block" aria-label="Account">
+  <h2>Account</h2>
+  <p id="account-method" class="hint"></p>
+  <label for="account-email">Email</label>
+  <input id="account-email" readonly autocomplete="off" placeholder="not set">
+  <label for="account-current" id="account-current-label" hidden>Current password</label>
+  <input id="account-current" type="password" autocomplete="current-password" hidden>
+  <label for="account-emailnew" id="account-emailnew-label" hidden>Email for password sign-in</label>
+  <input id="account-emailnew" type="email" autocomplete="email" spellcheck="false" hidden>
+  <label for="account-new">New password</label>
+  <input id="account-new" type="password" autocomplete="new-password" minlength="10">
+  <label for="account-confirm">Confirm new password</label>
+  <input id="account-confirm" type="password" autocomplete="new-password" minlength="10">
+  <button type="button" id="account-save">Change password</button>
+  <p id="account-status" role="status" class="hint"></p>
+  <div id="account-providers" hidden>
+    <label>Connected accounts</label>
+    <p id="account-provider-list" class="hint"></p>
+  </div>
+  <label>Invite a friend</label>
+  <p id="invite-state" class="hint">You can invite one person.</p>
+  <div id="invite-link-row" hidden>
+    <input id="invite-url" readonly autocomplete="off">
+    <button type="button" id="invite-copy">Copy</button>
+    <button type="button" id="invite-revoke">Revoke</button>
+  </div>
+  <button type="button" id="invite-make">Generate signup link</button>
+</section>
+</dialog>
 <dialog id="dlg-listening" onclose="clearListeningSecret()" oncancel="clearListeningSecret()">
   <h2>Player connections</h2>
   <p>Personal saved music only. Separate from administrator settings and acquisition permissions.</p>
@@ -1335,10 +1364,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
       <div class="field">
         <label>People</label>
         <div class="memlist" id="memberlist"><div class="hint">Loading…</div></div>
-        <p>Invitees choose their own name and icon when joining.</p>
-        <select id="new-person-role"><option value="member">Member</option><option value="admin">Administrator</option></select>
-        <button type="button" onclick="createPerson()">Create person and invite</button>
-        <div id="invite-created" hidden><p>Their permanent link — it opens their profile every time. Anyone holding it can sign in as them, so send it privately.</p><input id="invite-link" readonly><button type="button" onclick="navigator.clipboard.writeText($('#invite-link').value).catch(e=>showToast(e.message))">Copy one-time link</button><button type="button" onclick="clearInvite()">Dismiss</button></div>
+        <p>Signup links are single use and expire after a week. People choose their own name, icon and password when they join.</p>
+        <button type="button" onclick="adminSignupInvite()">Generate signup link</button>
+        <div id="invite-created" hidden><p>Send this link privately. Anyone holding it can use it, so treat it like a password. A signup link works once; a login link keeps working until it is regenerated.</p><input id="invite-link" readonly><button type="button" onclick="navigator.clipboard.writeText($('#invite-link').value).catch(e=>showToast(e.message))">Copy link</button><button type="button" onclick="clearInvite()">Dismiss</button></div>
 
       </div>
     </div>
@@ -2150,7 +2178,10 @@ $("#btn-signout").onclick = async () => {
 function clearInvite(){ inviteGeneration++; $('#invite-link').value=''; $('#invite-created').hidden=true; }
 let inviteGeneration=0;
 function showInvite(data, generation){ if(generation!==inviteGeneration || !$('#dlg-settings').open) return; $('#invite-link').value=data.invite; $('#invite-created').hidden=false; }
-async function createPerson(){ clearInvite(); const generation=inviteGeneration; try { showInvite(await api('/api/members/create',{role:$('#new-person-role').value}), generation); await loadMembers(); } catch(e){ showToast(e.message); } }
+// Enrollment no longer pre-creates an empty member: the link is the invitation, and the member is
+// born when somebody accepts it. `/api/members/create` still exists for recovery and migrations,
+// but nothing in this panel calls it.
+async function adminSignupInvite(){ clearInvite(); const generation=inviteGeneration; try { const data = await api('/api/admin/signup-invite',{}); showInvite({invite:data.url}, generation); } catch(e){ showToast(e.message); } }
 async function invitePerson(id){ clearInvite(); const generation=inviteGeneration; try { showInvite(await api('/api/members/invite',{id}), generation); } catch(e){ showToast(e.message); } }
 async function revokePerson(id){ clearInvite(); try { await api('/api/members/revoke',{id}); showToast('Sessions and invitations revoked'); } catch(e){ showToast(e.message); } }
 async function loadMembers(){
@@ -2162,7 +2193,7 @@ async function loadMembers(){
     list.innerHTML = data.members.map(m => `
       <div class="memrow">
         <div class="memmail"><button type="button" class="actwho" data-person-id="${esc(m.id)}" onclick="openMember(this.dataset.personId)">${profileSymbol(m.profile_icon || "music")} ${esc(m.display_name || "Not joined")}</button><span class="memrole ${m.role}">${esc(m.role)}</span><span class="memuse${m.over ? " over" : ""}">${esc(m.used || "0.0 GB")} / ${esc(m.cap || "")}</span></div>
-        ${m.id === last.viewer.id ? `<span>You</span>` : `<div class="memacts"><button type="button" data-person-id="${esc(m.id)}" onclick="invitePerson(this.dataset.personId)">New invite</button>
+        ${m.id === last.viewer.id ? `<span>You</span>` : `<div class="memacts"><button type="button" data-person-id="${esc(m.id)}" onclick="invitePerson(this.dataset.personId)">Regenerate login link</button>
         <button type="button" data-person-id="${esc(m.id)}" onclick="revokePerson(this.dataset.personId)">Revoke sessions and invites</button>
           ${m.role === "pending" ? `<button type="button" onclick="setMember('${esc(m.id)}','member')">Approve</button>` : ""}
           ${m.role === "member" ? `<button type="button" onclick="setMember('${esc(m.id)}','admin')">Make admin</button>` : ""}
@@ -2224,9 +2255,78 @@ function profileSymbol(icon){ return ({music:'♫',headphones:'🎧',star:'★',
 async function openProfile(){
   try { const p = await (await fetch('/api/profile')).json(); if(p.error) throw Error(p.error);
     $('#profile-name').value=p.display_name; $('#profile-icon').value=p.profile_icon;
+    fillAccount(p); loadInvite();
     $('#profile-status').textContent=''; $('#dlg-profile').showModal();
   } catch(e){ showToast(e.message); }
 }
+
+// The account half of the profile dialog. The session's `auth_method` decides what a password
+// change has to prove: a login-link session already holds the whole credential.
+const AUTH_METHOD_LABEL = {login_link:"your personal login link", password:"email and password", google:"Google", apple:"Apple"};
+function fillAccount(a){
+  $('#account-email').value = a.email || '';
+  $('#account-method').textContent = "Signed in with " + (AUTH_METHOD_LABEL[a.auth_method] || a.auth_method) + ".";
+  const askCurrent = a.auth_method !== "login_link" && a.has_password;
+  $('#account-current').hidden = !askCurrent;
+  $('#account-current-label').hidden = !askCurrent;
+  // A first password needs an address to sign in with; an existing one keeps its own, so the
+  // identifier cannot be changed by accident from here.
+  $('#account-emailnew').hidden = a.has_password;
+  $('#account-emailnew-label').hidden = a.has_password;
+  const providers = [a.google ? "Google" : "", a.apple ? "Apple" : ""].filter(Boolean);
+  $('#account-providers').hidden = !providers.length;
+  $('#account-provider-list').textContent = providers.join(" · ");
+  $('#account-status').textContent = "";
+}
+async function changeAccountPassword(){
+  const status = $('#account-status');
+  const body = {new_password: $('#account-new').value, confirm_password: $('#account-confirm').value};
+  if (!$('#account-current').hidden) body.current_password = $('#account-current').value;
+  if (!$('#account-emailnew').hidden) body.email = $('#account-emailnew').value;
+  try {
+    await api('/api/account/password', body);
+    const p = await (await fetch('/api/profile')).json();
+    if (!p.error) fillAccount(p);
+    $('#account-current').value = $('#account-new').value = $('#account-confirm').value = $('#account-emailnew').value = '';
+    status.textContent = "Password changed. Your login link still works.";
+  } catch(e){ status.textContent = e.message; }
+}
+function inviteExpiry(ts){
+  return ts ? new Date(ts * 1000).toLocaleDateString(undefined, {month:"short", day:"numeric"}) : "";
+}
+// One outstanding invite per member: the link is shown once, when it is made. After a reload the
+// panel can only say that an invite is active and when it expires.
+async function loadInvite(){
+  try {
+    const s = await (await fetch('/api/signup-invite')).json();
+    if (s.error) throw Error(s.error);
+    $('#invite-link-row').hidden = true; $('#invite-url').value = '';
+    $('#invite-make').hidden = !!s.active;
+    $('#invite-state').textContent = s.active
+      ? `You already have an active invite. It expires ${inviteExpiry(s.expires_at)}.`
+      : "You can invite one person.";
+  } catch(e){ $('#invite-state').textContent = e.message; }
+}
+async function makeInvite(){
+  try {
+    const data = await api('/api/signup-invite', {});
+    $('#invite-url').value = data.url;
+    $('#invite-link-row').hidden = false;
+    $('#invite-make').hidden = true;
+    $('#invite-state').textContent = `Send this link: it works once and expires ${inviteExpiry(data.expires_at)}. It is not shown again.`;
+  } catch(e){ $('#invite-state').textContent = e.message; }
+}
+async function revokeInvite(){
+  try {
+    await api('/api/signup-invite', {}, {method:"DELETE"});
+    await loadInvite();
+  } catch(e){ $('#invite-state').textContent = e.message; }
+}
+$('#account-save').onclick = changeAccountPassword;
+$('#invite-make').onclick = makeInvite;
+$('#invite-revoke').onclick = revokeInvite;
+$('#invite-copy').onclick = () => navigator.clipboard.writeText($('#invite-url').value)
+  .then(() => showToast('Copied'), e => showToast(e.message));
 async function saveProfile(event){
   event.preventDefault();
   try { const p=await api('/api/profile',{display_name:$('#profile-name').value,profile_icon:$('#profile-icon').value});
@@ -4170,7 +4270,7 @@ async function applyDeepLink(){
   else if (artist) await openArtistByName(artist);
   else {
     // Album links carry the track as well, so the row the mixer pointed at is marked.
-    // A  -joined artist+title album key is not URL-safe, so ids only.
+    // A NUL-joined artist+title album key is not URL-safe, so ids only.
     let key = album || null;
     if (!key && track){
       const row = scopedTracks().find(t => String(t.id) === String(track));
@@ -4215,6 +4315,10 @@ function publishMediaSession(row){
       album: row.album || "", artwork: mediaArtwork(row)
     });
   } catch (_) { /* older browser: the car just keeps the previous tag */ }
+  // Assigning metadata is what activates the session. Claim the transport actions
+  // immediately afterwards, while it is active, so the platform never falls back to
+  // its default +10/-10 layout.
+  bindMediaSession();
 }
 function publishPosition(){
   if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
@@ -4230,11 +4334,17 @@ function publishPosition(){
 function publishPlaybackState(){
   if (!("mediaSession" in navigator)) return;
   navigator.mediaSession.playbackState = playerAudio.paused ? "paused" : "playing";
+  // WebKit drops action handlers when the session deactivates — a pause, a trip to the
+  // background, a PWA resume. Re-claim them with every state change so the lock screen
+  // keeps ⏮/⏭ instead of reverting to the platform's +10/-10 seek pair.
+  bindMediaSession();
 }
 function bindMediaSession(){
   if (!("mediaSession" in navigator)) return;
-  // Remove any seek actions outright. If a seek action is registered, iOS/car head units
-  // replace the previous/next-track buttons with +10/-10 seek controls.
+  // Lock-screen layout is chosen from the REGISTERED actions: previous/next track gives
+  // ⏮/⏭, while any registered seek action replaces them with +10/-10. So clear the seek
+  // actions and claim only the track ones. RULE: never register seekbackward, seekforward
+  // or seekto here — it is the one thing that loses the skip buttons.
   for (const action of ["seekbackward","seekforward","seekto"]){
     try { navigator.mediaSession.setActionHandler(action, null); } catch (_) {}
   }
@@ -4248,6 +4358,23 @@ function bindMediaSession(){
     try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
   }
 }
+
+// iOS drops the whole lock-screen block when the page reloads: the session is gone, and nothing
+// assigns `mediaSession.metadata` again until a *different* track starts — so the phone falls back
+// to the app's name and icon, and the car's ⏮/⏭ stop doing anything. Re-claim it whenever the page
+// comes back and whenever the audio element actually starts, using the row that is already playing.
+function republishMediaSession(){
+  if (playingId == null) return;
+  const row = currentRows.find(t => t.id === playingId) || libQueue.find(t => t.id === playingId);
+  if (!row) return;
+  publishMediaSession(row);
+  publishPlaybackState();
+}
+window.addEventListener("pageshow", republishMediaSession);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") republishMediaSession();
+});
+playerAudio.addEventListener("play", republishMediaSession);
 
 // Playback of the next queued song should not wait for the network. The audio
 // route is no-store (a Range stream for seeking), so the only way to start
@@ -5494,6 +5621,13 @@ function pushPositionState(force){
   publishPosition();
 }
 bindMediaSession();
+// A reload, a resume from the home screen or a return from the background recreates the
+// media session with no handlers; every one of those entry points re-claims them so the
+// lock screen's ⏮/⏭ do not silently become +10/-10 again. This, not the single call above,
+// is what keeps the skip buttons.
+document.addEventListener("visibilitychange", bindMediaSession);
+window.addEventListener("pageshow", bindMediaSession);
+playerAudio.addEventListener("loadedmetadata", bindMediaSession);
 for (const event of ["loadedmetadata", "durationchange", "seeked", "ratechange"]){
   playerAudio.addEventListener(event, () => pushPositionState(true));
 }

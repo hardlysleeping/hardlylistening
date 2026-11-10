@@ -68,7 +68,7 @@ class SecurityHTTP(unittest.TestCase):
         sid = secrets.token_urlsafe(32)
         self.sec.schema(self.store)
         with self.store.lock:
-            self.store.conn.execute('INSERT INTO browser_sessions VALUES(?,?,?)', (self.sec.digest(sid), uid, time.time()+3600))
+            self.store.conn.execute('INSERT INTO browser_sessions(digest,member_id,expires) VALUES(?,?,?)', (self.sec.digest(sid), uid, time.time()+3600))
             self.store.conn.commit()
         return '__Host-hl_session='+sid
 

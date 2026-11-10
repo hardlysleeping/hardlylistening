@@ -53,13 +53,16 @@ def track_name(track, path, with_id=True):
     return f"{prefix}{artist} - {title}{suffix}"
 
 
-def archive(store, tracks):
+def archive(store, tracks, title=None):
     cache = Path(__file__).resolve().parents[1] / '.cache' / 'browser-downloads'
     cache.mkdir(parents=True, exist_ok=True)
     output = tempfile.TemporaryFile(dir=cache)
     try:
         with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_STORED, allowZip64=True) as z:
             notes = ['Only existing local library files are included. No downloads were queued.']
+            # The playlist indexes the files it ships with, using the archive's own
+            # names, so the folder opens as an ordered playlist wherever it lands.
+            m3u = ['#EXTM3U', '#PLAYLIST:%s' % (title or 'HardlyListening')]
             for track in tracks:
                 path = local_path(store, track)
                 if path is None:
@@ -70,8 +73,14 @@ def archive(store, tracks):
                 except OSError:
                     notes.append(f"Omitted track {track['id']}: file unavailable.")
                     continue
-                with source, z.open(track_name(track, path), 'w', force_zip64=True) as target:
+                name = track_name(track, path)
+                with source, z.open(name, 'w', force_zip64=True) as target:
                     shutil.copyfileobj(source, target, 65536)
+                label = ' - '.join(part for part in (track.get('artist_name'), track.get('title')) if part)
+                m3u.append('#EXTINF:%d,%s' % (int(track.get('duration') or -1), label or name))
+                m3u.append(name)
+            if len(m3u) > 2:
+                z.writestr(safe_name(title or 'HardlyListening') + '.m3u8', '\n'.join(m3u) + '\n')
             z.writestr('MANIFEST.txt', '\n'.join(notes) + '\n')
         output.seek(0)
         return output

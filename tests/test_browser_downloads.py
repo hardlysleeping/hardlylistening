@@ -59,15 +59,22 @@ class BrowserDownloads(unittest.TestCase):
                             self.assertIn('attachment;', response.headers['Content-Disposition'])
                             data = response.read()
                         with zipfile.ZipFile(io.BytesIO(data)) as z:
-                            # Audio plus the manifest only: the apple restore file is its
-                            # own button and never rides along in the playlist ZIP.
-                            self.assertEqual(len(z.namelist()), 2)
+                            # Audio, the manifest and the playlist that indexes it: the
+                            # apple restore file is its own button and never rides along.
+                            self.assertEqual(len(z.namelist()), 3)
                             self.assertNotIn('apple-music.json', z.namelist())
-                            name = next(n for n in z.namelist() if n != 'MANIFEST.txt')
+                            playlist = next(n for n in z.namelist() if n.endswith('.m3u8'))
+                            name = next(n for n in z.namelist() if n not in ('MANIFEST.txt', playlist))
                             self.assertNotIn('/', name)
                             self.assertNotIn('\\', name)
                             self.assertNotIn('\n', name)
                             self.assertEqual(z.read(name), original)
+                            lines = z.read(playlist).decode().splitlines()
+                            # Relative archive paths, in order, so the folder is a playlist.
+                            self.assertEqual(lines[0], '#EXTM3U')
+                            self.assertTrue(lines[1].startswith('#PLAYLIST:'))
+                            self.assertIn(name, lines)
+                            self.assertEqual(len([line for line in lines if line.startswith('#EXTINF:')]), 1)
                             manifest = z.read('MANIFEST.txt').decode()
                             for tid in ids[1:]:
                                 self.assertIn(f'Omitted track {tid}', manifest)

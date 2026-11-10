@@ -96,7 +96,7 @@ class BackupContract(unittest.TestCase):
         self.assertIsNone(doc['tracks'][0]['duration_ms'])
 
 
-class ZipStaysAudioOnly(unittest.TestCase):
+class ZipCarriesAudioAndPlaylist(unittest.TestCase):
     def test_archive_has_no_restore_sidecar(self):
         with tempfile.TemporaryDirectory(prefix='backup-zip-', dir=os.environ.get('TMPDIR')) as tmp:
             store = Store(Path(tmp) / 'fixture.db')
@@ -104,12 +104,30 @@ class ZipStaysAudioOnly(unittest.TestCase):
             pid = store.playlist('Driving', 'apple', APPLE_URL)
             tid = store.track('apple', '1440833084', 'One', artist_name='A')
             store.add_to_playlist(pid, tid, 0)
+            music = Path(tmp) / 'music'
+            music.mkdir()
+            media = music / 'one.mp3'
+            media.write_bytes(b'audio')
+            with store.lock:
+                store.conn.execute('UPDATE tracks SET file=? WHERE id=?', (str(media), tid))
+                store.conn.commit()
             _title, tracks = selection(store, 'playlist', pid)
-            with archive(store, tracks) as handle:
-                names = zipfile.ZipFile(io.BytesIO(handle.read())).namelist()
-            # The restore file is its own button; the ZIP is audio and the manifest only.
+            with archive(store, tracks, _title) as handle:
+                payload = handle.read()
+            archive_zip = zipfile.ZipFile(io.BytesIO(payload))
+            names = archive_zip.namelist()
+            # The restore file is its own button; the ZIP is audio, the manifest and the
+            # playlist that indexes the audio.
             self.assertNotIn('apple-music.json', names)
             self.assertIn('MANIFEST.txt', names)
+            self.assertIn('Driving.m3u8', names)
+            playlist = archive_zip.read('Driving.m3u8').decode().splitlines()
+            self.assertEqual(playlist[0], '#EXTM3U')
+            self.assertEqual(playlist[1], '#PLAYLIST:Driving')
+            self.assertEqual(playlist[2], '#EXTINF:-1,A - One')
+            audio = next(name for name in names if name.endswith('.mp3'))
+            # The entry is the archive's own path, so the folder plays where it is unpacked.
+            self.assertEqual(playlist[3], audio)
             with store.lock:
                 store._projection_timer.cancel()
             store._projection_timer.join()

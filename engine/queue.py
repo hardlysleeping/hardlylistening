@@ -352,7 +352,9 @@ class Queue:
         # archive can claim success after a user deletes the actual media.
         if track["file"]:
             existing = Path(track["file"])
-            ok, _ = ytdlp.verify_audio(existing)
+            # Expected length included: a 30 s preview that was accepted before the
+            # guard existed is re-downloaded instead of reported as completed.
+            ok, _ = ytdlp.verify_audio(existing, expected_seconds=track.get("duration") or 0)
             if ok:
                 self._finish(job, "completed", "", "", size=existing.stat().st_size)
                 return
@@ -429,11 +431,16 @@ class Queue:
 
         if rc == 0:
             written = ytdlp.find_output(outtmpl, fmt)
-            ok, why = ytdlp.verify_audio(written)
+            ok, why = ytdlp.verify_audio(written, expected_seconds=track.get("duration") or 0)
             if not ok:
                 # Exit 0 is not proof of a track: an empty or truncated file used
                 # to be recorded as "completed" and then silently vanished.
                 ytdlp.discard_output(outtmpl, stop=root)   # not a track, not a file
+                if "preview" in why and not job.get("pinned") and not job.get("source_url"):
+                    # The match itself was a sample; another source may hold the
+                    # whole track, so move on instead of retrying the same URL.
+                    self._next_source(job, url, why)
+                    return
                 self._retry_or_fail(job, why, "retryable")
                 return
             self.store.conn.execute(

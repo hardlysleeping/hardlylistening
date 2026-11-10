@@ -14,7 +14,14 @@ vm.runInContext(html.slice(html.indexOf('function profileSymbol'),html.indexOf('
  const list={};c.isAdmin=()=>true;c.esc=s=>String(s).replaceAll('<','&lt;');c.last.viewer.id='self';c.$=id=>id==='#memberlist'?list:$(id);
  c.fetch=async()=>({json:async()=>({members:[{id:'self',role:'admin',display_name:'Owner'},{id:'other',role:'member',display_name:''}]})});
  vm.runInContext(html.slice(html.indexOf('async function loadMembers'),html.indexOf('async function setMember')),c);
- await vm.runInContext('loadMembers()',c);assert(list.innerHTML.includes('You'));assert(!list.innerHTML.includes('data-person-id="self"'));assert(list.innerHTML.includes('Not joined'));
+ await vm.runInContext('loadMembers()',c);assert(list.innerHTML.includes('You'));assert(list.innerHTML.includes('Not joined'));
+ // Your own row keeps the "You" marker and none of the per-person actions (invite, revoke,
+ // block); the identity button still carries the id so the row opens.
+ const selfRow=list.innerHTML.split('class="memrow"').slice(1).find(r=>r.includes('data-person-id="self"'));
+ assert(selfRow&&selfRow.includes('<span>You</span>'));
+ assert(!selfRow.includes('invitePerson')&&!selfRow.includes('revokePerson')&&!selfRow.includes("setMember('self'"));
+ const otherRow=list.innerHTML.split('class="memrow"').slice(1).find(r=>r.includes('data-person-id="other"'));
+ assert(otherRow.includes('invitePerson')&&otherRow.includes('revokePerson'));
  const n={};const doc={getElementById:id=>n[id]||(n[id]={hidden:true,replaceChildren(){},appendChild(){}}),createElement:()=>({})};let calls=[];
  const lc=vm.createContext({document:doc,URLSearchParams,location:{hash:'#invite=secret',pathname:'/auth/link',replace:p=>calls.push(p)},history:{replaceState(){}},fetch:async(p,b)=>{calls.push(JSON.parse(b.body));return {status:400,ok:false,json:async()=>({error:'Choose profile'})}}});
  vm.runInContext(link.match(/<script>([\s\S]*?)<\/script>/)[1],lc);await new Promise(r=>setImmediate(r));assert.equal(n.profile.hidden,false);

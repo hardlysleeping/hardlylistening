@@ -455,7 +455,8 @@ def discard_output(outtmpl: str, stop: Path | None = None) -> int:
 
 
 def verify_audio(path: Path | None, min_seconds: float = 1.0,
-                 min_bytes: int = 16 * 1024) -> tuple[bool, str]:
+                 min_bytes: int = 16 * 1024,
+                 expected_seconds: float = 0) -> tuple[bool, str]:
     """Is this actually a playable track? yt-dlp can exit 0 having written junk."""
     if path is None or not Path(path).is_file():
         return False, "yt-dlp wrote no file"
@@ -472,6 +473,15 @@ def verify_audio(path: Path | None, min_seconds: float = 1.0,
         return False, "could not read the downloaded file"
     if duration < min_seconds:
         return False, f"downloaded file is {duration:.1f}s long — not a track"
+    # A 1-second floor passes a preview: SoundCloud serves ~30 s of a restricted
+    # label release and yt-dlp writes it with exit 0, so a 3:13 song became a 0:30
+    # file that still looked "completed". Compare against the length the provider
+    # catalogued — 40% of a track, or 20 s short, is a sample rather than the track.
+    if expected_seconds and expected_seconds >= 45:
+        floor = min(expected_seconds - 20, expected_seconds * 0.6)
+        if duration < floor:
+            return False, (f"downloaded file is only {duration:.0f}s of a "
+                           f"{expected_seconds:.0f}s track — a preview, not the track")
     return True, ""
 
 

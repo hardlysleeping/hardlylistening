@@ -1,8 +1,21 @@
-"""Local invitation enrollment and persistent browser sessions. No upstream identity."""
+"""Accounts and browser sessions: invite-only signup, passwords, and the permanent login link.
+
+A member is the account. There are several ways to prove you are that member — a personal login
+link, an email and password, and (later) Google or Apple — and every one of them mints the same
+`__Host-hl_session`. Nothing downstream knows how someone signed in.
+
+The two tokens are deliberately different things:
+
+* `/auth/link#invite=...` — the **login link**. It belongs to a member who already exists, it is
+  reusable, and it never expires until it is regenerated or revoked. It is also the recovery path.
+* `/signup#invite=...` — a **signup link**. It creates the member, it is single use, and it dies
+  after a week. Only the digest is stored, so the link can be shown once and never again.
+"""
 import os
 import sqlite3
 import time
 import hashlib
+import hmac
 import secrets
 import threading
 from collections import OrderedDict
@@ -21,6 +34,17 @@ class Security:
     SESSION_TTL = 10 * 365 * 86400
     # Sentinel stored in the `expires` column for "never expires".
     FOREVER = 0.0
+    # A signup link is temporary by construction: a week is long enough to send it to someone and
+    # short enough that a leaked link is not a standing door.
+    SIGNUP_TTL = 7 * 86400
+    # The short-lived proof that this browser's signup link was already validated. The fragment is
+    # erased on the page, and the raw token is never carried again.
+    SIGNUP_FLOW_TTL = 900
+    PASSWORD_MIN = 10
+    # scrypt parameters (N, r, p): the interactive-login profile, ~100 ms per hash here.
+    SCRYPT = {'n': 2 ** 14, 'r': 8, 'p': 1, 'dklen': 32}
+    AUTH_METHODS = ('login_link', 'password', 'google', 'apple')
+    PROVIDERS = ('google', 'apple')
     def __init__(self):
         self.lock = threading.RLock()
         self.rates = OrderedDict()
@@ -51,12 +75,32 @@ class Security:
                 CREATE TABLE IF NOT EXISTS member_items (kind TEXT NOT NULL, target_id INTEGER NOT NULL, member_id TEXT NOT NULL, PRIMARY KEY (kind, target_id));
                 CREATE TABLE IF NOT EXISTS member_requests (id INTEGER PRIMARY KEY, member_id TEXT NOT NULL, path TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
                 CREATE TABLE IF NOT EXISTS browser_invites (digest TEXT PRIMARY KEY, member_id TEXT NOT NULL, expires REAL NOT NULL);
-                CREATE TABLE IF NOT EXISTS browser_sessions (digest TEXT PRIMARY KEY, member_id TEXT NOT NULL, expires REAL NOT NULL);''')
+                CREATE TABLE IF NOT EXISTS browser_sessions (digest TEXT PRIMARY KEY, member_id TEXT NOT NULL, expires REAL NOT NULL);
+                -- Signup links: the member is created when one is redeemed, so this table belongs
+                -- to nobody until it is consumed. Only the digest is stored.
+                CREATE TABLE IF NOT EXISTS signup_invites (
+                    digest TEXT PRIMARY KEY, issued_by TEXT NOT NULL, created_at REAL NOT NULL,
+                    expires_at REAL NOT NULL, consumed_at REAL, consumed_by TEXT);
+                -- One row per member who can sign in with a password. `login_email` is the login
+                -- identifier; `members.email` stays the contact address and may differ.
+                CREATE TABLE IF NOT EXISTS member_credentials (
+                    member_id TEXT PRIMARY KEY, login_email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT, password_salt TEXT, password_changed_at REAL);
+                -- Google and Apple identities. Equal emails are never a reason to merge members:
+                -- linking happens only while somebody is already signed in.
+                CREATE TABLE IF NOT EXISTS member_identities (
+                    member_id TEXT NOT NULL, provider TEXT NOT NULL, provider_subject TEXT NOT NULL,
+                    email TEXT, created_at REAL NOT NULL, PRIMARY KEY(provider, provider_subject));''')
             cols = {r[1] for r in store.conn.execute('PRAGMA table_info(members)')}
             if 'display_name' not in cols:
                 store.conn.execute("ALTER TABLE members ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
             if 'profile_icon' not in cols:
                 store.conn.execute("ALTER TABLE members ADD COLUMN profile_icon TEXT NOT NULL DEFAULT 'music'")
+            # An existing session was necessarily minted by a login link, which is the honest
+            # default for rows written before the column existed.
+            session_cols = {r[1] for r in store.conn.execute('PRAGMA table_info(browser_sessions)')}
+            if 'auth_method' not in session_cols:
+                store.conn.execute("ALTER TABLE browser_sessions ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'login_link'")
             store.conn.commit()
 
     @staticmethod
@@ -166,7 +210,6 @@ class Security:
         self.schema(store)
         if not isinstance(token, str) or not token or len(token) > 256:
             raise Denied(401, 'Invalid or expired invitation')
-        sid = secrets.token_urlsafe(32)
         joined = ""
         # Reads the permanent link and issues a session, in one write
         # transaction. The link row is NOT deleted: a person's link is their
@@ -187,16 +230,7 @@ class Security:
                     name, icon = self.validate_profile(display_name, profile_icon)
                     store.conn.execute('UPDATE members SET display_name=?,profile_icon=? WHERE id=?', (name, icon, r[0]))
                     joined = name
-                store.conn.execute('INSERT INTO browser_sessions VALUES(?,?,?)', (self.digest(sid), r[0], time.time()+self.SESSION_TTL))
-                # One link, many devices: each open mints its own session, so the
-                # table needs a ceiling. Drop expired rows, then keep the newest 20
-                # per member (a phone, a laptop, a tablet, re-installs).
-                store.conn.execute('DELETE FROM browser_sessions WHERE expires<=?',
-                                   (time.time(),))
-                store.conn.execute(
-                    'DELETE FROM browser_sessions WHERE member_id=? AND rowid NOT IN '
-                    '(SELECT rowid FROM browser_sessions WHERE member_id=? '
-                    'ORDER BY rowid DESC LIMIT 20)', (r[0], r[0]))
+                sid = self._issue_session(store.conn, r[0], 'login_link')
                 store.conn.commit()
             except Exception:
                 store.conn.rollback()
@@ -211,11 +245,285 @@ class Security:
                 pass
         return sid
 
+    # -- sessions ----------------------------------------------------------
+    def _issue_session(self, connection, member_id, auth_method='login_link'):
+        """Write one session row and return the value the cookie carries.
+
+        The caller owns the transaction, so signup can mint the session in the same commit that
+        creates the member and consumes the invite.
+        """
+        if auth_method not in self.AUTH_METHODS:
+            raise Denied(400, 'Unknown authentication method')
+        sid = secrets.token_urlsafe(32)
+        now = time.time()
+        connection.execute(
+            'INSERT INTO browser_sessions(digest,member_id,expires,auth_method) VALUES(?,?,?,?)',
+            (self.digest(sid), member_id, now + self.SESSION_TTL, auth_method))
+        # One link, many devices: each open mints its own session, so the table needs a ceiling.
+        # Drop expired rows, then keep the newest 20 per member (a phone, a laptop, a tablet).
+        connection.execute('DELETE FROM browser_sessions WHERE expires<=?', (now,))
+        connection.execute(
+            'DELETE FROM browser_sessions WHERE member_id=? AND rowid NOT IN '
+            '(SELECT rowid FROM browser_sessions WHERE member_id=? '
+            'ORDER BY rowid DESC LIMIT 20)', (member_id, member_id))
+        return sid
+
+    def create_session(self, store, member_id, auth_method='login_link'):
+        """The one place a `__Host-hl_session` is minted, for every way in."""
+        self.schema(store)
+        with store.lock:
+            try:
+                sid = self._issue_session(store.conn, member_id, auth_method)
+                store.conn.commit()
+            except Exception:
+                store.conn.rollback()
+                raise
+        return sid
+
+    # -- passwords ---------------------------------------------------------
+    @staticmethod
+    def normalize_email(value):
+        return value.strip().lower() if isinstance(value, str) else ''
+
+    def validate_email(self, value):
+        email = self.normalize_email(value)
+        if not 5 <= len(email) <= 254 or email.count('@') != 1 or any(c.isspace() for c in email):
+            raise Denied(400, 'Enter an email address')
+        local, _, domain = email.partition('@')
+        if not local or '.' not in domain or domain.startswith('.') or domain.endswith('.'):
+            raise Denied(400, 'Enter an email address')
+        return email
+
+    def validate_password(self, password):
+        if not isinstance(password, str) or len(password) < self.PASSWORD_MIN:
+            raise Denied(400, 'Password must be at least %d characters' % self.PASSWORD_MIN)
+        if len(password) > 1024:
+            raise Denied(400, 'Password is too long')
+        return password
+
+    def hash_password(self, password):
+        """Salt and hash, both hex. Self-hosted: scrypt from the standard library."""
+        salt = secrets.token_hex(16)
+        hashed = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), **self.SCRYPT)
+        return salt, hashed.hex()
+
+    def verify_password(self, password, salt, stored):
+        if not isinstance(password, str) or not salt or not stored:
+            return False
+        try:
+            expected = bytes.fromhex(stored)
+            actual = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt),
+                                    dklen=len(expected), n=self.SCRYPT['n'],
+                                    r=self.SCRYPT['r'], p=self.SCRYPT['p'])
+        except (ValueError, TypeError):
+            return False
+        return hmac.compare_digest(actual, expected)
+
+    def set_password(self, store, member_id, password, email=None):
+        """Set or replace a password. `email` is only needed for a first password."""
+        password = self.validate_password(password)
+        salt, hashed = self.hash_password(password)
+        now = time.time()
+        self.schema(store)
+        with store.lock:
+            try:
+                row = store.conn.execute(
+                    'SELECT login_email FROM member_credentials WHERE member_id=?', (member_id,)).fetchone()
+                if row:
+                    store.conn.execute(
+                        'UPDATE member_credentials SET password_hash=?,password_salt=?,'
+                        'password_changed_at=? WHERE member_id=?', (hashed, salt, now, member_id))
+                else:
+                    # First password for a member who joined through a login link: it needs a login
+                    # identifier, and the address they type is it. `members.email` only follows when
+                    # nobody set a contact address.
+                    address = self.validate_email(email)
+                    if store.conn.execute('SELECT 1 FROM member_credentials WHERE login_email=?',
+                                          (address,)).fetchone():
+                        raise Denied(409, 'That email is already in use')
+                    store.conn.execute(
+                        'INSERT INTO member_credentials(member_id,login_email,password_hash,'
+                        'password_salt,password_changed_at) VALUES(?,?,?,?,?)',
+                        (member_id, address, hashed, salt, now))
+                    store.conn.execute(
+                        "UPDATE members SET email=? WHERE id=? AND email=''", (address, member_id))
+                store.conn.commit()
+            except Exception:
+                store.conn.rollback()
+                raise
+        return True
+
+    def authenticate_password(self, store, email, password):
+        """Email and password in, a member out. Every failure looks the same."""
+        self.schema(store)
+        address = self.normalize_email(email)
+        with store.lock:
+            row = store.conn.execute(
+                'SELECT c.member_id, c.password_hash, c.password_salt, m.role '
+                'FROM member_credentials c JOIN members m ON m.id=c.member_id '
+                'WHERE c.login_email=?', (address,)).fetchone()
+        if not row:
+            # Hash anyway: an unknown address and a wrong password should cost the same.
+            self.verify_password(password or '', secrets.token_hex(16), secrets.token_hex(32))
+            raise Denied(401, 'Invalid email or password')
+        if not self.verify_password(password, row['password_salt'], row['password_hash']):
+            raise Denied(401, 'Invalid email or password')
+        if row['role'] not in ('member', 'admin'):
+            raise Denied(403, 'Membership blocked or not approved')
+        return self.member(store, {'id': row['member_id']})
+
+    def account(self, store, member):
+        """Safe account metadata: no hashes, salts, provider subjects or tokens."""
+        self.schema(store)
+        with store.lock:
+            cred = store.conn.execute(
+                'SELECT login_email, password_hash FROM member_credentials WHERE member_id=?',
+                (member['id'],)).fetchone()
+            providers = {r[0] for r in store.conn.execute(
+                'SELECT provider FROM member_identities WHERE member_id=?', (member['id'],))}
+        return {
+            'email': cred['login_email'] if cred else '',
+            'has_password': bool(cred and cred['password_hash']),
+            'auth_method': member.get('auth_method') or 'login_link',
+            'google': 'google' in providers,
+            'apple': 'apple' in providers,
+        }
+
+    def change_password(self, store, member, payload):
+        if not isinstance(payload, dict):
+            raise Denied(400, 'Object required')
+        if payload.get('new_password') != payload.get('confirm_password'):
+            raise Denied(400, 'The two passwords do not match')
+        self.schema(store)
+        with store.lock:
+            cred = store.conn.execute(
+                'SELECT login_email, password_hash, password_salt FROM member_credentials '
+                'WHERE member_id=?', (member['id'],)).fetchone()
+        # A login-link session already proves the account — possession of the permanent link is the
+        # whole credential — so only the other methods ask for the current password. A password
+        # change never revokes the login link: the link stays the recovery path.
+        if cred and member.get('auth_method') != 'login_link':
+            if not self.verify_password(payload.get('current_password'),
+                                       cred['password_salt'], cred['password_hash']):
+                raise Denied(403, 'Current password is incorrect')
+        self.set_password(store, member['id'], payload.get('new_password'),
+                          None if cred else payload.get('email'))
+        return {'ok': True}
+
+    # -- signup links ------------------------------------------------------
+    def signup_url(self, token):
+        return self.config()[2] + '/signup#invite=' + token
+
+    def mint_signup(self, store, issued_by, ttl=None):
+        """Mint one single-use signup link. Returns the raw token and its expiry."""
+        self.schema(store)
+        token = secrets.token_urlsafe(32)
+        now = time.time()
+        expires = now + (self.SIGNUP_TTL if ttl is None else ttl)
+        with store.lock:
+            # Expired rows are swept here rather than by a job: "active" is a query, not a state.
+            store.conn.execute('DELETE FROM signup_invites WHERE consumed_at IS NULL AND expires_at<=?', (now,))
+            store.conn.execute(
+                'INSERT INTO signup_invites(digest,issued_by,created_at,expires_at) VALUES(?,?,?,?)',
+                (self.digest(token), issued_by, now, expires))
+            store.conn.commit()
+        return token, expires
+
+    def signup_state(self, store, digest):
+        """Whether this browser still holds a valid signup flow."""
+        if not isinstance(digest, str) or not digest:
+            return {'active': False, 'expires_at': None}
+        self.schema(store)
+        now = time.time()
+        with store.lock:
+            row = store.conn.execute(
+                'SELECT expires_at FROM signup_invites WHERE digest=? AND consumed_at IS NULL '
+                'AND expires_at>?', (digest, now)).fetchone()
+        return {'active': bool(row), 'expires_at': row['expires_at'] if row else None}
+
+    def open_signup(self, store, token):
+        """Validate a signup token and return the digest the flow cookie carries."""
+        self.schema(store)
+        if not isinstance(token, str) or not token or len(token) > 256:
+            raise Denied(401, 'That signup link is no longer valid')
+        digest = self.digest(token)
+        if not self.signup_state(store, digest)['active']:
+            raise Denied(401, 'That signup link is no longer valid')
+        return digest
+
+    def signup_invite_state(self, store, member):
+        self.schema(store)
+        now = time.time()
+        with store.lock:
+            row = store.conn.execute(
+                'SELECT expires_at FROM signup_invites WHERE issued_by=? AND consumed_at IS NULL '
+                'AND expires_at>? ORDER BY created_at DESC', (member['id'], now)).fetchone()
+        return {'active': bool(row), 'expires_at': row['expires_at'] if row else None}
+
+    def mint_member_signup(self, store, member):
+        """A regular member holds one outstanding invite at a time."""
+        if self.signup_invite_state(store, member)['active']:
+            raise Denied(409, 'You already have a signup link. Revoke it to make another.')
+        token, expires = self.mint_signup(store, member['id'])
+        return {'url': self.signup_url(token), 'expires_at': expires}
+
+    def revoke_member_signup(self, store, member):
+        with store.lock:
+            store.conn.execute('DELETE FROM signup_invites WHERE issued_by=? AND consumed_at IS NULL',
+                               (member['id'],))
+            store.conn.commit()
+        return True
+
+    def signup(self, store, digest, display_name, profile_icon, email, password):
+        """Redeem a signup link: create the member, the credential, the session — or nothing."""
+        name, icon = self.validate_profile(display_name, profile_icon)
+        address = self.validate_email(email)
+        password = self.validate_password(password)
+        salt, hashed = self.hash_password(password)
+        self.schema(store)
+        now = time.time()
+        member_id = secrets.token_hex(16)
+        with store.lock:
+            try:
+                store.conn.execute('BEGIN IMMEDIATE')
+                # Consuming first is what makes the link single use: the UPDATE is the lock, so two
+                # concurrent redemptions cannot both come out with a member.
+                used = store.conn.execute(
+                    'UPDATE signup_invites SET consumed_at=?, consumed_by=? '
+                    'WHERE digest=? AND consumed_at IS NULL AND expires_at>?',
+                    (now, member_id, digest, now)).rowcount
+                if used != 1:
+                    raise Denied(401, 'That signup link is no longer valid')
+                if store.conn.execute('SELECT 1 FROM member_credentials WHERE login_email=?',
+                                      (address,)).fetchone():
+                    raise Denied(409, 'That email is already in use')
+                store.conn.execute(
+                    'INSERT INTO members(id,email,role,display_name,profile_icon) VALUES(?,?,?,?,?)',
+                    (member_id, address, 'member', name, icon))
+                store.conn.execute(
+                    'INSERT INTO member_credentials(member_id,login_email,password_hash,'
+                    'password_salt,password_changed_at) VALUES(?,?,?,?,?)',
+                    (member_id, address, hashed, salt, now))
+                sid = self._issue_session(store.conn, member_id, 'password')
+                store.conn.commit()
+            except Exception:
+                store.conn.rollback()
+                raise
+        try:
+            import activity
+            activity.record(store, activity.KIND_JOIN, member_id=member_id, detail=name)
+        except Exception:
+            pass
+        return sid
+
     def revoke(self, store, uid):
         self.schema(store)
         with store.lock:
             store.conn.execute('DELETE FROM browser_sessions WHERE member_id=?', (uid,))
             store.conn.execute('DELETE FROM browser_invites WHERE member_id=?', (uid,))
+            # Links this member handed out die with their sessions; a password and a provider
+            # identity are not credentials to revoke — blocking is what stops those.
+            store.conn.execute('DELETE FROM signup_invites WHERE issued_by=? AND consumed_at IS NULL', (uid,))
             store.conn.commit()
 
     def cookie(self, handler, name):
@@ -253,7 +561,7 @@ class Security:
         digest = self.digest(sid)
         now = time.time()
         with store.lock:
-            r = store.conn.execute('SELECT member_id, expires FROM browser_sessions WHERE digest=? AND expires>?', (digest, now)).fetchone()
+            r = store.conn.execute('SELECT member_id, expires, auth_method FROM browser_sessions WHERE digest=? AND expires>?', (digest, now)).fetchone()
             # Sliding session: using it extends it, so a signed-in member is never
             # logged out for age. Written at most hourly rather than per request.
             if r and r['expires'] < now + self.SESSION_TTL - 3600:
@@ -263,6 +571,9 @@ class Security:
         if not r:
             raise Denied(401, 'Sign in required')
         member = self.member(store, {'id': r[0]})
+        # How this browser got in follows the session, not the member: the same account may be
+        # open through a login link on one device and a password on another.
+        member['auth_method'] = r['auth_method'] or 'login_link'
         if handler.command != 'GET':
             self.csrf(handler)
         self.limit(member['id'], 'requests', requests_limit)

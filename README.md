@@ -61,8 +61,29 @@ service restart.
 ./install-service.sh remove
 ```
 
-Needs `yt-dlp` and `ffmpeg` on PATH. The service listens on `0.0.0.0:8470` so the
-service hub and his phone can reach it over the tailnet; there is no auth.
+Needs `yt-dlp` and `ffmpeg` on PATH. The service listens on `0.0.0.0:8470` and
+requires browser sign-in (see Accounts).
+
+## Accounts
+
+There is no public sign-up. Two links do the work:
+
+* A **personal login link** (`/auth/link#invite=…`) is the account. It never
+  expires until it is regenerated, it signs in on every device, and it is the
+  way back in if a password is lost.
+* A **signup link** (`/signup#invite=…`) is an invitation. It creates the member
+  on first use, works exactly once and expires after seven days. Only its hash
+  is stored, so it is shown once and never again. Members hold one outstanding
+  signup link at a time; administrators mint as many as they need.
+
+Signing up or signing in mints the same `__Host-hl_session` cookie, and
+`members.id` is the identity behind playlists, saves, quota and Party whichever
+method was used. Passwords are `scrypt` with a per-member salt and a minimum of
+ten characters; a wrong password and an unknown email answer the same way. A
+session opened through the login link can set a new password without the old
+one — that link is the recovery path — while password sessions must confirm it.
+Changing a password never revokes the login link. Google and Apple sign-in are
+not implemented.
 
 ## The queue
 
