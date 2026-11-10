@@ -1959,3 +1959,25 @@ body #player.on.waving #plseek::-moz-range-track{background:transparent}
 /* The master switch owns a row; the mirrored checkbox shares the last one. */
 #player-full .pf-wave-knobs .pfwk-toggle.pfwk-inline{grid-column:span 1}
 #player-full .pf-wave-knobs .pfwk-toggle input{accent-color:var(--accent);width:16px;height:16px}
+
+/* Library add/remove on the player surfaces: the cards' own control, not a copy.
+   Sizes mirror the sibling icon buttons so neither row grows: the fullscreen foot is
+   already 40 px tall and the phone bar's cluster is already 34 px. */
+#player-full .pf-foot .pfsave{display:inline-flex;align-items:center;justify-content:center}
+#player-full .pf-foot .pfsave .ghost.lsave{width:40px;height:40px;min-width:40px;min-height:40px;
+  padding:0;border:0;border-radius:50%;background:none;color:var(--dim)}
+#player-full .pf-foot .pfsave .ghost.lsave:hover{background:none;color:var(--text)}
+#player-full .pf-foot .pfsave .ghost.lsave.on{color:var(--accent);border:0;background:none}
+/* Compact bar: the desktop row keeps its exact children; the phone cluster gets the
+   control in the free slot under the queue, level with the heart above and the expand
+   below (same 34 px box, same right edge as the group). */
+#player .plsave{display:none}
+@media (max-width:760px){
+  /* Between the heart and the expand, on the same right-hand column. The column is
+     100 px for three 34 px buttons, so this one is 30 px: it fits without moving
+     either neighbour or making the bar taller. */
+  body #player.on .plsave{display:block;position:absolute;right:9px;top:36px;width:30px;height:30px;z-index:3}
+  body #player.on .plsave .ghost.lsave{width:30px;height:30px;min-width:30px;min-height:30px;
+    padding:0;border:0;border-radius:0;background:none;color:var(--dim);opacity:.85}
+  body #player.on .plsave .ghost.lsave.on{color:var(--accent);border:0;background:none;opacity:1}
+}

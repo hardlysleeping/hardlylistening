@@ -1056,6 +1056,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 
 <div id="player">
   <button type="button" class="iconbtn small" id="pllike" title="Like song" aria-label="Like song" aria-pressed="false">&#9825;</button>
+  <span class="plsave" id="plsave"></span>
   <button class="plartwrap" id="plartwrap" title="Open album"><img id="plart" alt=""></button>
   <div class="pmeta" id="plmeta" title="Open fullscreen player">
     <div class="ptitle" id="pltitle">—</div>
@@ -1123,6 +1124,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     </div>
     <div class="pf-foot">
       <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
+      <span class="pfsave" id="pfsave"></span>
       <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue">☰</button>
       <button type="button" class="iconbtn" id="pfwave" title="Visualizer style" aria-label="Visualizer style" aria-expanded="false"
         aria-controls="pfwaveknobs"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 6.5v11M12 3.5v17M16 8v8M20 10.5v3"/></svg></button>
@@ -5126,7 +5128,6 @@ pfDisc.addEventListener('pointermove',event=>{
     // Pause on the first real movement (not on a tap) so the seek is audible
     // immediately instead of fighting the bytes still being played.
     pfDiscDrag.moved=true;pfDiscDrag.wasPlaying=!playerAudio.paused;
-    if(pfDiscDrag.wasPlaying) playerAudio.pause();
   }
   // Angular speed drives the scratch: the record is read as fast as the hand turns it,
   // smoothed so a single jittery sample cannot make the pitch jump.
@@ -5142,7 +5143,14 @@ pfDisc.addEventListener('pointermove',event=>{
   pfDisc.style.transform=`rotate(${pfDiscPhase}rad)`;
   paintFullPlayerPosition(target);
   paintPfDisc();
-  if(pfDiscDrag.moved){ pfDiscSeek(target); pfScratchRun(); }
+  // The hand turns the record: playback follows the finger's speed instead of pausing
+  // for a seek and playing a stand-in scratch. Slow spin drags the track down, a flick
+  // speeds it up, and the audio you hear is the track itself.
+  if(pfDiscDrag.moved){
+    const speed=Math.min(4, Math.max(0.0625, pfScratchRate(Math.abs(pfDiscDrag.omega||0), 1000)));
+    playerAudio.playbackRate=speed;
+    if(playerAudio.paused) playerAudio.play().catch(()=>{});
+  }
   event.preventDefault();
 });
 function endPfDiscDrag(event){
@@ -5159,7 +5167,8 @@ function endPfDiscDrag(event){
   }
   pfScratchSilence();
   pfNoiseSilence();
-  if(drag.moved && drag.wasPlaying && fullPlayerOpen()) playerAudio.play().catch(()=>{});
+  // Give the track its own speed back; the drag only borrowed the rate.
+  if(drag.moved) playerAudio.playbackRate=1;
   // Re-sync the record's angle to the position that was actually committed, so the
   // spin does not resume from an arbitrary drag angle.
   if(playerAudio.duration && Number.isFinite(playerAudio.duration)){
@@ -5297,6 +5306,16 @@ async function ensureLikes(){
   } catch (_) {}
   return likedTracks;
 }
+// The cards' add/remove control, on both player surfaces. Those cards already answer to
+// paintSaveControl(); giving the player buttons the same data-save-key means a save from any
+// surface repaints every one of them, so the three can never disagree.
+function paintPlayerSave(){
+  const html = playingId == null ? "" : listeningSaveControl("track", playingId);
+  for (const id of ["pfsave", "plsave"]){
+    const slot = $(id);
+    if (slot && slot.innerHTML !== html) slot.innerHTML = html;
+  }
+}
 // One heart state, two surfaces: the fullscreen player and the compact bar.
 async function paintFullLike(){
   const liked = (await ensureLikes()).has(Number(playingId));
@@ -5308,6 +5327,7 @@ async function paintFullLike(){
     button.setAttribute("aria-pressed", String(liked));
     button.title = liked ? "Unlike song" : "Like song";
   }
+  paintPlayerSave();
 }
 async function toggleLike(event){
   if (!playingId) return;
