@@ -219,3 +219,39 @@ class SecurityHTTP(unittest.TestCase):
             self.assertEqual(self.request(path,'POST',{'Origin':'https://music.example'},'{}')[0],401)
 
 if __name__ == '__main__': unittest.main()
+
+
+class CsrfOrigin(unittest.TestCase):
+    """The login form posts to whatever hostname the page was opened on."""
+
+    class Handler:
+        def __init__(self, headers):
+            self.headers = headers
+
+    def setUp(self):
+        self.env = patch.dict(os.environ, {'HARDLYLISTENING_PUBLIC_ORIGIN': 'https://music.example'})
+        self.env.start()
+        self.sec = Security()
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_configured_public_origin_is_accepted(self):
+        self.sec.csrf(self.Handler({'Origin': 'https://music.example', 'Host': 'music.example'}))
+
+    def test_the_request_own_host_is_accepted(self):
+        for host in ('127.0.0.1:8470', '192.168.1.20:8470', 'devbox.example.ts.net:8470'):
+            self.sec.csrf(self.Handler({'Origin': 'http://' + host, 'Host': host}))
+            self.sec.csrf(self.Handler({'Origin': 'https://' + host, 'Host': host}))
+
+    def test_another_site_is_refused(self):
+        refused = [
+            {'Origin': 'https://evil.example', 'Host': '127.0.0.1:8470'},
+            {'Origin': 'http://127.0.0.1:8471', 'Host': '127.0.0.1:8470'},
+            {'Origin': 'null', 'Host': '127.0.0.1:8470'},
+            {'Origin': 'http://127.0.0.1:8470', 'Host': ''},
+            {'Host': '127.0.0.1:8470'},
+        ]
+        for headers in refused:
+            with self.assertRaises(Denied, msg=str(headers)):
+                self.sec.csrf(self.Handler(headers))

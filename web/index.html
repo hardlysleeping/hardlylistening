@@ -1055,6 +1055,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 </main>
 
 <div id="player">
+  <button type="button" class="qgrip" id="qgrip" aria-label="Show or hide the queue" title="Show or hide the queue"><span aria-hidden="true">▲</span></button>
   <button type="button" class="iconbtn small" id="pllike" title="Like song" aria-label="Like song" aria-pressed="false">&#9825;</button>
   <span class="plsave" id="plsave"></span>
   <button class="plartwrap" id="plartwrap" title="Open album"><img id="plart" alt=""></button>
@@ -1072,7 +1073,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
       <button class="iconbtn small" id="plmute" title="Mute" aria-label="Mute" aria-pressed="false"></button>
     </div>
     <div class="pend">
-      <button class="iconbtn" id="plqueue" title="Playback queue" aria-label="Playback queue" aria-expanded="false">☰</button>
       <button class="iconbtn" id="plfull" title="Fullscreen player" aria-label="Fullscreen player">⤢</button>
     </div>
 
@@ -1096,7 +1096,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   <div class="pf-body">
     <div class="pf-top" id="pf-top">
     <div class="pf-stage">
-      <canvas class="pfwave-aura" aria-hidden="true"></canvas>
       <div class="pf-disc-shell">
       <div id="pf-disc" class="pf-disc" role="slider" tabindex="0" aria-label="Scrub playback position" aria-valuemin="0" aria-valuemax="1000" aria-valuenow="0">
         <span class="pf-grooves" aria-hidden="true"></span><img id="pfart" alt="Album art on the record label"><span class="pf-spindle" aria-hidden="true"></span>
@@ -1123,8 +1122,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
       <button class="iconbtn small" id="pfrepeat" type="button" title="Repeat" aria-label="Repeat"></button>
     </div>
     <div class="pf-foot">
-      <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
       <span class="pfsave" id="pfsave"></span>
+      <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
       <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue">☰</button>
       <button type="button" class="iconbtn" id="pfwave" title="Visualizer style" aria-label="Visualizer style" aria-expanded="false"
         aria-controls="pfwaveknobs"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 6.5v11M12 3.5v17M16 8v8M20 10.5v3"/></svg></button>
@@ -2381,6 +2380,7 @@ async function loadListeningSaves(){
     const [saves, folderData] = await Promise.all([listeningGet('saves'), listeningGet('folders')]);
     listeningSaves = {...saves, folders:folderData.folders || []};
   } catch(e){ listeningSaves = null; }
+  if (typeof paintPlayerSave === "function") paintPlayerSave();   // a restored player paints first
 }
 // Idle is a plus, an add flashes a check for a beat, and a saved song shows a minus that
 // removes it. Three states, one square, so nothing reflows when the state changes.
@@ -4354,7 +4354,14 @@ function bindMediaSession(){
     play: () => playerAudio.play().catch(() => {}),
     pause: () => playerAudio.pause(),
     previoustrack: () => playerPrev(),
-    nexttrack: () => playerNext()
+    nexttrack: () => playerNext(),
+    // The lock-screen timeline is only scrubbable when a seekto handler exists; it does
+    // NOT swap the skip pair for +10/-10 (that is seekbackward/seekforward alone).
+    seekto: details => {
+      if (details && Number.isFinite(details.seekTime)) {
+        playerAudio.currentTime = Math.max(0, Math.min(playerAudio.duration || details.seekTime, details.seekTime));
+      }
+    }
   };
   for (const [action, handler] of Object.entries(handlers)){
     try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
@@ -4582,6 +4589,9 @@ function playFromLibrary(id){
   playerAudio.play().catch(() => {});
   publishPlaybackState();
   paintTransport(wasPlaying);
+  // The compact add/remove follows the track: without this it only painted when the
+  // fullscreen player repainted or when the saves list happened to reload.
+  if (typeof paintPlayerSave === "function") paintPlayerSave();
   saveNowState(true);
   if (document.body.classList.contains("fullplayer")) paintFullPlayer();
   // A new track means a new "next three": refresh the buffer and the row states
@@ -5144,10 +5154,6 @@ pfDisc.addEventListener('pointermove',event=>{
   pfDisc.style.transform=`rotate(${pfDiscPhase}rad)`;
   paintFullPlayerPosition(target);
   paintPfDisc();
-  // The hand turns the record: the scratch copy is read at the hand's speed, forwards
-  // or backwards, and the file is seeked to match the angle. The file itself cannot
-  // follow the hand — playbackRate rejects negative values, so it can never play
-  // backwards, and a held platter would keep drifting instead of falling silent.
   if(pfDiscDrag.moved){ pfDiscSeek(target); pfScratchRun(); }
   event.preventDefault();
 });
@@ -5165,8 +5171,6 @@ function endPfDiscDrag(event){
   }
   pfScratchSilence();
   pfNoiseSilence();
-  // Resume only if the drag started on a playing track; the seek already committed the
-  // angle, so the record carries on from where the hand left it.
   if(drag.moved && drag.wasPlaying && fullPlayerOpen()) playerAudio.play().catch(()=>{});
   // Re-sync the record's angle to the position that was actually committed, so the
   // spin does not resume from an arbitrary drag angle.
@@ -5204,12 +5208,28 @@ hlSwipeBind($("#player-full"), dir => {
   else if(dir === "left") playerNext();
   else if(dir === "right") playerPrev();
 });
+// The tab on the bar's top edge is the queue toggle: same function as the queue button,
+// so the two can never disagree about the panel state.
+$("#qgrip").onclick = event => {
+  event.stopPropagation();
+  if (typeof togglePlaybackPanel === "function") togglePlaybackPanel();
+};
 $("#plfull").onclick = openFullPlayer;
 $("#plmeta").onclick = openFullPlayer;
 $("#pfqueue").onclick = event => {
   event.stopPropagation();
   const full = document.getElementById("player-full");
-  showFullQueue(!full.classList.contains("queue-open"));
+  const opening = !full.classList.contains("queue-open");
+  if (opening){
+    // One panel at a time: the queue and the visualizer knobs share this column.
+    const knobs = document.getElementById("pfwaveknobs");
+    const waveBtn = document.getElementById("pfwave");
+    if (knobs && !knobs.hidden){
+      knobs.hidden = true; knobs.style.display = "none";
+      waveBtn?.classList.remove("on"); waveBtn?.setAttribute("aria-expanded", "false");
+    }
+  }
+  showFullQueue(opening);
 };
 // The queue is the same element, physically moved into the fullscreen column, so it can
 // never behave like an overlay: the page itself rearranges around it.
@@ -5305,14 +5325,24 @@ async function ensureLikes(){
   } catch (_) {}
   return likedTracks;
 }
-// The cards' add/remove control, on both player surfaces. Those cards already answer to
-// paintSaveControl(); giving the player buttons the same data-save-key means a save from any
-// surface repaints every one of them, so the three can never disagree.
+// The cards' add/remove control, on the player. It clones the rendered card button when
+// the track is on screen, so the markup, label and inline handler are the card's own; a
+// missing slot or no track simply leaves it empty.
 function paintPlayerSave(){
-  const html = playingId == null ? "" : listeningSaveControl("track", playingId);
-  for (const id of ["pfsave", "plsave"]){
-    const slot = $(id);
-    if (slot && slot.innerHTML !== html) slot.innerHTML = html;
+  // One button, from the one function that renders it. Never a clone of another view node:
+  // in the library the save control sits inside a row action cluster, so copying it brought
+  // a like and a pin along. If anything ever puts a cluster in here, paint nothing rather
+  // than ship three icons.
+  // Only the save button, never the heart/pin pair preferences.js appends to the row
+  // control: these two slots are a single 34 px cell.
+  const raw = playingId == null ? "" : listeningSaveControl("track", playingId);
+  const end = raw.indexOf("</button>");
+  const html = end === -1 ? "" : raw.slice(0, end + 9);
+  for (const sel of ["#pfsave", "#plsave"]){
+    const slot = $(sel);
+    if (!slot) continue;
+    if (slot.innerHTML !== html) slot.innerHTML = html;
+    if (slot.childElementCount > 1) slot.innerHTML = "";
   }
 }
 // One heart state, two surfaces: the fullscreen player and the compact bar.
@@ -5651,7 +5681,7 @@ for (const event of ["loadedmetadata", "durationchange", "seeked", "ratechange"]
   playerAudio.addEventListener(event, () => pushPositionState(true));
 }
 playerAudio.addEventListener("timeupdate", () => pushPositionState(false));
-playerAudio.addEventListener("play", () => { publishPlaybackState(); pushPositionState(true); });
+playerAudio.addEventListener("play", () => { publishPlaybackState(); pushPositionState(true); if (typeof paintPlayerSave === "function") paintPlayerSave(); });
 playerAudio.addEventListener("pause", publishPlaybackState);
 // bindMediaSession() runs here, after playFromLibrary is defined; it closes over the
 // transport functions above, so the car's buttons always drive the live queue.
@@ -7303,7 +7333,19 @@ function togglePlaybackPanel(force){
   const panel = document.querySelector('#playback-panel');
   if (!panel) return;
   const open = force === undefined ? !panel.classList.contains('open') : !!force;
-  panel.classList.toggle('open', open);
+  // The panel slides out before it hides: `.closing` keeps it on screen for the exit
+  // animation, then the class is dropped. Opening is immediate.
+  clearTimeout(panel._closeTimer);
+  if (open){
+    panel.classList.remove('closing');
+    panel.classList.add('open');
+  } else if (panel.classList.contains('open')){
+    panel.classList.remove('open');
+    panel.classList.add('closing');
+    panel._closeTimer = setTimeout(() => panel.classList.remove('closing'), 170);
+  }
+  const bar = document.getElementById('player');
+  if (bar) bar.classList.toggle('queue-shown', open);
   // The fullscreen layout follows the panel: closing the queue brings the record and the
   // header back, whichever control closed it.
   const full = document.querySelector('#player-full');
@@ -7879,9 +7921,9 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   if (!audio) return;
   const KEY = 'hl.wave.v1';
   // Off until asked for: the player has to cost nothing extra out of the box.
-  const cfg = {bars: 48, level: 30, smooth: 80, mirror: true, enabled: false};
+  const cfg = {bars: 64, level: 30, smooth: 25, mirror: true, enabled: true};
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) {}
-  cfg.enabled = cfg.enabled === true;    // only a stored "on" turns it on
+  cfg.enabled = cfg.enabled !== false;   // on unless deliberately turned off
   let accent = '#58d3a8';
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -7895,6 +7937,35 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   };
   const reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+  // Bound here, not at the bottom of this module: everything below can return early
+  // (no canvas on this surface) and when it did, the click handler was never attached —
+  // the button then does nothing no matter how correct the markup and CSS are.
+  (function bindWaveToggle(){
+    const toggle = document.getElementById('pfwave');
+    const panel = document.getElementById('pfwaveknobs');
+    if (!toggle || !panel) return;
+    toggle.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const opening = panel.hidden;
+      const slot = document.getElementById('pf-queue-slot');
+      // One panel at a time, and it lives where the queue lives: the same slot in the
+      // fullscreen column, so it scrolls there instead of squeezing the transport.
+      if (opening && typeof showFullQueue === 'function') showFullQueue(false);
+      if (!panel._home) panel._home = {parent: panel.parentElement, next: panel.nextElementSibling};
+      if (opening && slot){ slot.appendChild(panel); panel.classList.add('in-slot'); }
+      panel.hidden = !opening;
+      panel.style.display = opening ? '' : 'none';
+      if (!opening && panel._home && panel._home.parent){
+        panel.classList.remove('in-slot');
+        panel._home.parent.insertBefore(panel, panel._home.next || null);
+      }
+      toggle.classList.toggle('on', opening);
+      toggle.setAttribute('aria-expanded', String(opening));
+      if (opening){ try { paint(); } catch (_) { /* surfaces not built yet */ } }
+    });
+  })();
+
   const surfaces = [];
   const add = (sel, mode) => {
     const canvas = document.querySelector(sel);
@@ -7902,7 +7973,6 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     surfaces.push({canvas, mode, g: canvas.getContext('2d')});
   };
   add('#player .plwave-seek', 'seek');
-  add('#player-full .pfwave-aura', 'aura');
   if (!surfaces.length) return;
 
   // ---- the envelope: one decode per track, no analysis of the live stream ----------
@@ -7980,19 +8050,31 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
       for (let j = a; j < b && j < src.length; j++) if (src[j] > peak) peak = src[j];
       out[i] = peak;
     }
+
+    // Map the track range onto 0..1 FIRST and unconditionally: with smoothing off the
+    // function returned straight from out, so the remap never ran and every bar stayed at
+    // the ceiling (measured 20-21 px of 24, sd 0.29).
+    const scale = (arr) => {
+      const order = Array.from(arr).sort((a, b) => a - b);
+      const lo = order[Math.floor(order.length * 0.08)] || 0;
+      const hi = order[Math.floor(order.length * 0.97)] || 1;
+      const span = Math.max(0.05, hi - lo);
+      for (let i = 0; i < arr.length; i++) arr[i] = Math.min(1, Math.max(0, (arr[i] - lo) / span));
+      return arr;
+    };
     const k = Math.round(Math.max(0, Math.min(1, cfg.smooth / 100)) * 4);
-    if (!k) return out;
+    if (!k) return scale(out);
     const blurred = new Float32Array(n);
     for (let i = 0; i < n; i++){
-      let sum = 0, count = 0;
+      let peak = 0;
       for (let d = -k; d <= k; d++){
         const j = i + d;
         if (j < 0 || j >= n) continue;
-        sum += out[j]; count++;
+        if (out[j] > peak) peak = out[j];
       }
-      blurred[i] = sum / count;
+      blurred[i] = peak;
     }
-    return blurred;
+    return scale(blurred);
   }
   // Where the playhead is, 0..1, from the scrub both surfaces already share.
   function progress(){
@@ -8028,37 +8110,47 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   }
   function draw(s){
     if (!fit(s)) return;
+    if (window.__wavedbg) console.log('DRAWMODE', s.mode, s.w, s.h);
     const g = s.g, w = s.w, h = s.h;
     const lvl = Math.max(0, Math.min(1, cfg.level / 100));
     g.clearRect(0, 0, w, h);
     const n0 = Math.max(12, Math.round(cfg.bars));
     const p = progress();
 
-    // The compact scrub's own line: the played part in accent, the rest in grey.
+    // The compact scrub IS the wave: played bars lit in the accent, the rest a dim grey
+    // ramp, so progress reads from the light itself. No thumb is drawn (the native track
+    // and thumb are transparent while waving); the input still owns the whole touch area.
     if (s.mode === 'seek'){
-      const n = Math.min(96, n0);
-      const amp = barsFor(n);
-      const step = w / n;
-      const bw = Math.max(1, step * 0.55);
-      const half = h * 0.42, cy = h / 2;
-      for (let i = 0; i < n; i++){
-        const a = amp[i] || 0;
-        const x = i * step + (step - bw) / 2;
-        const played = (i + 0.5) / n <= p;
-        g.fillStyle = played ? accent : '#3a3d47';
-        g.globalAlpha = played ? 0.95 : 0.72;
-        if (cfg.mirror){
-          const bh = 1 + a * half;
-          g.fillRect(x, cy - bh, bw, bh * 2);
-        } else {
-          const bh = 1 + a * half * 2;
-          g.fillRect(x, cy + half - bh, bw, bh);
-        }
-      }
+    const n = Math.min(96, n0);
+    const amp = barsFor(n);
+    if (window.__wavedbg) console.log('AMP', JSON.stringify(Array.from(amp).slice(0,10).map(v=>+v.toFixed(3))), 'n', n);
+    const step = w / n;
+    const bw = Math.max(1.5, step * 0.62);
+    const half = h * 0.40, cy = h / 2;
+    let lit = false;
+    for (let i = 0; i < n; i++) if ((amp[i] || 0) > 0.02) { lit = true; break; }
+    if (!lit){
+      const y = cy - 2;
+      g.fillStyle = '#2a2d35'; g.fillRect(0, y, w, 4);
+      g.fillStyle = accent;    g.fillRect(0, y, Math.max(3, w * p), 4);
       g.globalAlpha = 1;
       return;
     }
-
+    g.globalAlpha = 0.55; g.fillStyle = '#4a4e58';   // dim bars behind the playhead
+    for (let i = 0; i < n; i++){
+      const x = i * step + (step - bw) / 2;
+      const bh = 1 + (amp[i] || 0) * half * 2;
+      g.fillRect(x, cy + half - bh, bw, bh);
+    }
+    g.globalAlpha = 1; g.fillStyle = accent;         // played: the same bars, lit
+    for (let i = 0; i < n; i++){
+      if ((i + 0.5) / n > p) break;
+      const x = i * step + (step - bw) / 2;
+      const bh = 1 + (amp[i] || 0) * half * 2;
+      g.fillRect(x, cy + half - bh, bw, bh);
+    }
+    return;
+  }
     // A bloom behind the record that swells with the section the playhead is in.
     if (s.mode === 'aura'){
       const e = energyAt(p);
@@ -8113,7 +8205,7 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     if (!cfg.enabled || document.hidden) return;
     const id = typeof playingId === 'undefined' ? null : playingId;
     if (!id) return;
-    envTimer = setTimeout(() => ensureEnvelope(id, audio.currentSrc || audio.src), 2500);
+    envTimer = setTimeout(() => ensureEnvelope(id, audio.currentSrc || audio.src), 250);
   }
   audio.addEventListener('play', run);
   audio.addEventListener('playing', () => { run(); scheduleEnvelope(); });
@@ -8186,17 +8278,7 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   }
   paintKnobs();
 
-  const toggle = document.getElementById('pfwave');
-  const panel = document.getElementById('pfwaveknobs');
-  if (toggle && panel){
-    toggle.addEventListener('click', () => {
-      const open = panel.hidden;
-      panel.hidden = !open;
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.classList.toggle('on', open);
-      paint();
-    });
-  }
+
   paint();
 })();
 </script>

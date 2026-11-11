@@ -59,7 +59,7 @@ body.fullplayer #playback-panel.open{display:flex;flex-direction:column}
 .pq-actions,.pq-toolbar{display:flex;gap:5px;flex-wrap:wrap}.pq-actions button{padding:5px 9px;font-size:12px}.pq-toolbar{margin:10px 0}
 #playlist-editor{width:680px;padding:20px;background:var(--panel);color:var(--text)}
 #playlist-editor form{display:flex;align-items:center;justify-content:space-between;gap:12px}#playlist-editor input{min-width:0;max-width:100%;flex:1}#playlist-editor label{display:block;margin:10px 0}
-@media(max-width:600px){#playback-panel{right:8px;bottom:calc(var(--nav-h,0px) + 176px + var(--safe-b,0px));width:calc(100vw - 16px);padding:6px 8px 8px;box-sizing:border-box}body.fullplayer #playback-panel{left:8px;right:8px;bottom:0;width:auto}#playback-items{max-height:min(40vh,300px)}#playback-items .pq-x{opacity:.55}#playback-items .pq-handle{display:none}.pq-actions{flex-basis:100%;padding-left:2px}.pq-actions button{min-height:38px}#playlist-editor{padding:12px;box-sizing:border-box}}
+@media(max-width:600px){#playback-panel{right:8px;bottom:calc(var(--nav-h,0px) + 169px + var(--safe-b,0px));width:calc(100vw - 16px);padding:6px 8px 8px;box-sizing:border-box}body.fullplayer #playback-panel{left:8px;right:8px;bottom:0;width:auto}#playback-items{max-height:min(40vh,300px)}#playback-items .pq-x{opacity:.55}#playback-items .pq-handle{display:none}.pq-actions{flex-basis:100%;padding-left:2px}.pq-actions button{min-height:38px}#playlist-editor{padding:12px;box-sizing:border-box}}
 
 :root{color-scheme:dark;--bg:#101014;--panel:#191a21;--panel2:#23252e;--line:#343641;--dim:#aaadbd;--radius:16px}
 /* The app is chrome, not a document: a long press must never start a text
@@ -171,7 +171,7 @@ html[data-cardstyle="compact"] .songcard.open{position:relative;z-index:3;
 .songcard .st b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
 /* The plus walks up to the strap directly under the cover, right-aligned on the same
    edge as the artwork, so it is found before the title is read instead of last. */
-.songcard .rowactions{grid-area:save;display:flex;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:6px;margin:0;min-width:0;padding:0}
+.songcard .rowactions{grid-area:save;display:flex;flex-wrap:nowrap;align-items:flex-end;justify-content:flex-end;gap:6px;margin:0;min-width:0;padding:0}
 .songcard .lsave{position:static;right:auto;bottom:auto;z-index:3;width:40px;height:40px;
   min-width:0;min-height:0;padding:0;font-size:0;border-radius:12px;box-shadow:0 2px 10px #0006}
 /* The glyph keeps a margin inside the box instead of touching its edges. */
@@ -1809,9 +1809,11 @@ body #player.on{display:block;animation:none}
 /* Cover: the image is clipped by its own frame radius, so the art curves with the border. */
 /* Bigger art on the title's top line: 72px at 4,5 stops one pixel short of the transport's
    first glyph, and the clocks below it have moved down out of its way. */
-body #player.on #plartwrap{position:absolute;left:3px;top:5px;width:72px;height:72px;
+/* Flush into the bar's own top-left corner: 1px inset to sit inside the border, and the
+   radius is the bar's 14px minus that border, so the two arcs are concentric. */
+body #player.on #plartwrap{position:absolute;left:1px;top:1px;width:72px;height:72px;
   min-width:0;min-height:0;margin:0;padding:0;display:block;overflow:hidden;
-  border:0;border-radius:12px;background:var(--panel2);cursor:pointer;z-index:2}
+  border:0;border-radius:13px 0 0 0;background:var(--panel2);cursor:pointer;z-index:2}
 body #player.on #plartwrap img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 
 /* Text column: starts at the drawing's x=83 and stops 56 px from the right edge, so the
@@ -1871,8 +1873,15 @@ body #player.on #plseek::-webkit-slider-thumb{-webkit-appearance:none;width:10px
   margin-top:-3px;border-radius:50%;background:#e8eaf0}
 body #player.on #plseek::-moz-range-track{height:4px;border-radius:2px;background:#3a3d47}
 body #player.on #plseek::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:#e8eaf0}
-body #player.on .ptime{position:absolute;bottom:4px;width:44px;margin:0;font-size:11.5px;
-  line-height:14px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:center;z-index:2}
+
+/* The wave is the confirmation now: hide the native track and thumb while it draws, but
+   keep the input box, so dragging anywhere across the bar still seeks. */
+body #player.on.waving #plseek::-webkit-slider-runnable-track{background:transparent}
+body #player.on.waving #plseek::-moz-range-track{background:transparent}
+body #player.on.waving #plseek::-webkit-slider-thumb{opacity:0;box-shadow:none}
+body #player.on.waving #plseek::-moz-range-thumb{opacity:0;box-shadow:none}
+body #player.on .ptime{position:absolute;bottom:19px;width:44px;margin:0;font-size:11.5px;
+  line-height:16px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:center;z-index:2}
 body #player.on #pltime{left:22px}
 body #player.on #pldur{right:50px}
 
@@ -1918,8 +1927,8 @@ body #player.on .plwave-seek{position:absolute;left:85px;bottom:15px;height:24px
   width:calc(100% - 180px);pointer-events:none;z-index:1}
 /* Only while the wave is drawing the line: with the visualizer off the native track
    is the progress bar again, exactly as it was before the wave existed. */
-body #player.on.waving #plseek::-webkit-slider-runnable-track{background:transparent}
-body #player.on.waving #plseek::-moz-range-track{background:transparent}
+/* No thumb: the light in the wave is the position. The input keeps its own height, so
+   dragging anywhere across the bar still seeks. */
 
 /* The stage is the record plus 12% of air on every side, so the glow can paint outside
    the disc without being clipped by the shell's own circle. */
@@ -1960,24 +1969,57 @@ body #player.on.waving #plseek::-moz-range-track{background:transparent}
 #player-full .pf-wave-knobs .pfwk-toggle.pfwk-inline{grid-column:span 1}
 #player-full .pf-wave-knobs .pfwk-toggle input{accent-color:var(--accent);width:16px;height:16px}
 
-/* Library add/remove on the player surfaces: the cards' own control, not a copy.
-   Sizes mirror the sibling icon buttons so neither row grows: the fullscreen foot is
-   already 40 px tall and the phone bar's cluster is already 34 px. */
+/* Library add/remove in the fullscreen foot, left of the heart. Same box as its
+   siblings so the row's height does not change. */
 #player-full .pf-foot .pfsave{display:inline-flex;align-items:center;justify-content:center}
-#player-full .pf-foot .pfsave .ghost.lsave{width:40px;height:40px;min-width:40px;min-height:40px;
+#player-full .pf-foot .pfsave .ghost.lsave{width:44px;height:44px;min-width:44px;min-height:44px;
   padding:0;border:0;border-radius:50%;background:none;color:var(--dim)}
 #player-full .pf-foot .pfsave .ghost.lsave:hover{background:none;color:var(--text)}
 #player-full .pf-foot .pfsave .ghost.lsave.on{color:var(--accent);border:0;background:none}
-/* Compact bar: the desktop row keeps its exact children; the phone cluster gets the
-   control in the free slot under the queue, level with the heart above and the expand
-   below (same 34 px box, same right edge as the group). */
-#player .plsave{display:none}
-@media (max-width:760px){
-  /* Between the heart and the expand, on the same right-hand column. The column is
-     100 px for three 34 px buttons, so this one is 30 px: it fits without moving
-     either neighbour or making the bar taller. */
-  body #player.on .plsave{display:block;position:absolute;right:9px;top:36px;width:30px;height:30px;z-index:3}
-  body #player.on .plsave .ghost.lsave{width:30px;height:30px;min-width:30px;min-height:30px;
-    padding:0;border:0;border-radius:0;background:none;color:var(--dim);opacity:.85}
-  body #player.on .plsave .ghost.lsave.on{color:var(--accent);border:0;background:none;opacity:1}
-}
+/* The knobs live in the queue's slot: it scrolls there instead of squeezing the transport. */
+#player-full .pf-wave-knobs.in-slot{overflow:auto;overscroll-behavior:contain;max-height:100%;
+  padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+
+/* The compact add/remove slot sits in the right-hand cluster (measured), absolutely, so it
+   never joins the flow and cannot push the transport or the title. */
+/* Compact add/remove: immediately right of the queue button, on its row but low enough to
+   clear the heart above and the expand button below (measured: heart ends 777, expand
+   starts 809; this sits 777-807). Absolute, so it takes no flow space. */
+/* The tab does the queue's job now, so the add/remove control takes the queue button's
+   old cell exactly: measured queue box was 34x34 with its right edge 56 px in, 33 px down. */
+body #player.on .plsave{display:block;position:absolute;right:56px;top:33px;width:34px;height:34px;z-index:3}
+body #player.on .plsave .ghost.lsave{width:34px;height:34px;min-width:0;min-height:0;
+  padding:0;border:0;border-radius:0;background:none;color:var(--dim);opacity:.85}
+body #player.on .plsave .ghost.lsave.on{color:var(--accent);border:0;background:none;opacity:1}
+/* The strip between the queue panel and the bar is now a control: a wide tab hanging off
+   the bar top centre, exactly the height of the reduced gap, that toggles the queue. The
+   bar must stop clipping so the tab can sit outside its own box. */
+body #player.on{overflow:visible}
+body #player.on .qgrip{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+  width:132px;height:10px;margin:0;padding:0;border:1px solid var(--line);border-bottom:0;
+  border-radius:9px 9px 0 0;background:var(--panel);color:var(--dim);font-size:8px;
+  line-height:1;display:grid;place-items:center;cursor:pointer;z-index:4}
+body #player.on .qgrip:hover{color:var(--text);background:var(--panel2)}
+body #player.on .qgrip span{pointer-events:none}
+/* Final overrides for the queue gap tab: the earlier rule change did not take effect
+   (another rule of equal weight wins later in the sheet), and the tab inherited the
+   global button min-height of 40 px, so it rendered 40 tall instead of the 10 px gap. */
+/* The tab is fixed furniture: always visible (it is the only way back into the queue) and
+   never animated. Width matches the skip pair (114 px, prev left to next right); the centre
+   is nudged 3 px right to sit on the play button, which is centred on that pair. */
+body #player.on .qgrip{min-height:0;min-width:0;width:114px;height:18px;top:-18px;font-size:9px;
+  left:calc(50% + 3px);opacity:1;transform:translate(-50%,0)}
+/* The panel is what slides: up into place on open, down and out on close. `.closing` holds
+   it on screen for the exit animation. */
+#playback-panel.open{animation:hlPanelIn .16s ease both}
+#playback-panel.closing{animation:hlPanelOut .16s ease both;display:block!important}
+@keyframes hlPanelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes hlPanelOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(10px)}}
+/* The save box is 40 px against 26 px vote arrows. Bottom-aligning it to the arrows keeps
+   its own bottom edge on theirs, so the card border stops one button-height lower than the
+   content it is supposed to wrap. */
+.songcard .rowactions{align-items:flex-end}
+/* The save box is 40 px where the vote arrows are 26: that 14 px difference is what
+   made the card border end below the arrows. A negative top margin removes it from the
+   row's height (a transform would not), so the row ends on the arrows' bottom edge. */
+.songcard .rowactions .lsave{align-self:flex-end;margin:-14px 0 0 0}

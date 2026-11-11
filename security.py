@@ -458,14 +458,16 @@ class Security:
             row = store.conn.execute(
                 'SELECT expires_at FROM signup_invites WHERE issued_by=? AND consumed_at IS NULL '
                 'AND expires_at>? ORDER BY created_at DESC', (member['id'], now)).fetchone()
-        return {'active': bool(row), 'expires_at': row['expires_at'] if row else None}
+        return {'active': bool(row), 'expires_at': row['expires_at'] if row else None,
+                'unlimited': member.get('role') == 'admin'}
 
     def mint_member_signup(self, store, member):
-        """A regular member holds one outstanding invite at a time."""
-        if self.signup_invite_state(store, member)['active']:
+        """A regular member holds one outstanding invite at a time; an administrator is not capped."""
+        unlimited = member.get('role') == 'admin'
+        if not unlimited and self.signup_invite_state(store, member)['active']:
             raise Denied(409, 'You already have a signup link. Revoke it to make another.')
         token, expires = self.mint_signup(store, member['id'])
-        return {'url': self.signup_url(token), 'expires_at': expires}
+        return {'url': self.signup_url(token), 'expires_at': expires, 'unlimited': unlimited}
 
     def revoke_member_signup(self, store, member):
         with store.lock:
@@ -533,8 +535,25 @@ class Security:
             return ''
 
     def csrf(self, handler):
-        if handler.headers.get('Origin') != self.config()[2]:
-            raise Denied(403, 'Same-origin request required')
+        """Every POST must come from a page this app served.
+
+        The configured public origin is the canonical one, but the same site is also
+        opened on http://127.0.0.1:8470 while developing, on the machine's LAN address
+        from a phone and on a tailnet name — and a browser answers every one of those
+        with the Origin of the page it is on, so a single literal origin rejects the
+        app's own login form. A hostile page can only ever name itself, so accepting the
+        request's own scheme://host alongside the configured origin keeps this a CSRF
+        check instead of a domain allowlist. A rebinding page still cannot present our
+        session cookie: it is `__Host-hl_session`, bound to the origin that set it.
+        """
+        origin = handler.headers.get('Origin', '')
+        if origin == self.config()[2]:
+            return
+        parsed = urlparse(origin)
+        host = handler.headers.get('Host', '')
+        if host and parsed.scheme in ('http', 'https') and parsed.netloc == host:
+            return
+        raise Denied(403, 'Same-origin request required')
 
     def bounded(self, mapping, key, value):
         mapping[key] = value
