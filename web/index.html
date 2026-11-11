@@ -905,19 +905,29 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 
 <!-- One persistent app menu: sticky at the top on desktop, a fixed bottom bar on phones and in the installed PWA. -->
 <nav class="tabs" id="appnav" aria-label="Main">
-  <button class="tab on" data-view="queue">Queue</button>
-  <button class="tab" data-view="feed">Feed <span id="feedcount"></span></button>
-  <button class="tab" data-view="library" data-scope="shared" title="Repository">Repo</button>
-  <button class="tab" data-view="library" data-scope="mine">Library</button>
-  <span class="grow"></span>
-  <div class="navpanel" id="navpanel">
-    <button class="tab" id="btn-settings" data-admin-only>Settings</button>
-    <a href="/party" class="tab" style="text-decoration:none">Party</a>
-    <a href="/dj" class="tab navlink" style="text-decoration:none">Mixer</a>
-    <a href="/swipe" class="tab navlink" style="text-decoration:none">Swipe</a>
-    <button class="tab" id="exportbtn" title="Your saved songs as a ZIP with an M3U8 inside">Export library (.zip)</button>
+  <!-- The five destinations share one centred group. The secondary pages live behind
+       More on every tab; on the Library itself they also stay right-aligned in the row. -->
+  <div class="navmain">
+    <button class="tab on" data-view="queue">Queue</button>
+    <button class="tab" data-view="feed">Feed <span id="feedcount"></span></button>
+    <button class="tab" data-view="library" data-scope="shared" title="Repository">Repo</button>
+    <button class="tab" data-view="library" data-scope="mine">Library</button>
+    <button class="tab" id="btn-more" aria-expanded="false" aria-controls="navpanel"
+      aria-haspopup="menu" aria-label="More" title="More">More</button>
   </div>
-  <button class="tab" id="btn-more" aria-expanded="false" aria-controls="navpanel" aria-label="More" title="More"><span aria-hidden="true">…</span></button>
+  <div class="navquick" id="navquick" hidden>
+    <a href="/party" class="tab" style="text-decoration:none">Party</a>
+    <a href="/dj" class="tab" style="text-decoration:none">Mixer</a>
+    <a href="/swipe" class="tab" style="text-decoration:none">Swipe</a>
+    <button class="tab" data-export title="Your saved songs as a ZIP with an M3U8 inside">Export library (.zip)</button>
+  </div>
+  <div class="navpanel" id="navpanel" role="menu" aria-label="More pages">
+    <button class="tab" id="btn-settings" data-admin-only role="menuitem">Settings</button>
+    <a href="/party" class="tab" role="menuitem" style="text-decoration:none">Party</a>
+    <a href="/dj" class="tab navlink" role="menuitem" style="text-decoration:none">Mixer</a>
+    <a href="/swipe" class="tab navlink" role="menuitem" style="text-decoration:none">Swipe</a>
+    <button class="tab" id="exportbtn" data-export role="menuitem" title="Your saved songs as a ZIP with an M3U8 inside">Export library (.zip)</button>
+  </div>
 </nav>
 
 <main>
@@ -4636,6 +4646,7 @@ let deepLinkDone = false;
 function showLibraryTab(){
   for (const tab of document.querySelectorAll(".tab[data-view]"))
     tab.classList.toggle("on", tab.dataset.view === "library" && tab.dataset.scope === libraryScope);
+  paintNavQuick();
   $("#view-queue").hidden = true;
   $("#view-feed").hidden = true;
   $("#view-library").hidden = false;
@@ -6529,7 +6540,7 @@ $("#vercatalog-go").onclick = async event => {
 
 // The export is the member's own library, not the shared pool: a ZIP of the files they
 // saved with an M3U8 inside that indexes them, so it is usable wherever it is unpacked.
-$("#exportbtn").onclick = () => {
+function askExport(){
   const playlist = $("#libplaylist") ? $("#libplaylist").value : "";
   const ids = new Set([...(listeningSaves?.tracks || [])]);
   for (const row of listeningSaves?.playlist_tracks || []) ids.add(row.track_id);
@@ -6540,7 +6551,10 @@ $("#exportbtn").onclick = () => {
   $("#exp-confirm-text").textContent =
     `${ids.size} song${ids.size === 1 ? "" : "s"} from ${name} will download as a ZIP with an M3U8 inside.`;
   $("#dlg-export-confirm").showModal();
-};
+}
+// Both export controls (the row on Library, the More menu everywhere else) ask first: a
+// ZIP of a whole library is not something to start on a mis-click.
+document.querySelectorAll("[data-export]").forEach(b => b.onclick = askExport);
 $("#dlg-export-confirm").addEventListener("close", event => {
   if (event.target.returnValue !== "go") return;
   const playlist = $("#libplaylist") ? $("#libplaylist").value : "";
@@ -7905,12 +7919,37 @@ function closeMore(){
   $("#appnav").classList.remove("more-open");
   $("#btn-more").setAttribute("aria-expanded", "false");
 }
+// The desktop dropdown hangs off the More button, not off the page edge, so its left and
+// top are measured from the button. On a phone the panel is the fixed bottom sheet and
+// needs none of this.
+function positionMoreMenu(){
+  const btn = $("#btn-more"), panel = $("#navpanel");
+  if (!btn || !panel || innerWidth <= 760) return;
+  const b = btn.getBoundingClientRect();
+  const width = panel.offsetWidth || 216;
+  // Right-aligned to the button, never off the screen edge.
+  panel.style.left = Math.max(8, Math.min(b.right - width, innerWidth - width - 8)) + "px";
+  panel.style.top = (b.bottom + 6) + "px";
+}
+function paintNavQuick(){
+  const quick = $("#navquick");
+  if (!quick) return;
+  // Only a wide row has room for it next to the centred tabs (the CSS says the same at
+  // 1180 px); a phone never shows it at all.
+  const on = document.querySelector('.tab[data-view="library"][data-scope="mine"].on');
+  quick.hidden = !on || innerWidth < 1180;
+}
 $("#btn-more").onclick = (event) => {
   event.stopPropagation();
   const open = !$("#appnav").classList.contains("more-open");
   $("#appnav").classList.toggle("more-open", open);
   $("#btn-more").setAttribute("aria-expanded", String(open));
+  if (open) positionMoreMenu();
 };
+window.addEventListener("resize", () => {
+  paintNavQuick();
+  if ($("#appnav").classList.contains("more-open")) positionMoreMenu();
+});
 document.addEventListener("click", (event) => {
   if (!$("#appnav").classList.contains("more-open")) return;
   if ($("#navpanel").contains(event.target)) return;
@@ -7929,6 +7968,7 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => {
     closeMore();
     document.querySelectorAll(".tab[data-view]").forEach(t =>
       t.classList.toggle("on", t === tab));
+    paintNavQuick();
     $("#view-queue").hidden = view !== "queue";
     $("#view-feed").hidden = view !== "feed";
     $("#view-library").hidden = view !== "library";
