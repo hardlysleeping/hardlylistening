@@ -6,6 +6,17 @@ Built off the part of [HardlyWatching](../hardlywatching) that already drives
 `yt-dlp` — one SQLite database, one worker thread, one honest pace — with the
 Instagram machinery left behind.
 
+<p>
+  <img src="docs/screenshots/library.png" alt="Library: songs and albums as artwork tiles">
+</p>
+<p>
+  <img src="docs/screenshots/player.png" width="49%" alt="Fullscreen player: record, transport, save, queue, visualizer and volume">
+  <img src="docs/screenshots/queue.png" width="49%" alt="Play queue: rows to drag into order">
+</p>
+
+The screenshots are a throwaway instance with invented songs and generated
+artwork — no real library appears in them.
+
 ## What it takes
 
 * **SoundCloud** — sets and user pages, read natively by yt-dlp.
@@ -18,6 +29,58 @@ Instagram machinery left behind.
   re-pointed at any URL by hand.
 * Anything else yt-dlp understands (Bandcamp albums, YouTube playlists, a single
   track URL).
+
+## Library and Repository
+
+Two scopes over the one database:
+
+* **Repository** is the shared pool: every track whose file is on disk, for everyone on
+  the instance.
+* **Library** is yours: the songs and playlists you saved, plus personal folders you can
+  nest.
+
+Both browse five ways — **songs, albums, artists, playlists, folders** — with search,
+sort and sort direction, a column slider (1–8) and three layouts: cards, covers only,
+and list. A card's save button adds the song or album in one click. Every song, album
+and playlist carries upvote/downvote counts and a discussion thread, and the pinned
+carousel at the top is per member.
+
+`Export library (.zip)` writes your saved songs as a ZIP with an `.m3u8` inside whose
+paths are relative to the archive, so the unzipped folder works anywhere. The same
+catalogue is also served over the Subsonic / OpenSubsonic API, scoped to one device's
+member, so a phone player can stream it; the parts Subsonic has and this app does not
+(chat, jukebox, transcoding, sonic analysis, podcast downloads, user administration)
+answer Subsonic error 30 rather than pretending.
+
+## The player
+
+One audio element drives the bar, the fullscreen view and the queue, so there is no
+second player to drift out of sync.
+
+* **The bar** keeps like, the library save control, artwork, title, transport, shuffle
+  and repeat, mute, a volume fader and the lyrics button. Click the title or the expand
+  button for fullscreen.
+* **Fullscreen** turns the artwork into a record you can drag to scrub, then title,
+  artist and album, a seek bar with both times, and one foot row: library save, like,
+  play queue, visualizer style and volume. The volume fader is desktop only — a phone
+  has hardware buttons and its single column has no spare lane.
+* **The play queue** is the same element on both surfaces: it is physically moved into
+  the fullscreen column rather than floated over it, so the page rearranges around it
+  instead of being covered. Rows drag to reorder — press and hold on a phone, grab the
+  handle with a mouse — and a lifted row owns the gesture, so the list cannot scroll
+  out from under the drag. `⋯` moves a row to the top or the bottom, or removes it.
+* **Saving is a two-step remove.** A song in your library shows a check. The first click
+  turns it into a minus; only the second click removes it, so a stray tap on a card
+  cannot delete a song. The armed minus lets go after four seconds, on Escape, or on a
+  click anywhere else, and only one control is armed at a time.
+* **The visualizer** has five styles with live knobs (bar density, smoothing, mirror,
+  glow). It shares a column with the queue, so opening one closes the other.
+* **Where you left off** is remembered — queue, current song and position — and comes
+  back paused, because a browser will not start audio on its own.
+
+Both volume faders (bar and fullscreen) are painted from the audio element rather than
+from each other, so they cannot disagree: muting empties both fills, and dragging either
+fader clears the mute without losing the level.
 
 ## Lyrics and karaoke display
 
@@ -106,6 +169,24 @@ not implemented.
   otherwise the playlist that first brought the track in. Adding the same track
   to a second playlist adds membership, not a second copy of the audio.
 
+## Feed
+
+Following an artist — from their page or the feed's own search — turns their new tracks
+into **feed items** and nothing else. A feed item is expanded and queued only when you
+click it; ignoring one keeps it ignored, and "new" is a seen-set rather than a timestamp,
+so a pinned or re-ordered provider listing cannot flood the feed.
+
+## Party, Swipe, and the other pages
+
+* `/party` — a room that outlives any one browser tab. Members create it, guests join
+  through a 24-hour guest link that never becomes an account and can never touch the
+  normal API. The shared queue ranks by votes, the current track can be skipped once
+  more than half the people present agree (a room of one skips instantly), chat keeps
+  the last 500 messages, and one member holds a 30-second host lease to advance playback.
+* `/swipe` — one Repository song at a time: right adds it to your library, left drops
+  it, up adds and likes it. Tap plays; the arrow keys do the same.
+* `/dj` — the mixer, described below.
+
 ## Mixer (/dj)
 
 A two-deck board that plays your own library, so the EQ and filters do real DSP:
@@ -163,11 +244,32 @@ downloaders/ytdlp.py   command building, search + scoring, error classification
 engine/queue.py        one worker: retries, provider-wide 429 cooldown, pacing
 library/store.py       the canonical path (Artist/Collection/NN - Title)
 server.py              stdlib HTTP server + JSON API (no framework)
-web/index.html         the whole UI — plain DOM, polls /api/state
+web/index.html         the main UI — plain DOM, polls /api/library
+web/dj.html            the mixer board
+web/party.js           the room client (queue, votes, chat, host lease)
+web/swipe.js           one Repository card at a time
+subsonic.py            Subsonic / OpenSubsonic surface for phone players
 ```
 
 `download_jobs` holds the state of every track: `queued`, `resolving`,
 `downloading`, `retry_wait`, `completed`, `failed`, `unavailable`, `cancelled`.
 A track's status is its job's status — there is no second copy of it on the track
-row. `watches` and `feed_items` exist in the schema for the discovery layer;
-nothing writes them yet.
+row. `watches` and `feed_items` back the Feed: a subscription writes items and
+never downloads, and only a click turns one into a job.
+
+## Tests
+
+`python3 -m unittest discover -s tests -v` covers the server; the UI tests are
+Playwright scripts that serve `web/` over a stub API and drive a headless browser:
+
+```sh
+export NODE_PATH=/path/to/node_modules     # wherever playwright is installed
+node tests/test_library_save_control.cjs   # check → minus → remove
+node tests/test_volume_faders.cjs          # bar and fullscreen fader stay in step
+node tests/test_queue_reorder_touch.cjs    # drag a row on a touch screen
+node tests/test_fullscreen_queue_toggle.cjs # open looks open, shut looks shut
+node tests/visual/snap.cjs                 # every screen against tests/visual/baseline
+```
+
+`snap.cjs --update` rewrites the baselines; look at every changed screenshot before
+accepting one, because a diff outside the element you touched is a regression.

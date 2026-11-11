@@ -1050,7 +1050,9 @@ dialog.smallconfirm .dlg-foot{display:flex;gap:8px;justify-content:flex-end;marg
     radial-gradient(55% 40% at 85% 82%,color-mix(in srgb,#7aa2ff 32%,transparent),transparent 72%),
     linear-gradient(180deg,#0b0b10d9 0%,#0b0b10b3 45%,#0b0b10f2 100%);
   mix-blend-mode:screen;opacity:.75}
-#player-full.has-art{background:linear-gradient(180deg,#101014cc,#0c0c11f5)}
+#player-full.has-art{background:linear-gradient(180deg,#101014,#0c0c11)}
+/* The wash is a layer of its own (`::before`), so the surface under it has no reason to be
+   translucent: at 80% the page showed through the modal as ghost text over the record. */
 #player.has-art{background:rgba(18,19,25,.72)}
 /* The compact pill is a small floating object, not a full-screen surface: the blurred copy
    of the cover is clipped to the pill instead of blooming out around it (on a phone that
