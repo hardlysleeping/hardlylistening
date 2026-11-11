@@ -5,7 +5,7 @@
 //   node tests/visual/library.cjs --update     rewrite the baselines
 //   node tests/visual/library.cjs              compare, exit 1 on any changed pixel
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("../_pw.cjs");
 const ROOT = path.join(__dirname, "..", "..", "web");
 const OUT = path.join(__dirname, "library");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };

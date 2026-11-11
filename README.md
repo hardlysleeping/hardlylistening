@@ -269,13 +269,22 @@ never downloads, and only a click turns one into a job.
 Playwright scripts that serve `web/` over a stub API and drive a headless browser:
 
 ```sh
-export NODE_PATH=/path/to/node_modules     # wherever playwright is installed
 node tests/test_library_save_control.cjs   # check → minus → remove
 node tests/test_volume_faders.cjs          # bar and fullscreen fader stay in step
 node tests/test_queue_reorder_touch.cjs    # drag a row on a touch screen
 node tests/test_fullscreen_queue_toggle.cjs # open looks open, shut looks shut
+node tests/visual/library.cjs              # library list, cards, and the playing row
 node tests/visual/snap.cjs                 # every screen against tests/visual/baseline
+```
+
+Playwright is not vendored here. `tests/_pw.cjs` resolves it once for the visual tests: an
+explicit `PW_PLAYWRIGHT`, a local install, then the shared one under `~/apps`. The other
+scripts still expect it on `NODE_PATH`:
+
+```sh
+export NODE_PATH=/path/to/node_modules     # wherever playwright is installed
 ```
 
 `snap.cjs --update` rewrites the baselines; look at every changed screenshot before
 accepting one, because a diff outside the element you touched is a regression.
+`library.cjs --update` does the same for the library baselines in `tests/visual/library/`.

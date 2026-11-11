@@ -7,7 +7,7 @@
 //   node tests/visual/snap.cjs              compare, exit 1 on any changed pixel
 //   node tests/visual/snap.cjs --selfcheck  capture twice and prove the baseline is stable
 const fs = require("fs"), path = require("path"), http = require("http"), assert = require("assert");
-const { chromium } = require("playwright");
+const { chromium } = require("../_pw.cjs");
 const ROOT = path.join(__dirname, "..", "..", "web");
 const OUT = path.join(__dirname, "baseline");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
