@@ -1,0 +1,1325 @@
+#feedartistpage .backbtn{
+  margin-bottom:10px
+}
+
+.fanav .backbtn{
+  margin-bottom:0
+}
+
+.fapalbumtable.songtable .songrow .send{
+  display:flex;
+  grid-area:more
+}
+
+.fapalbumtable.songtable .songrow .send .sdl-grab{
+  width:30px;
+  height:30px;
+  padding:0;
+  display:inline-grid;
+  place-items:center
+}
+
+.acard.removed .thumb{
+  filter:grayscale(.6) brightness(.72)
+}
+
+.songrow .send{
+  display:flex;
+  gap:2px;
+  align-items:center;
+  justify-content:flex-end
+}
+
+.songrow .sdl{
+  color:var(--dim);
+  text-decoration:none;
+  font-size:14px;
+  padding:0 3px;
+  opacity:.6
+}
+
+.songrow .sdl:hover{
+  color:var(--accent);
+  opacity:1
+}
+
+.songrow.absent{
+  opacity:.55
+}
+
+.songrow.absent:hover{
+  opacity:.85
+}
+
+.songrow .send .sdl-grab{
+  display:inline-grid;
+  place-items:center;
+  width:26px;
+  height:26px;
+  min-width:26px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--panel2);
+  color:var(--dim);
+  cursor:pointer;
+  padding:0
+}
+
+.songrow .send .sdl-grab:hover{
+  color:var(--accent);
+  border-color:#2f6b57
+}
+
+.songrow .send .sdl-grab svg{
+  display:block
+}
+
+.songhead,.songrow{
+  display:grid;
+  grid-template-columns:32px 40px minmax(0,2.2fr) minmax(0,1.3fr) minmax(0,1.3fr) 96px 76px 34px;
+  gap:10px;
+  align-items:center;
+  padding:0 14px
+}
+
+.songhead::after{
+  content:"";
+  position:absolute;
+  left:14px;
+  right:14px;
+  bottom:0;
+  height:1px;
+  background:var(--line);
+  pointer-events:none
+}
+
+.songhead > *{
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.songhead > span:first-child{
+  text-align:center
+}
+
+.songhead .hcell{
+  display:flex;
+  width:100%;
+  align-items:center;
+  gap:4px;
+  background:none;
+  border:0;
+  padding:0;
+  font:inherit;
+  letter-spacing:inherit;
+  text-transform:inherit;
+  color:inherit;
+  cursor:pointer;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.songhead .hcell:hover{
+  color:var(--text)
+}
+
+.songhead .hcell.on{
+  color:var(--accent)
+}
+
+.songhead .hcell:focus-visible{
+  outline:2px solid var(--accent2);
+  outline-offset:2px;
+  border-radius:4px
+}
+
+.songhead .harrow{
+  font-style:normal;
+  font-size:11px;
+  line-height:1
+}
+
+.ghost.lsave{
+  width:32px;
+  height:32px;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  display:inline-grid;
+  place-items:center;
+  white-space:nowrap;
+  flex:0 0 auto;
+  box-sizing:border-box
+}
+
+.ghost.lsave.on{
+  color:var(--accent);
+  border-color:#2f6b57;
+  background:#16241f
+}
+
+.ghost.lsave.armed{
+  color:var(--err);
+  border-color:#6b2f37;
+  background:#241a1e
+}
+
+.ghost.lsave.armed svg{
+  display:block
+}
+
+.songrow.removed .st,.songrow.removed .sartist,.songrow.removed .listtags{
+  opacity:.72
+}
+
+.songrow.removed .idx{
+  color:var(--dim)
+}
+
+.songcard.removed .thumb{
+  filter:grayscale(.6) brightness(.72)
+}
+
+.ghost.lsave svg{
+  display:block
+}
+
+@media (max-width:760px){ .ghost.lsave{width:34px;height:34px} }
+
+.songhead .h-votes{
+  justify-content:center
+}
+
+.songhead .h-time{
+  justify-content:flex-end
+}
+
+.songhead .h-title{
+  color:#cdcdd8
+}
+
+.songrow::after{
+  content:"";
+  position:absolute;
+  left:14px;
+  right:14px;
+  bottom:0;
+  height:1px;
+  background:#222229;
+  pointer-events:none
+}
+
+.songtable > .songrow:last-child::after{
+  display:none
+}
+
+.songrow > *{
+  min-width:0
+}
+
+.songtable{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px
+}
+
+.songtable > .songhead + .songrow{
+  border-top-left-radius:13px;
+  border-top-right-radius:13px
+}
+
+.songtable > .songrow:last-child{
+  border-bottom-left-radius:13px;
+  border-bottom-right-radius:13px
+}
+
+.songrow:nth-child(even){
+  background:#1a1a21
+}
+
+.songrow.focus{
+  outline:2px solid #58d3a8;
+  outline-offset:-2px;
+  background:#58d3a814
+}
+
+.songrow:last-child{
+  border-bottom:0
+}
+
+.songrow:hover{
+  background:var(--panel2)
+}
+
+.songrow.gone{
+  background:linear-gradient(90deg,#241d13,#1a1710 60%);
+  box-shadow:inset 0 0 0 1px #e0a24a55,0 0 16px -6px #e0a24a88
+}
+
+.songrow.gone .st b{
+  color:#ffe2b8
+}
+
+.gone-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-left:8px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:10.5px;
+  font-weight:600;
+  letter-spacing:.02em;
+  color:#ffd9a1;
+  background:#3a2a14;
+  border:1px solid #6f5527;
+  white-space:nowrap
+}
+
+.gone-badge::before{
+  content:"";
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#e0a24a;
+  box-shadow:0 0 6px #e0a24a
+}
+
+.songrow .idx{
+  color:var(--dim);
+  font-variant-numeric:tabular-nums;
+  font-size:12px;
+  text-align:right
+}
+
+.songrow .thumb{
+  width:34px;
+  height:34px;
+  border-radius:6px;
+  background:var(--panel2) center/cover;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  font-size:10px;
+  color:var(--dim);
+  position:relative
+}
+
+.songrow.playing .idx{
+  color:var(--accent)
+}
+
+.songrow.playing .idx svg{
+  display:block;
+  margin-left:auto
+}
+
+.songrow .thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover
+}
+
+.songrow .st{
+  min-width:0
+}
+
+.songrow .sttext{
+  min-width:0
+}
+
+.songrow .rowactions{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:5px
+}
+
+.songrow .rowactions:empty{
+  display:none
+}
+
+.songrow .st b{
+  font-weight:600;
+  display:block;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.songrow .sartist,.songrow .salbum{
+  color:var(--dim);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:12.5px
+}
+
+.songrow .splay{
+  background:transparent;
+  border:0;
+  color:var(--text);
+  cursor:pointer;
+  opacity:.55;
+  display:grid;
+  place-items:center
+}
+
+.songrow:hover .splay,.songrow.playing .splay{
+  opacity:1;
+  color:var(--accent)
+}
+
+.songrow .splay.off,.songrow .splay[disabled]{
+  opacity:.5;
+  color:var(--dim);
+  cursor:not-allowed;
+  position:relative
+}
+
+.songrow .splay.off::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:74%;
+  height:1.5px;
+  background:currentColor;
+  border-radius:2px;
+  transform:translate(-50%,-50%) rotate(-45deg)
+}
+
+.songrow .sdur{
+  color:var(--dim);
+  font-size:12.5px;
+  text-align:right;
+  font-variant-numeric:tabular-nums
+}
+
+@media(max-width:700px){
+.songrow .sdur{grid-column:4;grid-row:1}
+.songrow .send{grid-column:4;grid-row:2}
+}
+
+.backbtn{
+  background:var(--panel);
+  border:1px solid var(--line);
+  color:var(--text);
+  border-radius:9px;
+  padding:6px 11px;
+  font-size:12.5px;
+  cursor:pointer;
+  margin-bottom:16px
+}
+
+.backbtn:hover{
+  background:var(--panel2)
+}
+
+.tracklist .songrow{
+  border-radius:0
+}
+
+@media (max-width:760px){
+.songhead{display:none}
+.songrow{grid-template-columns:26px 38px minmax(0,1fr) 56px;gap:8px;padding:9px 10px}
+.songrow::after{left:10px;right:10px}
+}
+
+@media (max-width:760px){
+.songrow .sdur{grid-column:4;grid-row:1}
+.songrow .send{grid-column:4;grid-row:2}
+/* One line for save + like + pin across the row: the pair used to wrap with
+   "Pin" alone under the heart when the cell was a few pixels too narrow. */
+.songrow:not(.songcard) .st{display:contents}
+.songrow:not(.songcard) .sttext{grid-column:3;grid-row:1;min-width:0}
+.songrow:not(.songcard) .rowactions{grid-column:3 / span 2;grid-row:2;display:flex;flex-wrap:nowrap;gap:6px;margin-top:0;min-width:0;align-items:center}
+.songrow:not(.songcard) .rowactions .lsave{flex:0 0 auto;width:34px;height:34px;min-height:0;padding:0}
+.songrow:not(.songcard) .rowactions .preference{min-height:32px;padding:3px 8px}
+}
+
+@media (max-width:760px){
+.songrow:not(.songcard) .send{grid-row:3}
+}
+
+.songrow{
+  min-height:54px;
+  cursor:default;
+  font-size:13.5px;
+  position:relative
+}
+
+.songhead{
+  color:var(--dim);
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  font-weight:600;
+  height:34px;
+  border-bottom:0;
+  background:var(--panel2);
+  position:sticky;
+  top:var(--hdr,78px);
+  z-index:6;
+  border-top-left-radius:13px;
+  border-top-right-radius:13px;
+  padding-top:10px;
+  padding-bottom:10px
+}
+
+.sdl{
+  min-width:28px
+}
+
+.songcard .thumb:empty::after{
+  content:'♫'
+}
+
+.songcard .thumb .snext{
+  position:absolute;
+  top:var(--chip);
+  left:var(--chip);
+  z-index:3;
+  width:30px;
+  height:30px;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#0b0c11cc;
+  color:#eef1f5;
+  border:1px solid #ffffff2e;
+  backdrop-filter:blur(6px);
+  opacity:0;
+  transition:opacity .15s ease
+}
+
+.songcard:hover .thumb .snext,.songcard:focus-within .thumb .snext{
+  opacity:1
+}
+
+@media (hover:none){.songcard .thumb .snext{opacity:1}}
+
+.songcard .st{
+  display:contents
+}
+
+.songcard .lsave{
+  position:static;
+  right:auto;
+  bottom:auto;
+  z-index:3;
+  width:40px;
+  height:40px;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  font-size:0;
+  border-radius:12px;
+  box-shadow:0 2px 10px #0006
+}
+
+.songcard .lsave svg{
+  width:18px;
+  height:18px
+}
+
+.songcard .sartist{
+  grid-area:artist;
+  display:block;
+  min-width:0
+}
+
+.songcard .salbum{
+  grid-area:album;
+  display:block;
+  min-width:0;
+  text-align:right;
+  color:var(--dim);
+  opacity:.8;
+  padding-right:0
+}
+
+.songcard .idx{
+  display:none
+}
+
+.songcard .sdur{
+  grid-area:art;
+  align-self:end;
+  justify-self:start;
+  z-index:2;
+  margin:0 0 6px 6px;
+  padding:2px 7px;
+  border-radius:7px;
+  background:#0b0c11cc;
+  border:1px solid #ffffff24;
+  color:#eef1f5;
+  font-size:11px;
+  line-height:1.5
+}
+
+.songcard .send{
+  grid-area:art;
+  align-self:end;
+  justify-self:end;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:0;
+  padding:0 6px 6px 0;
+  z-index:2
+}
+
+.songcard .splay{
+  opacity:1;
+  min-width:46px;
+  min-height:46px;
+  width:46px;
+  height:46px;
+  background:#0b0c11cc;
+  color:#eef1f5;
+  border:0;
+  box-shadow:0 2px 10px #0007;
+  backdrop-filter:blur(6px);
+  border-radius:50%;
+  /* Album cards are .acard, not .songrow, so the shared row rule's centring never reached them: the button was display:block and the glyph sat against its left edge. */ display:grid;
+  place-items:center
+}
+
+.songcard .splay svg{
+  width:19px;
+  height:19px
+}
+
+.songcard.playing .splay{
+  background:var(--accent);
+  color:#08110d;
+  border-color:transparent
+}
+
+.songcard .sdl{
+  opacity:1;
+  display:inline-grid;
+  place-items:center;
+  min-width:32px;
+  min-height:32px;
+  font-size:15px;
+  background:#0b0c11cc;
+  color:#eef1f5;
+  border:0;
+  box-shadow:0 2px 10px #0007;
+  border-radius:50%;
+  backdrop-filter:blur(6px);
+  text-decoration:none
+}
+
+@media(max-width:760px){
+  .songcard .lsave{width:38px;height:38px;border-radius:11px}
+  .songcard .salbum{padding-right:0}
+  .songcard .lsave svg{width:17px;height:17px}
+  .songcard .st b{font-size:12.5px}
+}
+
+html[data-cardstyle="compact"] .songcard:not(.open) .st b{
+  color:#f2f4f8
+}
+
+html[data-cardstyle="compact"] .songcard:not(.open) .sartist, html[data-cardstyle="compact"] .songcard:not(.open) .salbum, html[data-cardstyle="compact"] .songcard:not(.open) .votes, html[data-cardstyle="compact"] .songcard:not(.open) .rowactions, html[data-cardstyle="compact"] .songcard:not(.open) .pref-pair, html[data-cardstyle="compact"] .songcard:not(.open) .send, html[data-cardstyle="compact"] .songcard:not(.open) .sdur, html[data-cardstyle="compact"] .songcard:not(.open) .thumb .snext{
+  display:none
+}
+
+html[data-cols-tier="dense"] .songcard .lsave{
+  position:static;
+  margin-left:auto
+}
+
+html[data-cols-tier="dense"] .songcard .salbum{
+  padding-right:0
+}
+
+html[data-cols-tier="dense"] .songcard .st b{
+  font-size:12.5px
+}
+
+html[data-cols-tier="dense"] .songcard .sartist, html[data-cols-tier="dense"] .songcard .salbum{
+  font-size:11.5px
+}
+
+@container (max-width:380px){
+  .songcard .lsave{width:42px;height:42px;border-radius:13px}
+  .songcard .lsave svg{width:18px;height:18px}
+}
+
+@container (max-width:280px){
+  .songcard .lsave{width:37px;height:37px;border-radius:12px}
+  .songcard .lsave svg{width:17px;height:17px}
+  .songcard .thumb{--chip:4px}
+  .songcard .thumb .snext{width:26px;height:26px;min-width:0;min-height:0}
+  .songcard .sdur{margin:0 0 4px 4px}
+  .songcard .send{padding:0 4px 4px 0}
+}
+
+@container (max-width:150px){
+  .songcard .lsave{width:33px;height:33px;border-radius:11px}
+  .songcard .lsave svg{width:16px;height:16px}
+}
+
+@container (max-width:150px){
+  .songcard .sdur{font-size:10px;padding:1px 5px}
+  .songcard .send{gap:4px}
+  .songcard .splay{width:37px;height:37px;min-width:37px;min-height:37px}
+  .songcard .sdl{min-width:26px;min-height:26px;font-size:13px}
+}
+
+/* A card this narrow cannot hold the clock and the play pair side by side any more;
+   the clock goes rather than sitting under the buttons. */
+@container (max-width:112px){
+  .songcard .sdur{display:none}
+}
+
+@container (max-width:80px){
+  .songcard .lsave{width:28px;height:28px;border-radius:10px}
+  .songcard .lsave svg{width:15px;height:15px}
+  .songcard .send{gap:3px;padding:0 3px 3px 0}
+  .songcard .sdl{min-width:22px;min-height:22px;font-size:12px}
+  .songcard .splay{width:34px;height:34px;min-width:34px;min-height:34px}
+  .songcard .thumb{--chip:3px}
+  .songcard .thumb .snext{width:22px;height:22px;min-width:0;min-height:0}
+  .songcard .thumb .snext svg{width:12px;height:12px}
+}
+
+/* The last step: at this width only the play button fits on the art. Downloading and
+   queueing stay reachable from the card's own menu. */
+@container (max-width:62px){
+  .songcard .sdl{display:none}
+  .songcard .splay{width:34px;height:34px;min-width:34px;min-height:34px}
+}
+
+.songmenu button{
+  text-align:left;
+  background:transparent;
+  color:var(--text);
+  border:0;
+  border-radius:8px;
+  padding:8px 12px
+}
+
+.songmenu button:hover,.songmenu button:focus{
+  background:var(--panel2)
+}
+
+.songmenu{
+  position:fixed;
+  z-index:1000;
+  display:grid;
+  gap:4px;
+  min-width:200px;
+  max-width:calc(100vw - 16px);
+  max-height:min(70vh,560px);
+  overflow:auto;
+  padding:8px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 12px 32px #0008;
+  overflow-y:auto;
+  overscroll-behavior:contain
+}
+
+@media(max-width:560px){
+.folderhead .backbtn{width:100%;text-align:left}
+}
+
+.qsegtabs{
+  margin:0 0 14px
+}
+
+#songsearch-results{
+  display:flex;
+  flex-direction:column;
+  gap:6px
+}
+
+.srhit{
+  display:grid;
+  grid-template-columns:48px minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel)
+}
+
+.srhit img,.srhit .noart{
+  width:48px;
+  height:48px;
+  border-radius:8px;
+  object-fit:cover;
+  background:var(--panel2);
+  display:grid;
+  place-items:center;
+  color:var(--dim);
+  font-size:18px
+}
+
+.srhit .srt{
+  min-width:0
+}
+
+.srhit .srt b{
+  display:block;
+  font-size:13px;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.srhit .srt small{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  color:var(--dim);
+  font-size:11.5px;
+  margin-top:2px
+}
+
+.srhit button{
+  min-height:34px;
+  padding:6px 12px;
+  font-size:12.5px
+}
+
+@media(max-width:600px){.srhit{grid-template-columns:40px minmax(0,1fr) auto;gap:8px;padding:7px 8px}
+  .srhit img,.srhit .noart{width:40px;height:40px}}
+
+.qrevtabs{
+  margin:0 0 14px
+}
+
+.acard .thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block
+}
+
+.acard .sartist{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.acard .salbum{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:8.5em;
+  justify-self:end
+}
+
+.detaillist{
+  background:none;
+  border:0;
+  border-radius:0;
+  overflow:visible;
+  margin:0
+}
+
+.songcard .st b{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:13px;
+  display:block;
+  min-width:0
+}
+
+.songcard .sartist,.songcard .salbum{
+  font-size:12.5px;
+  line-height:19px;
+  height:19px
+}
+
+.plcard .pacts .lsave{
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  border-radius:10px
+}
+
+.plcard .pacts .sdl-dl{
+  width:32px;
+  height:32px
+}
+
+.songcard .thumb{
+  grid-area:art;
+  width:100%;
+  height:auto;
+  aspect-ratio:1;
+  border-radius:9px;
+  font-size:34px;
+  --chip:6px;
+  position:relative;
+  overflow:hidden
+}
+
+.sdl-dl{
+  display:grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  min-width:32px;
+  min-height:32px;
+  padding:0;
+  border-radius:50%;
+  background:var(--panel2);
+  border:1px solid var(--line);
+  color:var(--text);
+  text-decoration:none;
+  opacity:.9
+}
+
+.sdl-dl:hover{
+  opacity:1;
+  border-color:var(--accent);
+  color:var(--accent)
+}
+
+.sdl-dl[disabled]{
+  opacity:.4
+}
+
+.covergrid .covercell .marks{
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:3;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:2px;
+  padding:4px 4px;
+  border-radius:9px;
+  background:#08090dcc;
+  backdrop-filter:blur(3px);
+  pointer-events:none;
+  box-shadow:0 2px 6px #0007
+}
+
+html[data-gridstyle="hex"] .covercell .marks{
+  top:26%;
+  right:8%
+}
+
+.songtable .songhead{
+  display:none
+}
+
+.songtable .songrow .idx{
+  display:none
+}
+
+.songtable .songrow .thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block
+}
+
+.songtable .songrow .sttext{
+  display:block;
+  min-width:0
+}
+
+.songtable .songrow .st b{
+  display:block;
+  font-size:13px;
+  line-height:1.25;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.songtable .songrow .salbum, .songtable .songrow .votes, .songtable .songrow .rowactions, .songtable .songrow .send .sdl{
+  display:none
+}
+
+.songtable .songrow .splay{
+  width:32px;
+  height:32px;
+  min-width:32px;
+  min-height:32px
+}
+
+.songtable .songrow .splay svg{
+  width:14px;
+  height:14px
+}
+
+.songtable .songrow .thumb{
+  grid-area:art;
+  width:44px;
+  height:44px;
+  border-radius:9px;
+  overflow:hidden
+}
+
+.songtable .songrow .st .sartist{
+  display:none
+}
+
+.songtable .songrow .send{
+  grid-area:act;
+  display:none;
+  align-items:center;
+  gap:8px;
+  margin:0;
+  padding:0
+}
+
+.songtable.grabable .songrow.absent .send{
+  display:flex;
+  grid-area:more
+}
+
+.songtable.grabable .songrow.absent .send .splay{
+  display:none
+}
+
+.songtable.grabable .songrow.absent .rowmore{
+  display:none
+}
+
+.songtable .songrow .rowmore:hover{
+  color:var(--text)
+}
+
+.songtable .songrow{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) auto;
+  grid-template-areas:"art st more" "art sartist more";
+  align-items:center;
+  gap:10px;
+  padding:8px 6px 8px 8px;
+  min-height:0;
+  height:60px;
+  grid-template-rows:auto auto
+}
+
+.songtable .songrow .st{
+  grid-area:st;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  min-width:0;
+  gap:1px;
+  height:auto;
+  padding-top:2px
+}
+
+.songtable .songrow .sartist{
+  font-size:11.5px;
+  line-height:1.2;
+  color:var(--dim);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  grid-area:sartist;
+  display:block;
+  height:auto;
+  margin:0 0 3px
+}
+
+.songtable .songrow .sdur{
+  font-size:11px;
+  color:var(--dim);
+  white-space:nowrap;
+  display:none
+}
+
+.songtable .songrow .rowmore{
+  grid-area:more;
+  display:grid;
+  place-items:center;
+  width:40px;
+  height:40px;
+  min-width:40px;
+  min-height:40px;
+  padding:0;
+  border:0;
+  background:none;
+  color:var(--dim);
+  font-size:20px;
+  line-height:1;
+  cursor:pointer;
+  justify-self:end
+}
+
+.qrowmenu{
+  min-width:170px
+}
+
+/* The playing row is drawn by one layer: its own border. It used to fake the edge with an
+   inset shadow while a pseudo-element drew the separator underneath, so the two could fight
+   and a neighbouring separator could cross the edge. A real border cannot be overdrawn by
+   the row's own separator, which stays off, and the accent right edge is part of the same
+   border instead of a second drawing. */
+.songrow.playing:not(.songcard){
+  background:linear-gradient(270deg,color-mix(in srgb,var(--accent) 20%,transparent) 0%, color-mix(in srgb,var(--accent) 11%,transparent) 40%, color-mix(in srgb,var(--accent) 4%,transparent) 60%, transparent 75%);
+  border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);
+  border-right:3px solid var(--accent);
+  border-radius:8px
+}
+
+.songrow.playing:not(.songcard)::after{
+  display:none
+}
+
+.songrow.playing:not(.songcard) .st b{
+  color:var(--accent);
+  font-weight:650
+}
+
+.songrow.playing:not(.songcard) .sartist{
+  color:color-mix(in srgb,var(--text) 78%,var(--accent))
+}
+
+.songrow:not(.songcard){
+  row-gap:0;
+  padding-top:9px;
+  padding-bottom:9px;
+  padding:4px 6px 4px 6px;
+  column-gap:8px;
+  min-height:0
+}
+
+.songrow:not(.songcard) .thumb{
+  width:38px;
+  height:38px;
+  border-radius:7px
+}
+
+.songrow:not(.songcard) .st b{
+  line-height:1.15;
+  font-size:13px
+}
+
+.songrow:not(.songcard) .sartist{
+  line-height:1.15;
+  font-size:11.5px
+}
+
+.songrow:not(.songcard) .sdur,.songrow:not(.songcard) .salbum{
+  font-size:11.5px
+}
+
+.songrow:not(.songcard) .splay{
+  width:34px;
+  height:34px;
+  min-height:0
+}
+
+.songtable .songrow:not(.songcard) .rowmore{
+  height:26px;
+  min-height:0;
+  width:26px;
+  padding:0;
+  font-size:15px
+}
+
+.songtable .songrow:not(.songcard) .st, .songtable .songrow:not(.songcard) .st b{
+  line-height:1.12
+}
+
+.songtable .songrow:not(.songcard) .thumb{
+  width:34px;
+  height:34px;
+  border-radius:6px
+}
+
+.songtable .songrow:not(.songcard) .splay{
+  width:30px;
+  height:30px;
+  min-height:0
+}
+
+.songtable .songrow:not(.songcard) .marks{
+  position:absolute;
+  left:3px;
+  top:50%;
+  z-index:2;
+  transform:translateY(-50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:2px;
+  pointer-events:none
+}
+
+.songtable .songrow:not(.songcard) .mark{
+  display:block;
+  line-height:1
+}
+
+.songtable .songrow:not(.songcard) .mark.like{
+  color:#ff4d6d;
+  font-size:11px;
+  font-weight:700
+}
+
+.songtable .songrow:not(.songcard) .mark.pin{
+  color:#5ea8ff;
+  display:grid;
+  place-items:center
+}
+
+.songtable .songrow:not(.songcard) .st{
+  gap:0;
+  justify-content:center
+}
+
+.songtable .songrow:not(.songcard){
+  padding:2px 4px;
+  row-gap:0;
+  height:46px;
+  min-height:0;
+  gap:0 8px;
+  grid-template-rows:auto auto;
+  position:relative;
+  padding-left:19px;
+  grid-template-columns:44px minmax(0,1fr) auto;
+  grid-template-areas:"art st more" "art sartist more"
+}
+
+.songtable .songrow:not(.songcard) .listtags{
+  position:absolute;
+  right:34px;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:4px;
+  min-width:0;
+  overflow:hidden;
+  pointer-events:none
+}
+
+.songtable .songrow:not(.songcard) .srctag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:5px;
+  flex:0 0 auto;
+  color:var(--dim);
+  background:color-mix(in srgb,var(--panel2) 70%,transparent);
+  pointer-events:auto;
+  text-decoration:none;
+  cursor:pointer
+}
+
+.songtable .songrow:not(.songcard) a.srctag:hover{
+  color:var(--text);
+  background:color-mix(in srgb,var(--accent) 22%,transparent)
+}
+
+.songtable .songrow:not(.songcard) .srctag.apple{
+  color:#fa5c73
+}
+
+.songtable .songrow:not(.songcard) .srctag.soundcloud{
+  color:#ff8a3d
+}
+
+.songtable .songrow:not(.songcard) .srctag.local{
+  color:#8fb3d9
+}
+
+.songtable .songrow:not(.songcard) .srctag svg{
+  display:block
+}
+
+.songtable .songrow:not(.songcard) .sartist{
+  line-height:1.1;
+  margin-top:0;
+  max-width:42%;
+  margin-right:auto
+}
+
+.songtable .songrow:not(.songcard) .listtags:empty{
+  display:none
+}
+
+#player-full .pf-foot .pfsave .ghost.lsave{
+  width:44px;
+  height:44px;
+  min-width:44px;
+  min-height:44px;
+  padding:0;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:transparent;
+  color:var(--dim)
+}
+
+#player-full .pf-foot .pfsave .ghost.lsave:hover{
+  background:var(--panel2);
+  color:var(--text)
+}
+
+#player-full .pf-foot .pfsave .ghost.lsave.on{
+  color:var(--accent);
+  border-color:#2f6b57;
+  background:#16241f
+}
+
+#player-full .pf-foot .pfsave .ghost.lsave.armed{
+  color:var(--err);
+  border:1px solid #6b2f37;
+  background:#241a1e
+}
+
+body #player.on .plsave .ghost.lsave{
+  width:29px;
+  height:29px;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:transparent;
+  color:var(--dim);
+  opacity:.95
+}
+
+body #player.on .plsave .ghost.lsave.on{
+  color:var(--accent);
+  border:1px solid #2f6b57;
+  background:#16241f;
+  opacity:1
+}
+
+body #player.on .plsave .ghost.lsave.armed{
+  color:var(--err);
+  border:1px solid #6b2f37;
+  background:#241a1e
+}
+
+.songcard .rowactions .lsave{
+  align-self:flex-end;
+  margin:-14px 0 0 0
+}

@@ -10,7 +10,7 @@ const html=fs.readFileSync('web/index.html','utf8');
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('http://fixture.test/**',route=>route.fulfill({contentType:'text/html',body:html.slice(0,html.indexOf('<script>')).replace(/<link[^>]*>/g,'').replace(/<script[\s\S]*?<\/script>/g,'')}));
  await page.goto('http://fixture.test/');
- await page.addStyleTag({content:fs.readFileSync('web/polish.css','utf8')});
+ await page.addStyleTag({content:require('./_css.cjs').appCss()});
  await page.evaluate(()=>{
  window.$=s=>document.querySelector(s);window.esc=s=>String(s??'');
  window.playerAudio={src:''};window.localStorage={getItem:()=>null};

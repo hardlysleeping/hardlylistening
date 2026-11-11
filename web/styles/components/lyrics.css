@@ -1,3 +1,16 @@
+/* Lyrics component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+/* Lyrics is parked until it works: the buttons stay in the DOM (and in lyrics.js) but
+   nothing renders them, so bringing the feature back is deleting this line. */
+#pllyrics,#pflyrics{display:none}
+
+@media(max-width:640px){
+  #player #pllyrics{order:3;flex:none;min-height:28px;padding:0 10px;font-size:11.5px}
+}
+
 #lyrics-overlay{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;box-sizing:border-box;padding:10px 12px 12px;color:#fff;background:transparent;overflow:hidden;opacity:0;transform:translateY(18px);transition:opacity .28s ease,transform .34s cubic-bezier(.2,.75,.25,1);pointer-events:none}
 #lyrics-overlay[hidden]{display:none}
 #lyrics-overlay.on{opacity:1;transform:translateY(0);pointer-events:auto}

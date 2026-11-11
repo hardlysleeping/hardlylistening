@@ -1,12 +1,12 @@
 // Isolated real queue/editor script, mocked media and playlist contract.
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
-const html=fs.readFileSync('web/index.html','utf8'),css=fs.readFileSync('web/polish.css','utf8');
+const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
 const markup=html.slice(html.indexOf('<aside id="playback-panel"'),html.indexOf('// Playback queue and owner playlist editor')).split('<script>')[0];
 const script=html.split('// Playback queue and owner playlist editor (no media or network on initialization).')[1].split('</script>')[0];
 const queueSong=html.slice(html.indexOf('function queueSong('),html.indexOf('function playTrackNow('));
 (async()=>{const browser=await chromium.launch({headless:true});try{for(const width of [1280,390]){
  const page=await browser.newPage({viewport:{width,height:1100}});let network=0;await page.route('**/*',r=>{network++;r.abort()});
- await page.goto('about:blank');await page.setContent(`<style>${html.match(/<style>([\s\S]*?)<\/style>/)[1]}${css}</style>${markup}`);
+ await page.goto('about:blank');await page.setContent(`${require('./_css.cjs').styleTag()}${markup}`);
  await page.addScriptTag({content:`
  const memory={};const localStorage={getItem:k=>memory[k]??null,setItem:(k,v)=>memory[k]=v};
  let libAll=[1,2,3,4].map(id=>({id,title:'Song '+id,artist_name:'Artist',playable:id!==4})),currentRows=libAll,libQueue=[],playingId=null,libIndex=-1,playbackQueueEdited=false;

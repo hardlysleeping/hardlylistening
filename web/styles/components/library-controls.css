@@ -1,0 +1,1143 @@
+.libsearch{
+  width:100%;
+  background:var(--panel);
+  border:1px solid var(--line);
+  color:var(--text);
+  margin:0 0 10px;
+  border-radius:10px;
+  padding:10px 12px;
+  font:inherit;
+  outline:none;
+  margin-bottom:12px
+}
+
+.libtools{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:12px
+}
+
+.libtools button{
+  padding:8px 12px
+}
+
+.fatop .seg{
+  padding:2px
+}
+
+.fatop .seg button{
+  width:34px;
+  min-height:30px;
+  padding:0;
+  display:grid;
+  place-items:center
+}
+
+.libtools .grow{
+  flex:1
+}
+
+.libtop{
+  display:flex;
+  align-items:flex-end;
+  gap:12px;
+  margin:6px 0 14px;
+  flex-wrap:wrap
+}
+
+.libtop h2{
+  margin:0;
+  font-size:26px;
+  letter-spacing:-.02em;
+  font-weight:650
+}
+
+.libtop .libtools{
+  display:flex;
+  gap:8px;
+  margin-left:auto;
+  flex-wrap:wrap
+}
+
+.libbar{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-bottom:8px;
+  flex-wrap:nowrap
+}
+
+.seg{
+  display:inline-flex;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:11px;
+  padding:3px;
+  gap:2px
+}
+
+.seg button{
+  background:transparent;
+  border:0;
+  color:var(--dim);
+  padding:7px 14px;
+  border-radius:8px;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer
+}
+
+.seg button:hover{
+  color:var(--text)
+}
+
+.seg button.on{
+  background:var(--panel2);
+  color:var(--text)
+}
+
+.libbar select{
+  width:auto;
+  max-width:230px;
+  flex:0 0 auto
+}
+
+.libbar select,.libbar .libsearch{
+  background:var(--panel);
+  border:1px solid var(--line);
+  color:var(--text);
+  border-radius:10px;
+  padding:8px 10px;
+  font:inherit;
+  font-size:13px
+}
+
+.libbar .libsearch{
+  width:auto;
+  flex:1 1 180px;
+  min-width:0
+}
+
+.libsearch{
+  margin:0 0 10px
+}
+
+.libfilters{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-bottom:14px;
+  flex-wrap:nowrap
+}
+
+.libfilters select,.libfilters .libsearch{
+  background:var(--panel);
+  border:1px solid var(--line);
+  color:var(--text);
+  border-radius:10px;
+  padding:8px 10px;
+  font:inherit;
+  font-size:13px
+}
+
+.libfilters select{
+  width:auto;
+  min-width:0;
+  flex:1 1 0;
+  max-width:230px;
+  text-overflow:ellipsis
+}
+
+.libfilters .seg{
+  flex:0 0 auto
+}
+
+.libfilters .songcols{
+  flex:0 0 92px;
+  min-width:0
+}
+
+.libfilters .songcols input{
+  width:100%
+}
+
+.libfilters .spacer{
+  flex:0 0 auto
+}
+
+.libbar .spacer{
+  flex:1 1 auto
+}
+
+@media (max-width:760px){
+.libbar{flex-wrap:wrap}
+.libbar .libsearch{flex:1 1 100%}
+.seg button{padding:7px 9px;font-size:12px}
+.libtop h2{font-size:21px}
+.libtop{gap:8px}
+.libtop .libtools{width:100%;margin-left:0}
+.libtop .libtools button{flex:1 1 auto;min-width:0;font-size:12px;padding:7px 8px}
+.libfilters{gap:6px}
+.libfilters select{max-width:none;flex:1 1 0}
+.libfilters .songcols{flex:0 0 68px}
+}
+
+#view-library.detail-open .libtop, #view-library.detail-open .dropzone, #view-library.detail-open #libsort, #view-library.detail-open #libsortdir, #view-library.detail-open #filterbtn, #view-library.detail-open #libfilters, #view-library.detail-open #libplaylist, #view-library.detail-open #libsearch{
+  display:none!important
+}
+
+#view-library.detail-open .libbar{
+  margin-bottom:10px
+}
+
+.libtop{
+  margin-bottom:18px
+}
+
+.libtop h2{
+  font-size:29px;
+  letter-spacing:-.04em
+}
+
+.libbar{
+  gap:12px
+}
+
+.seg{
+  padding:4px
+}
+
+.seg button{
+  min-height:36px
+}
+
+@media(max-width:720px){
+.libbar{flex-wrap:wrap}
+.libbar .seg{max-width:100%;flex-wrap:wrap}
+.libbar select{flex:1 1 120px;max-width:100%}
+.libbar .libsearch{flex-basis:100%}
+}
+
+.songcontrols{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+  color:var(--dim)
+}
+
+.songlayout{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0
+}
+
+.density{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  min-width:0
+}
+
+.density input[type=range]{
+  -webkit-appearance:none;
+  appearance:none;
+  width:124px;
+  height:30px;
+  margin:0;
+  padding:0;
+  background:transparent;
+  cursor:pointer;
+  touch-action:pan-y
+}
+
+.density input[type=range]::-webkit-slider-runnable-track{
+  height:5px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: repeating-linear-gradient(to right,var(--line) 0 1px,transparent 1px calc(100% / var(--dcols-gaps,10))), var(--panel2)
+}
+
+.density input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:15px;
+  height:15px;
+  margin-top:-6px;
+  border-radius:50%;
+  background:var(--accent);
+  border:2px solid #0f1014;
+  box-shadow:0 1px 4px #0008
+}
+
+.density input[type=range]::-moz-range-track{
+  height:5px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: repeating-linear-gradient(to right,var(--line) 0 1px,transparent 1px calc(100% / var(--dcols-gaps,10))), var(--panel2)
+}
+
+.density input[type=range]::-moz-range-thumb{
+  width:15px;
+  height:15px;
+  border:2px solid #0f1014;
+  border-radius:50%;
+  background:var(--accent)
+}
+
+.density input[type=range]:hover::-webkit-slider-thumb{
+  background:color-mix(in srgb,var(--accent) 82%,#fff)
+}
+
+.density input[type=range]:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);
+  outline-offset:3px;
+  border-radius:999px
+}
+
+.dcolsn{
+  min-width:20px;
+  text-align:center;
+  font-size:12px;
+  font-weight:650;
+  line-height:1;
+  color:var(--text);
+  font-variant-numeric:tabular-nums;
+  padding:5px 4px;
+  border-radius:7px;
+  background:var(--panel2);
+  border:1px solid var(--line)
+}
+
+@media(max-width:760px){
+  .songcontrols{gap:8px;margin-bottom:10px}
+  .songlayout{gap:6px}
+  /* The row is shared with the centred layout group: on a phone the slider has to end
+     before it, so the track is short and the number keeps its own room. */
+  .density{gap:7px}
+  .density input[type=range]{width:66px}
+  /* Narrower still: the centred layout group reaches further left, so the track gives way
+     rather than the number sliding under it. */
+  @media (max-width:400px){ .density input[type=range]{width:56px} }
+  @media (max-width:344px){ .density input[type=range]{width:38px} }
+}
+
+.libnote{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 14px;
+  padding:9px 12px;
+  border-radius:11px;
+  border:1px solid var(--line);
+  background:#15161c;
+  color:var(--dim);
+  font-size:12.5px
+}
+
+.libnote::before{
+  content:"";
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--accent2);
+  box-shadow:0 0 0 3px rgba(122,162,255,.16);
+  flex:none
+}
+
+.srchip{
+  display:inline-block;
+  padding:1px 6px;
+  border-radius:999px;
+  background:var(--panel2);
+  color:var(--dim);
+  font-size:10.5px;
+  letter-spacing:.02em
+}
+
+.segcount{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:19px;
+  height:19px;
+  margin-left:7px;
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--panel2);
+  color:var(--dim);
+  font-size:11px;
+  font-weight:650;
+  font-variant-numeric:tabular-nums;
+  line-height:1
+}
+
+.seg button.on .segcount{
+  background:#00000038;
+  color:inherit
+}
+
+.segcount[hidden]{
+  display:none
+}
+
+#view-library.detail-open #libscopes, #view-library.detail-open #libscopehelp{
+  display:none
+}
+
+#view-library.detail-open #libviews, #view-library.detail-open #layoutseg, #view-library.detail-open #compactbtn, #view-library.detail-open .density, #view-library.detail-open .genre-panel{
+  display:none
+}
+
+#libscopes{
+  display:none
+}
+
+#dlg-listening .libtools{
+  gap:8px;
+  padding:7px 0;
+  border-bottom:1px solid var(--line);
+  font-size:12.5px
+}
+
+#listening-devices{
+  margin:4px 0;
+  font-size:12.5px
+}
+
+#libscopehelp[hidden]{
+  display:none
+}
+
+#btn-connections{
+  margin-left:auto;
+  flex:none;
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+  border-radius:10px
+}
+
+#btn-connections svg{
+  display:block
+}
+
+.libtop{
+  margin:2px 0 6px
+}
+
+#libscopehelp{
+  margin:2px 0 4px
+}
+
+#view-library .libtop{
+  margin:2px 0 6px
+}
+
+#view-library #libscopehelp{
+  margin:2px 0 4px;
+  font-size:12.5px;
+  line-height:1.25
+}
+
+.searchrow{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin:0 0 10px
+}
+
+.searchrow #libsearch{
+  flex:1 1 auto;
+  width:auto;
+  margin:0;
+  min-width:0
+}
+
+.libfilters #genresbtn{
+  flex:0 0 auto;
+  height:32px;
+  min-height:32px;
+  padding:0 12px;
+  display:inline-flex;
+  align-items:center;
+  font-size:13px;
+  margin:0
+}
+
+.libfilters #genresbtn.on{
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  color:var(--accent)
+}
+
+#view-library #libscopehelp{
+  margin-bottom:2px
+}
+
+#view-library .libtop{
+  margin-top:-10px
+}
+
+#btn-shuffle+ #btn-connections{
+  margin-left:0
+}
+
+#view-library .libtop{
+  margin-top:-5px
+}
+
+.libtop{
+  margin-top:1px
+}
+
+#view-library .libtop{
+  margin-bottom:2px
+}
+
+#view-library .libbar{
+  margin-top:0
+}
+
+#libscopehelp{
+  display:none
+}
+
+#libsearch{
+  height:23px;
+  min-height:23px;
+  padding:0 8px;
+  font-size:11px;
+  border-radius:7px
+}
+
+#view-library #libsearch{
+  font-size:11px
+}
+
+#view-library #libsearch::placeholder{
+  font-size:11px
+}
+
+#view-library #libsearch{
+  font-size:11px !important
+}
+
+#libviews{
+  justify-content:center
+}
+
+#view-library .libbar{
+  justify-content:center
+}
+
+#libviews{
+  margin:0 auto
+}
+
+#libviews [data-view]{
+  display:grid;
+  place-items:center;
+  min-width:44px;
+  padding:9px 12px
+}
+
+#libviews [data-view] svg{
+  width:20px;
+  height:20px;
+  display:block
+}
+
+#view-library .libtop #pintogglebtn{
+  margin-left:auto;
+  order:9;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  border-radius:10px;
+  opacity:.55
+}
+
+#view-library .libtop #pintogglebtn.on{
+  opacity:1;
+  color:var(--accent)
+}
+
+#view-library .libtop #pintogglebtn svg{
+  width:17px;
+  height:17px
+}
+
+#libviews{
+  gap:8px;
+  padding:2px
+}
+
+#libviews [data-view],#fapTabs [data-fatab]{
+  width:44px;
+  height:36px;
+  min-width:44px;
+  min-height:0;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border:0;
+  background:transparent;
+  color:var(--dim);
+  border-radius:10px
+}
+
+#libviews [data-view] svg,#fapTabs [data-fatab] svg{
+  width:20px;
+  height:20px;
+  display:block
+}
+
+#libviews [data-view]:hover,#fapTabs [data-fatab]:hover{
+  color:var(--text);
+  background:var(--panel2)
+}
+
+#libviews [data-view].on,#fapTabs [data-fatab].on{
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 42%,transparent)
+}
+
+#view-library .libtop{
+  position:relative
+}
+
+#view-library .libtop #pintogglebtn{
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  margin:0;
+  order:0
+}
+
+.searchrow{
+  position:fixed;
+  left:0;
+  right:0;
+  top:var(--dock-top,var(--bar-h,52px));
+  z-index:75;
+  margin:0;
+  padding:9px 16px 11px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:var(--bg,#101014);
+  box-shadow:0 14px 28px #0005;
+  transform:translateY(-115%);
+  opacity:0;
+  pointer-events:none;
+  transition:transform .24s cubic-bezier(.22,.8,.3,1),opacity .16s ease
+}
+
+html.searchopen .searchrow{
+  transform:none;
+  opacity:1;
+  pointer-events:auto
+}
+
+.searchbox{
+  position:relative;
+  flex:0 1 560px;
+  display:flex;
+  align-items:center;
+  min-width:0
+}
+
+.searchrow #libsearch{
+  width:100%;
+  height:38px;
+  min-height:38px;
+  margin:0;
+  padding:0 42px 0 15px;
+  border-radius:999px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  font-size:14px;
+  box-shadow:0 8px 24px #0005;
+  transition:border-color .15s ease,box-shadow .15s ease
+}
+
+.searchrow #libsearch::placeholder{
+  color:var(--dim)
+}
+
+.searchrow #libsearch:focus{
+  outline:0;
+  border-color:color-mix(in srgb,var(--accent) 45%,transparent);
+  box-shadow:0 8px 24px #0005,0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)
+}
+
+.searchrow #libsearchclose{
+  position:absolute;
+  right:4px;
+  top:50%;
+  transform:translateY(-50%);
+  width:30px;
+  height:30px;
+  min-width:30px;
+  min-height:30px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:var(--dim);
+  opacity:1
+}
+
+.searchrow #libsearchclose:hover{
+  background:var(--panel2);
+  color:var(--text)
+}
+
+#view-library.detail-open .searchrow{
+  display:none!important
+}
+
+.seg[hidden]{
+  display:none!important
+}
+
+#layoutseg[hidden]{
+  display:none!important
+}
+
+#view-library .libtop{
+  flex-wrap:nowrap;
+  align-items:center
+}
+
+#view-library .libtop #pintogglebtn{
+  position:static;
+  transform:none;
+  margin-left:8px;
+  order:9;
+  flex:0 0 auto
+}
+
+#view-library .libtop #pintogglebtn[hidden]{
+  display:none!important
+}
+
+#view-library .libtop #btn-search{
+  order:7;
+  margin-left:auto;
+  flex:0 0 auto;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+  opacity:.55
+}
+
+#view-library .libtop #btn-search svg{
+  width:17px;
+  height:17px;
+  display:block
+}
+
+#view-library .libtop #btn-search:hover, #view-library .libtop #btn-search.on{
+  opacity:1;
+  color:var(--accent)
+}
+
+#compactbtn{
+  padding:0;
+  min-height:0;
+  font-size:0;
+  color:var(--dim)
+}
+
+#libsortdir{
+  display:inline-grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  min-width:32px;
+  min-height:32px;
+  padding:0
+}
+
+#libsortdir svg{
+  transition:transform .18s ease
+}
+
+#libsortdir.on{
+  color:var(--accent);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  background:color-mix(in srgb,var(--accent) 16%,transparent)
+}
+
+#libsortdir.on svg{
+  transform:rotate(180deg)
+}
+
+#filterbtn{
+  display:block;
+  margin:0 auto 4px
+}
+
+#view-library .libfilters{
+  display:none
+}
+
+html.filters-open #view-library .libfilters{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:0 0 8px
+}
+
+#view-library .libtools[hidden]{
+  display:none!important
+}
+
+.liblayout{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  min-height:40px;
+  margin:0 0 14px
+}
+
+.liblayout[hidden]{
+  display:none!important
+}
+
+.liblayout #filterbtn{
+  display:inline-flex;
+  align-items:center;
+  margin:0 0 0 4px
+}
+
+#libsortdir{
+  background:var(--panel2);
+  border:1px solid var(--line);
+  color:var(--text);
+  opacity:1
+}
+
+#libsortdir:hover{
+  border-color:color-mix(in srgb,var(--accent) 45%,transparent)
+}
+
+#libsortdir.on{
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  color:var(--accent)
+}
+
+#libsortdir.on svg{
+  transform:none
+}
+
+.liblayout #filterbtn{
+  order:-1;
+  margin:0 8px 0 0;
+  width:32px;
+  height:32px;
+  min-width:32px;
+  min-height:32px;
+  padding:0;
+  display:inline-grid;
+  place-items:center
+}
+
+#view-library .libtop #admintoolsbtn{
+  position:static;
+  transform:none;
+  margin-left:8px;
+  order:8;
+  flex:0 0 auto;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  border-radius:10px;
+  display:grid;
+  place-items:center
+}
+
+#view-library .libtop{
+  border:0
+}
+
+#view-library .libtools{
+  position:absolute;
+  top:46px;
+  right:0;
+  z-index:40;
+  display:none;
+  flex-direction:column;
+  align-items:stretch;
+  gap:4px;
+  padding:6px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 16px 40px #000a;
+  margin:0;
+  min-width:190px
+}
+
+html.admintools-open #view-library .libtools{
+  display:flex
+}
+
+#view-library .libtools button{
+  width:100%;
+  text-align:left;
+  justify-content:flex-start
+}
+
+#layoutseg.icons{
+  align-items:center
+}
+
+#layoutseg.icons button{
+  display:grid;
+  place-items:center;
+  width:36px;
+  min-width:36px;
+  height:30px;
+  min-height:0;
+  padding:0
+}
+
+#layoutseg.icons button svg{
+  display:block
+}
+
+#layoutseg #compactbtn{
+  display:grid;
+  place-items:center;
+  width:36px;
+  min-width:36px;
+  height:30px;
+  min-height:0;
+  padding:0
+}
+
+#compactbtn.on{
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  color:var(--accent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent)
+}
+
+#layoutseg button{
+  color:var(--dim);
+  border:1px solid transparent;
+  background:transparent;
+  border-radius:10px;
+  transition:background .12s ease,color .12s ease,box-shadow .12s ease
+}
+
+#layoutseg button:hover{
+  background:var(--panel2);
+  color:var(--text)
+}
+
+#layoutseg button.on{
+  background:color-mix(in srgb,var(--accent) 18%,transparent);
+  color:var(--accent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 60%,transparent)
+}
+
+#layoutseg button.on svg{
+  opacity:1
+}
+
+#layoutseg button svg{
+  opacity:.8
+}
+
+#filterbtn.on, .liblayout #filterbtn.on{
+  background:color-mix(in srgb,var(--accent) 18%,transparent);
+  color:var(--accent);
+  border-color:color-mix(in srgb,var(--accent) 60%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 60%,transparent)
+}
+
+#filterbtn.on svg{
+  opacity:1
+}
+
+#layoutseg #compactbtn[hidden]{
+  display:none!important
+}
+
+/* Layout row: the cards/grid/list glyphs sit centred under the section icons, the funnel is
+   pinned to the right edge, and the density slider follows the glyphs without dragging the
+   centre off. */
+@media (min-width:1px){
+  #view-library .liblayout{position:relative;justify-content:center;padding-left:0;padding-right:0}
+  #view-library .liblayout #layoutseg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    margin:0;z-index:2}
+  #view-library .liblayout #filterbtn{position:absolute;right:0;top:50%;transform:translateY(-50%);
+    margin:0;order:0}
+}
+
+@media (max-width:760px){
+  #view-library .liblayout{flex-wrap:wrap;row-gap:4px;padding-bottom:2px}
+}
+
+#layoutseg #gridstylebtn{
+  display:grid;
+  place-items:center;
+  width:36px;
+  min-width:36px;
+  height:30px;
+  min-height:0;
+  padding:0
+}
+
+#layoutseg #gridstylebtn[hidden]{
+  display:none!important
+}
+
+#layoutseg #gridstylebtn.on{
+  background:color-mix(in srgb,var(--accent) 18%,transparent);
+  color:var(--accent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 60%,transparent)
+}
+
+#view-library .liblayout .libtoolright #gridstylebtn, #view-library .liblayout .libtoolright #compactbtn{
+  width:32px;
+  min-width:32px;
+  height:32px;
+  min-height:0;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  color:var(--dim);
+  transition:color .15s ease,border-color .15s ease,background .15s ease,transform .12s ease
+}
+
+#view-library .liblayout .libtoolright #compactbtn svg{
+  width:17px;
+  height:17px
+}
+
+#view-library .liblayout .libtoolright #compactbtn:active{
+  transform:scale(.94)
+}
+
+#view-library .liblayout .libtoolright #gridstylebtn:hover, #view-library .liblayout .libtoolright #compactbtn:hover{
+  color:var(--text);
+  border-color:color-mix(in srgb,var(--accent) 45%,transparent)
+}
+
+#view-library .liblayout .libtoolright #gridstylebtn.on{
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  box-shadow:none
+}
+
+#view-library .liblayout .libtoolright #compactbtn.on{
+  color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent)
+}
+
+#gridstylebtn svg{
+  display:none
+}
+
+#gridstylebtn svg[data-grid="std"]{
+  display:block
+}
+
+html[data-gridstyle="hex"] #gridstylebtn svg[data-grid="std"], html[data-gridstyle="mosaic"] #gridstylebtn svg[data-grid="std"]{
+  display:none
+}
+
+html[data-gridstyle="hex"] #gridstylebtn svg[data-grid="hex"], html[data-gridstyle="mosaic"] #gridstylebtn svg[data-grid="mosaic"]{
+  display:block
+}
+
+#view-library .liblayout .libtoolright{
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  order:99;
+  z-index:3
+}
+
+#view-library .liblayout .libtoolright #filterbtn{
+  position:static;
+  transform:none;
+  margin:0;
+  order:99
+}
+
+#view-library .liblayout .libtoolright #compactbtn, #view-library .liblayout .libtoolright #gridstylebtn{
+  position:static;
+  transform:none;
+  margin:0;
+  order:1
+}
+
+#view-library .liblayout .libtoolright #compactbtn[hidden], #view-library .liblayout .libtoolright #gridstylebtn[hidden]{
+  display:none!important
+}
+
+#view-library .liblayout .density{
+  position:absolute;
+  left:10px;
+  top:50%;
+  transform:translateY(-50%);
+  margin:0;
+  z-index:2
+}
+
+#view-library .liblayout .density[hidden]{
+  display:none!important
+}
+
+/* A finger is not a mouse pointer: the strip keeps its thin look but the touch area is a
+   full 44 px tall and the thumb grows, so it no longer has to be hit dead centre. */
+@media (hover:none),(pointer:coarse){
+  .density input[type=range]{height:44px}
+  .density input[type=range]::-webkit-slider-thumb{width:20px;height:20px;margin-top:-8px}
+  .density input[type=range]::-moz-range-thumb{width:20px;height:20px}
+  .dcolsn{padding:7px 5px;min-width:24px}
+}
+
+#view-library .libbar .seg, #view-library .liblayout #layoutseg{
+  box-shadow:0 6px 18px #00000059,0 1px 0 #ffffff0a inset
+}
+
+#view-library .liblayout .libtoolright > button{
+  box-shadow:0 4px 14px #00000040
+}
+
+#view-library .liblayout .dcolsn{
+  box-shadow:0 4px 12px #00000033
+}

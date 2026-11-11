@@ -1,0 +1,1067 @@
+.libgroup{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px;
+  margin-bottom:10px;
+  overflow:hidden
+}
+
+.libgroup summary{
+  padding:10px 12px;
+  cursor:pointer;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  font-weight:600
+}
+
+.libgroup summary .count{
+  color:var(--dim);
+  font-weight:400;
+  font-size:12.5px
+}
+
+.librow{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:7px 12px;
+  border-top:1px solid #1e1e26;
+  cursor:pointer
+}
+
+.librow:hover{
+  background:#1c1c24
+}
+
+.librow.playing{
+  background:#17241f
+}
+
+.librow .n{
+  width:18px;
+  color:var(--accent);
+  font-size:12.5px;
+  flex:none
+}
+
+.librow .t{
+  flex:1;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.librow .t small{
+  color:var(--dim);
+  display:block;
+  font-weight:400;
+  font-size:12px
+}
+
+.librow .d{
+  color:var(--dim);
+  font-size:12px;
+  font-variant-numeric:tabular-nums
+}
+
+.libchips{
+  display:flex;
+  gap:5px;
+  flex-wrap:wrap;
+  margin-top:5px
+}
+
+.libchip{
+  font-size:11px;
+  color:var(--dim);
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:1px 8px;
+  white-space:nowrap;
+  max-width:190px;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.libchips .more{
+  color:var(--accent);
+  border-color:#2c6b57
+}
+
+.librow .t:has(.social[open]){
+  overflow:visible
+}
+
+.albumgrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(164px,1fr));
+  gap:18px
+}
+
+.albumgrid.list{
+  grid-template-columns:minmax(0,1fr);
+  gap:6px
+}
+
+.albumgrid.list .acover{
+  border-radius:8px
+}
+
+.albumgrid.list .aplay{
+  width:30px;
+  height:30px;
+  right:5px;
+  bottom:5px;
+  opacity:1
+}
+
+.acard{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  cursor:pointer;
+  transition:transform .16s,border-color .16s,background .16s;
+  position:relative
+}
+
+.acard .acover{
+  aspect-ratio:1/1;
+  border-radius:10px;
+  background:var(--panel2) center/cover;
+  position:relative;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  color:#cfd3e1;
+  font-weight:700;
+  font-size:22px;
+  letter-spacing:-.02em
+}
+
+.acard .aplay{
+  position:absolute;
+  right:9px;
+  bottom:9px;
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  background:var(--accent);
+  color:#08110d;
+  border:0;
+  display:grid;
+  place-items:center;
+  opacity:0;
+  transform:translateY(4px);
+  transition:.16s;
+  cursor:pointer;
+  box-shadow:0 6px 18px #0009
+}
+
+.acard.removed{
+  border-style:dashed;
+  border-color:#3a3a45;
+  animation:acardout .4s ease
+}
+
+.removed-chip{
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:3;
+  padding:2px 8px;
+  border-radius:999px;
+  background:#0b0c11d9;
+  border:1px solid #3a3a45;
+  color:#b9bcc9;
+  font-size:10.5px;
+  font-weight:600;
+  letter-spacing:.02em;
+  backdrop-filter:blur(6px);
+  pointer-events:none;
+  white-space:nowrap
+}
+
+.artistgrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:18px
+}
+
+.arcard{
+  text-align:center;
+  padding:7px 5px;
+  border-radius:14px;
+  border:1px solid transparent;
+  transition:.16s
+}
+
+.removed-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-left:8px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:10.5px;
+  font-weight:600;
+  letter-spacing:.02em;
+  color:#c3c3ce;
+  background:#26262e;
+  border:1px solid #3f3f4a;
+  white-space:nowrap
+}
+
+.removed-badge::before{
+  content:"";
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#8b8b98
+}
+
+.songcard.removed{
+  border-style:dashed;
+  border-color:#3a3a45
+}
+
+.covercell.removed .coverart{
+  filter:grayscale(.7) brightness(.7)
+}
+
+.covercell.removed .covername b{
+  color:var(--dim)
+}
+
+.songcard.gone-any{
+  border-color:#6f5527;
+  box-shadow:0 0 0 1px #e0a24a33,0 0 22px -10px #e0a24a77
+}
+
+.songrow .st .libchips{
+  margin-top:2px
+}
+
+.songrow .st .libchip{
+  font-size:10.5px;
+  padding:1px 6px
+}
+
+.plgrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(198px,1fr));
+  gap:14px;
+  align-items:stretch
+}
+
+.plcard{
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px;
+  cursor:pointer;
+  transition:border-color .16s
+}
+
+.plcard:hover{
+  border-color:#3a3a48
+}
+
+.collage{
+  width:100%;
+  aspect-ratio:4/3;
+  display:grid;
+  gap:1px;
+  border-radius:10px;
+  overflow:hidden;
+  background:#0b0c11
+}
+
+.collage i{
+  background:var(--panel2) center/cover;
+  display:block;
+  min-width:0
+}
+
+.collage i.ph{
+  display:grid;
+  place-items:center;
+  font-style:normal;
+  font-weight:700;
+  font-size:clamp(18px,6vw,30px);
+  color:#cfd3e1
+}
+
+.collage.c1{
+  grid-template-columns:1fr;
+  grid-template-rows:1fr
+}
+
+.collage.c2{
+  grid-template-columns:repeat(2,1fr);
+  grid-template-rows:1fr
+}
+
+.collage.c3{
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:1fr
+}
+
+.collage.c4{
+  grid-template-columns:repeat(2,1fr);
+  grid-template-rows:repeat(2,1fr)
+}
+
+.collage.c6{
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(2,1fr)
+}
+
+.collage.c8{
+  grid-template-columns:repeat(4,1fr);
+  grid-template-rows:repeat(2,1fr)
+}
+
+.collage.c9{
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(3,1fr)
+}
+
+.collage.c12{
+  grid-template-columns:repeat(4,1fr);
+  grid-template-rows:repeat(3,1fr)
+}
+
+.plcard .pbody{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px
+}
+
+.plcard .pt{
+  font-weight:600;
+  font-size:14px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.plcard .ps{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  color:var(--dim);
+  font-size:12px;
+  min-width:0
+}
+
+.plcard .plcount{
+  flex:0 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+.plcard .plby{
+  flex:1 1 auto;
+  min-width:0;
+  text-align:right;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+.plcard .pacts{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  flex-wrap:wrap
+}
+
+@media (hover:none){.acard .aplay{opacity:1;transform:none}}
+
+/* On a phone the facts column is ~150 px wide: "365/365" plus the name fits, the
+ word "downloaded" does not. The number alone is unambiguous under a playlist. */
+@media (max-width:480px){.plcard .plword{display:none}}
+
+@media (max-width:760px){
+.albumgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+}
+
+.art{
+  width:56px;
+  height:56px;
+  border-radius:10px;
+  object-fit:cover;
+  background:#242430;
+  flex:none
+}
+
+.meta{
+  min-width:0;
+  flex:1
+}
+
+.title{
+  font-weight:600;
+  font-size:15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.sub{
+  color:var(--dim);
+  font-size:12.5px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:3px
+}
+
+.prog{
+  height:4px;
+  background:#242430;
+  border-radius:2px;
+  overflow:hidden;
+  margin-top:8px
+}
+
+.prog i{
+  display:block;
+  height:100%;
+  background:var(--accent);
+  width:0;
+  transition:width .3s
+}
+
+.prog i.bad{
+  background:var(--err)
+}
+
+.actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-end
+}
+
+.actions button{
+  padding:7px 10px;
+  font-size:13px
+}
+
+@media (max-width:640px){
+  .card-head{flex-wrap:wrap}
+  .actions{width:100%;justify-content:flex-start;border-top:1px solid var(--line);padding-top:10px}
+  .actions button{flex:1}
+}
+
+.albumgrid{
+  gap:20px
+}
+
+.artistgrid{
+  gap:6px
+}
+
+.acard .aplay{
+  transition:transform .16s ease,opacity .16s ease
+}
+
+.acard:focus-within .aplay{
+  opacity:1;
+  transform:none
+}
+
+.feedcard,.followrow,.libgroup,.plcard{
+  border-radius:16px
+}
+
+.prog i{
+  transition:none
+}
+
+@media(hover:none){.acard .aplay{opacity:1;transform:none}}
+
+@media(max-width:720px){
+.albumgrid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}
+}
+
+.songgrid{
+  display:grid;
+  grid-template-columns:repeat(var(--song-cols,4),minmax(0,1fr));
+  gap:10px;
+  align-items:start
+}
+
+html[data-cardstyle="compact"] .songcard.open{
+  position:relative;
+  z-index:3;
+  box-shadow:0 14px 34px #000a
+}
+
+.songcard{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:"art art" "title title" "artist album" "votes save";
+  /* Every chip that floats on the cover keeps the same distance from the artwork's edge: 6px, tightened to 4 and 3 on narrow cards. Only the card's padding is a variable, because the chips are placed from it. */ --card-pad:6px;
+  gap:2px 6px;
+  padding:var(--card-pad);
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--panel);
+  align-content:start;
+  min-width:0;
+  position:relative
+}
+
+.songcard.playing{
+  border-color:var(--accent);
+  background:#16241f
+}
+
+.songcard .sttext{
+  grid-area:title;
+  display:block;
+  min-width:0
+}
+
+.songcard .rowactions{
+  grid-area:save;
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:flex-end;
+  justify-content:flex-end;
+  gap:6px;
+  margin:0;
+  min-width:0;
+  padding:0
+}
+
+.songcard .pref-pair{
+  position:absolute;
+  z-index:3;
+  order:0;
+  flex:0 0 auto;
+  top:calc(var(--card-pad) + 6px);
+  right:calc(var(--card-pad) + 6px);
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:3px;
+  border-radius:10px;
+  background:#0b0c11b3;
+  border:1px solid #ffffff24;
+  backdrop-filter:blur(6px)
+}
+
+.songcard .preference,.songcard .preference[data-pref-action=pin]{
+  margin:0;
+  width:26px;
+  height:26px;
+  min-height:26px;
+  padding:0;
+  font-size:12px;
+  border-radius:7px;
+  justify-content:center;
+  align-items:center;
+  background:transparent;
+  border-color:transparent
+}
+
+@media(max-width:760px){
+  .songgrid{gap:8px}
+  .songcard{--card-pad:5px;gap:2px 6px;border-radius:12px}
+}
+
+.covergrid{
+  display:grid;
+  grid-template-columns:repeat(var(--cover-cols,var(--song-cols,4)),minmax(0,1fr));
+  gap:8px
+}
+
+.covergrid .covercell{
+  display:block;
+  min-width:0;
+  padding:0;
+  border:0;
+  background:none;
+  color:var(--text);
+  text-align:left;
+  cursor:pointer;
+  border-radius:11px;
+  overflow:hidden
+}
+
+.covergrid .covercell .coverart{
+  display:block;
+  width:100%;
+  aspect-ratio:1;
+  border-radius:11px;
+  overflow:hidden;
+  background:#16171e;
+  border:1px solid var(--line)
+}
+
+.covergrid .covercell .coverart img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block
+}
+
+.covergrid .covercell .coverart{
+  display:grid;
+  place-items:center;
+  font-size:clamp(14px,4vw,22px);
+  font-weight:700;
+  color:#ffffff9c
+}
+
+.covergrid .covercell .covername{
+  display:block;
+  font-size:12px;
+  line-height:1.3;
+  padding:5px 2px 2px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:var(--dim)
+}
+
+.covergrid .covercell:hover .covername{
+  color:var(--text)
+}
+
+.covergrid .covercell.playing .coverart{
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent)
+}
+
+.covergrid .covercell.playing .covername{
+  color:var(--accent)
+}
+
+@media(max-width:760px){.covergrid{gap:6px}.covergrid .covercell .covername{font-size:11px;padding:4px 1px 0}}
+
+html[data-cardstyle="compact"] .songcard:not(.open){
+  grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"art"
+}
+
+html[data-cardstyle="compact"] .songcard:not(.open) .sttext{
+  grid-area:art;
+  align-self:end;
+  justify-self:stretch;
+  z-index:2;
+  margin:0;
+  padding:6px 8px;
+  border-radius:0 0 9px 9px;
+  background:linear-gradient(180deg,#0b0c1100,#0b0c11e0 45%,#0b0c11f7)
+}
+
+html[data-cardstyle="compact"] .songcard{
+  cursor:pointer
+}
+
+html[data-cols-tier="trio"] .songcard, html[data-cols-tier="dense"] .songcard{
+  grid-template-areas:"art art" "title title" "artist album" "votes save"
+}
+
+html[data-cols-tier="dense"] .songcard{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)
+}
+
+html[data-cols-tier="dense"] .songcard .pref-pair{
+  display:none
+}
+
+html[data-cols-tier="dense"] .songcard .rowactions{
+  padding:0;
+  justify-content:flex-end;
+  align-items:center
+}
+
+@media (min-width:761px){
+  html[data-cols-tier="dense"] .songcard .pref-pair,
+  html[data-cols-tier="dense"] .acard .pref-pair{display:flex}
+}
+
+.songcard{
+  container-type:inline-size
+}
+
+@container (max-width:280px){
+  .songcard .pref-pair{top:calc(var(--card-pad) + 4px);right:calc(var(--card-pad) + 4px);
+    gap:3px;padding:2px}
+  .songcard .preference{width:23px;height:23px;min-height:23px;font-size:11px}
+}
+
+@container (max-width:150px){
+  .songcard .pref-pair{gap:2px;padding:1px;border-radius:8px}
+  .songcard .preference{width:20px;height:20px;min-height:20px;font-size:10px}
+}
+
+@container (max-width:80px){
+  .songcard .pref-pair{top:calc(var(--card-pad) + 3px);right:calc(var(--card-pad) + 3px)}
+}
+
+@media(prefers-reduced-motion:reduce){
+.acard:hover{transform:none}
+}
+
+.folderhead{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:8px 0 14px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel)
+}
+
+.folderhead .grow{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  min-width:0
+}
+
+.folderhead small,.foldermeta{
+  color:var(--dim);
+  font-size:12px
+}
+
+.folderlist{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));
+  gap:8px;
+  margin:8px 0 14px
+}
+
+.foldercard{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel);
+  color:var(--text);
+  text-align:left;
+  cursor:pointer
+}
+
+.foldercard:hover,.foldercard:focus-visible{
+  border-color:var(--accent2);
+  background:var(--panel2)
+}
+
+.foldericon{
+  color:var(--accent);
+  font-size:18px
+}
+
+.foldername{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:600
+}
+
+.foldermeta{
+  margin-left:auto;
+  white-space:nowrap
+}
+
+@media(max-width:560px){
+.folderhead{flex-wrap:wrap}
+}
+
+.acard .thumb .acover{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center
+}
+
+.acard .album-tools{
+  position:absolute;
+  z-index:4;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  top:var(--chip,6px);
+  right:var(--chip,6px)
+}
+
+.acard .album-tools .pref-pair{
+  position:static;
+  background:none;
+  border:0;
+  padding:0;
+  backdrop-filter:none
+}
+
+html[data-cols-tier="dense"] .acard .pref-pair{
+  display:none
+}
+
+.acard, html[data-cols-tier="trio"] .acard, html[data-cols-tier="dense"] .acard{
+  grid-template-areas:"art art" "title album" "artist artist" "votes save"
+}
+
+#view-library .mixed-pinned{
+  margin-bottom:8px;
+  padding:10px 12px
+}
+
+#view-library .mixed-pinned h3{
+  margin:0 0 6px
+}
+
+#view-library .mixed-pinned{
+  margin-top:0;
+  margin-bottom:4px;
+  padding:8px 12px
+}
+
+#view-library .mixed-pinned h3{
+  margin:0 0 4px
+}
+
+#view-library .pinned-carousel{
+  padding:0
+}
+
+#view-library .mixed-pinned{
+  margin-bottom:8px;
+  padding:8px 12px 2px;
+  margin-top:0
+}
+
+.mixed-pinned .pintoggle{
+  all:unset;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  font:inherit;
+  font-weight:650;
+  padding:2px 0
+}
+
+.mixed-pinned .pinchev{
+  margin-left:2px;
+  transition:transform .18s ease;
+  display:inline-block
+}
+
+.mixed-pinned.collapsed .pinchev{
+  transform:rotate(-90deg)
+}
+
+.mixed-pinned.collapsed .pinned-carousel{
+  display:none
+}
+
+.mixed-pinned .preference.pin-holder{
+  display:none!important
+}
+
+.pinmenu{
+  min-width:120px
+}
+
+.mixed-pinned.collapsed .pinbody{
+  display:none
+}
+
+.plcard .pt{
+  font-size:13.5px
+}
+
+.plcard .ps{
+  font-size:11.5px
+}
+
+.plcard .pacts{
+  margin-top:2px;
+  gap:6px
+}
+
+.plcard .pacts .pref-pair:empty{
+  display:none
+}
+
+#view-library .mixed-pinned{
+  margin-top:6px
+}
+
+.plcard{
+  position:relative
+}
+
+.plcard .pacts .pref-pair:empty{
+  display:none
+}
+
+.covergrid .covercell{
+  position:relative
+}
+
+.covergrid .covercell .mark{
+  display:block;
+  line-height:1
+}
+
+.covergrid .covercell .mark.like{
+  color:#ff4d6d;
+  font-size:14px;
+  font-weight:700;
+  text-shadow:0 1px 2px #000a
+}
+
+.covergrid .covercell .mark.pin{
+  color:#5ea8ff;
+  display:grid;
+  place-items:center;
+  filter:drop-shadow(0 1px 2px #000a)
+}
+
+.covergrid .covercell .covername{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:2;
+  padding:14px 8px 6px;
+  border-radius:0 0 11px 11px;
+  color:#f2f4f8;
+  background:linear-gradient(180deg,#0b0c1100,#0b0c11c9 45%,#0b0c11f2)
+}
+
+.covergrid .covercell .covername b{
+  display:block;
+  font-size:12px;
+  line-height:1.25;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0
+}
+
+@media(max-width:760px){.covergrid .covercell .covername{padding:12px 6px 5px}
+  .covergrid .covercell .covername b{font-size:11px}}
+
+.songgrid{
+  position:relative
+}
+
+html[data-cardstyle="compact"] .songcard.open{
+  box-shadow:0 18px 44px #000a
+}
+
+/* Pinned on desktop: one row of small tiles that scrolls sideways, instead of a 2×3 wall
+   of 360 px covers. */
+@media (min-width: 761px){
+  #view-library .pinned-carousel, .pinned-carousel{
+    grid-template-rows:1fr;grid-auto-columns:132px;gap:10px;padding:2px 2px 6px}
+  .pinned-tile{padding:5px;border-radius:11px}
+  .pinart{border-radius:8px}
+  .pinmeta small{font-size:9.5px}
+  .pinmeta b{font-size:11.5px}
+}
+
+/* Phone grid: a two-across wall of covers is for browsing artwork, so the title no longer
+   sits over the image there. Desktop keeps its overlay. */
+@media (max-width:760px){
+  .covergrid .covercell .covername{display:none}
+}
+
+.covergrid{
+  gap:4px
+}
+
+.covergrid .covercell .coverart{
+  border:0;
+  border-radius:8px
+}
+
+.covergrid .covercell{
+  border-radius:8px
+}
+
+@media (max-width:760px){.covergrid{gap:3px}}
+
+.covergrid .covercell, .covergrid .covercell .coverart{
+  border-radius:0
+}
+
+html[data-gridstyle="hex"] .covergrid{
+  display:flex;
+  flex-wrap:wrap;
+  align-content:flex-start;
+  gap:0;
+  overflow:visible
+}
+
+html[data-gridstyle="hex"] .covercell{
+  flex:0 0 auto;
+  padding:0;
+  border-radius:0;
+  overflow:visible;
+  transform:translateX(0);
+  width:calc(100% / (var(--hex-cols,3) + 0.5));
+  flex-basis:calc(100% / (var(--hex-cols,3) + 0.5));
+  margin-bottom:calc(-100% * 0.288675 / (var(--hex-cols,3) + 0.5));
+  /* The clip belongs on the cell, not the cover: rows interlock by overlapping boxes, and a clipped cover still let the next row's box claim the bottom quarter of the hex above it — a long press there opened the song below. Clipped, hit-testing follows the hexagon. */ clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)
+}
+
+html[data-gridstyle="hex"] .covercell.hex-shift{
+  transform:translateX(50%)
+}
+
+html[data-gridstyle="hex"] .covercell .coverart{
+  aspect-ratio:0.866;
+  border:0;
+  border-radius:0
+}
+
+html[data-gridstyle="hex"] .covercell .covername{
+  display:none
+}
+
+html[data-gridstyle="mosaic"] .covergrid{
+  grid-auto-flow:dense
+}
+
+html[data-gridstyle="mosaic"] .covercell:nth-child(7n+1){
+  grid-row:span 2
+}
+
+html[data-gridstyle="mosaic"] .covercell:nth-child(7n+1) .coverart{
+  aspect-ratio:.5
+}
+
+@media (min-width:761px){
+  html[data-gridstyle="mosaic"] .covercell:nth-child(7n+1){grid-row:auto;grid-column:span 2}
+  html[data-gridstyle="mosaic"] .covercell:nth-child(7n+1) .coverart{aspect-ratio:2.06}
+}
+
+.songcard .rowactions{
+  align-items:flex-end
+}

@@ -1,0 +1,12 @@
+/* Genuine utilities. Nothing here may become a component patch.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+[data-admin-only]{display:none!important}
+
+html.is-admin [data-admin-only]{display:revert!important}
+
+@media (max-width:760px){
+  input,select,textarea{font-size:16px!important}
+}

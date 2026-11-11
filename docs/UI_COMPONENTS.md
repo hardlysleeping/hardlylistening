@@ -6,17 +6,21 @@ Read this before changing the player, the queue, or anything they share.
 
 | File | Size | Owns |
 | --- | --- | --- |
-| `web/index.html` | ~444 KB | All markup, a ~51 KB inline `<style>` block, and ~352 KB of inline script |
-| `web/polish.css` | ~134 KB | Most styling, in ~886 top-level blocks |
+| `web/index.html` | ~420 KB | All markup and ~352 KB of inline script. No component CSS |
+| `web/styles/app.css` | small | The one stylesheet entry point: layer order and imports only |
+| `web/styles/*.css` | — | `tokens`, `base`, `layout`, `motion`, `utilities` (see `docs/frontend-css.md`) |
+| `web/styles/components/*.css` | — | One file per surface; the ownership contract is `docs/frontend-css.md` |
 | `web/preferences.js` | small | Likes/pins wrappers around the cards' controls |
 | `web/genres.js`, `web/lyrics.js`, `web/lifecycle.js` | small | Genre chips, lyrics, reload-on-new-version |
 
 There is no build step: the files above are what the server serves. A change is live on
-reload; there is nothing to compile.
+reload; there is nothing to compile. Components read the entry point's imports; never add a
+second stylesheet to `index.html`.
 
 ## Player components
 
-All of these are inside `web/index.html` today.
+All of these have their markup and behaviour in `web/index.html`; their styling is in
+`web/styles/components/player.css` (queue: `playback-queue.css`).
 
 | Component | Markup | Behaviour | Notes |
 | --- | --- | --- | --- |
@@ -39,10 +43,10 @@ the Genres chip. The row is `display:none` until `html.filters-open`.
 
 | Piece | Owner |
 | --- | --- |
-| Row layout and its selects | `.libfilters` blocks in the `web/index.html` inline style |
-| Open state and centring | `html.filters-open #view-library .libfilters` in `polish.css` |
-| Genres chip | created by `web/genres.js`, appended to `#libfilters`; sized by `.libfilters #genresbtn` in `polish.css` |
-| Filtering | `Genres.matches()` in `renderLibrary()`; the popup markup and stylesheet are `web/genres.js` / `web/genres.css` |
+| Row layout and its selects | `web/styles/components/library-controls.css` |
+| Open state and centring | the same file, `html.filters-open #view-library .libfilters` |
+| Genres chip | created by `web/genres.js`, appended to `#libfilters`; **placement** in `library-controls.css`, the chip's own look in `genres.css` |
+| Filtering | `Genres.matches()` in `renderLibrary()`; the popup markup and stylesheet are `web/genres.js` / `styles/components/genres.css` |
 
 The chip opens a modal (`#genres-pop`) of taxonomy checkboxes. Selection is multi-select
 with OR semantics, and it narrows `rows` before Albums / Artists / Songs / Playlists and
@@ -58,10 +62,10 @@ One square button per song, per album card and per album row: `+` when the item 
 | --- | --- |
 | Button markup and states | `listeningSaveControl()`, `albumSaveControl()` in `web/index.html` |
 | Click routing | `saveControlClick()` → `toggleListeningSave()` / `toggleAlbumSave()` |
-| Styling | `.ghost.lsave` blocks in the `web/index.html` inline style |
-| Player surfaces | `#pfsave` (fullscreen foot, 44 px, 12 px radius) and `#plsave` (compact bar, 34 px, 9 px radius), both painted by `paintPlayerSave()`; box, `.on` green and the red `.armed` border live in the `.pfsave` / `.plsave` blocks in `polish.css` |
+| Styling | `.ghost.lsave` in `styles/components/base.css` (shared control) with per-surface geometry in `library-cards.css` / `library-row.css` |
+| Player surfaces | `#pfsave` (fullscreen foot, 44 px, 12 px radius) and `#plsave` (compact bar, 34 px, 9 px radius), both painted by `paintPlayerSave()`; box, `.on` green and the red `.armed` border live in `styles/components/player.css` |
 | Removed-but-visible state | `.acard.removed`, `.songcard.removed`, `.songrow.removed`, `.covercell.removed` |
-| Album card layout | `.songcard` grid areas in `polish.css`; album cards override them to `"art art" / "title album" / "artist artist" / "votes save"` so the song count sits on the title line, top-right, instead of sharing the artist line with the taller save button (the count's `justify-self:end` keeps it flush with the button's right edge in the equal-column tiers) |
+| Album card layout | `.songcard` grid in `styles/components/library-cards.css`; album cards override it to `"art art" / "title album" / "artist artist" / "votes save"` so the song count sits on the title line, top-right, instead of sharing the artist line with the taller save button (the count's `justify-self:end` keeps it flush with the button's right edge in the equal-column tiers) |
 
 - **A song** keeps its check while saved; the first click turns it into a minus (armed for
   4 s, disarmed by Escape or a click elsewhere) and the second click removes it. An add flashes
@@ -85,8 +89,8 @@ and the ZIP / save controls.
 
 | Piece | Owner |
 | --- | --- |
-| Grid and card layout | `.plgrid` / `.plcard` blocks in the `web/index.html` inline style |
-| Mosaic steps | `playlistCollage()` in `web/index.html` and the `.collage` / `.collage.cN` blocks |
+| Grid and card layout | `.plgrid` / `.plcard` in `styles/components/library-cards.css` |
+| Mosaic steps | `playlistCollage()` in `web/index.html` and the `.collage` / `.collage.cN` rules in `library-cards.css` |
 | Dynamic cards | `dynCard()` in `web/preferences.js` — same markup, so they follow the mosaic too |
 
 - The mosaic steps in whole rectangles: 12 (4×3), 9 (3×3), 8 (4×2), 6 (3×2), 4, 3, 2, 1
@@ -110,7 +114,7 @@ to both, and both sit on one row above the pane.
 | Song pane (cards / covers / rows) | `paintArtistSongs()`, `artistSongsHtml()`; layout state in `hl.artistLayout` |
 | Song count and paging | `#fap-song-meter`, `#fap-foot`, `paintArtistFooter()`, `loadMoreArtistSongs()` (Songs tab only) |
 | Filter | `#fapsearch` in `.fahead`, right-aligned on the artist's name row; filters albums by title/date and songs by title/album/artist |
-| Footer layout | `#fap-song-meter` and `.fafoot` blocks in the `web/index.html` inline style |
+| Footer layout | `#fap-song-meter` and `.fafoot` in `styles/components/feed.css` |
 | Data | `GET /api/catalogue?watch=<id>&offset=<n>` → `discovery/tracklist.catalogue()` |
 
 Storage is per follow, in two tables: `artist_releases` and `artist_tracks` (`db.py`). The
@@ -127,25 +131,50 @@ collection row and no track rows at all, so they stay counted but unlisted.
 
 ## CSS ownership
 
-`polish.css` is still the only stylesheet for the player, and it carries historical
-overrides: 209 of its blocks mention a player selector, and several elements are defined
-three times. The rule from here on:
+The main app loads exactly one stylesheet, `web/styles/app.css`, which imports one file per
+surface under `@layer tokens, base, layout, components, utilities`. `polish.css`, the old
+`index.html` inline `<style>` block, and the standalone `preferences.css` / `genres.css` /
+`lyrics.css` sheets are gone; their rules live in the owning component. The full contract —
+layer rules, what belongs in `utilities.css`, and why a rule cannot be appended to another
+file — is `docs/frontend-css.md`.
 
-- **One authoritative block per element.** If a rule must change, edit the block that owns
-  the element; do not append a third override at the end of the file.
-- The fullscreen foot is the worked example. `#player-full .pf-foot` controls are sized from
-  tokens on `#player-full`:
+Where a component lives:
+
+| Surface | File |
+| --- | --- |
+| Header, brand, spectrum slot, volume widget, tabs, More menu | `components/app-chrome.css` |
+| Library header, filter row, sort/scope/layout/density controls | `components/library-controls.css` |
+| List rows (`.songtable`, `.songrow`, `.st`, `.sartist`, `.sdur`, `.send`) | `components/library-row.css` |
+| Cards, covers, playlist tiles, folders | `components/library-cards.css` |
+| Compact bar and fullscreen player | `components/player.css` |
+| Playback queue sheet | `components/playback-queue.css` |
+| Download queue / search / review | `components/queue-view.css` |
+| Feed and artist catalogue | `components/feed.css` |
+| Genres dialog | `components/genres.css` |
+| Lyrics pane | `components/lyrics.css` |
+
+- **One authoritative rule per selector within its owner.** Duplicate selectors inside one
+  file were folded where that was order-safe; what remains are deliberate state and
+  breakpoint layers (base rule, then `.playing`/`.open`, then `@media`), so an element is
+  changed by editing its rule, not by appending a third copy at the end.
+- **The playing row is one border.** `.songrow.playing:not(.songcard)` owns a real
+  `border` — 1 px accent at 60% and a 3 px accent right edge — and switches its own separator
+  off. It used to fake the edge with an inset `box-shadow` over a pseudo-element separator,
+  which is why a neighbouring separator could appear to cross it. Do not reintroduce a
+  shadow border or a second drawing layer.
+- The fullscreen foot is the worked example of token sizing. `#player-full .pf-foot` controls
+  are sized from tokens on `#player-full`:
 
   ```css
   #player-full{--pf-foot-size:55px;--pf-foot-glyph:30px;--pf-wave-size:44px;--pf-wave-glyph:24px}
   ```
 
   Like and queue read `--pf-foot-size`/`--pf-foot-glyph`; the style toggle reads
-  `--pf-wave-size`/`--pf-wave-glyph`. The old 40 px rule, the 44 px rule and the queue-only
-  55 px override are gone. 55 px is deliberate: it is the box the queue already had, so
-  equalising like upwards did not change the row height or move the record.
-- Compact bar rules belong in the `body #player, body #player.on { … }` section, which is the
-  authoritative block for that surface. Earlier `#player` blocks above it are historical.
+  `--pf-wave-size`/`--pf-wave-glyph`. 55 px is deliberate: it is the box the queue already
+  had, so equalising like upwards did not change the row height or move the record.
+- Compact bar rules are the `body #player, body #player.on` section of `components/player.css`,
+  the authoritative block for that surface. Inside one file the later block still wins, so
+  edit the block that owns the element rather than adding another.
 - **One bar at every width.** The phone composition is the bar: 112 px tall, cover flush in
   the top-left corner, title and artist centred above the transport, transport centred on the
   bar, seek across the foot with a clock at each end, heart top-right, expand bottom-right.
@@ -175,13 +204,15 @@ three times. The rule from here on:
 
 ## Adding or changing a button
 
-1. Find the element's authoritative block (grep its id in `polish.css`; if it appears more
-   than once, the last one wins — consolidate instead of adding another).
+1. Find the owning component file from the table in `docs/frontend-css.md`, then grep the
+   selector in that file. If it appears more than once there, the later block wins —
+   consolidate instead of adding another.
 2. Size it from an existing token or add one on the owning component, never a bare pixel
    override appended later.
 3. Keep the element's id and click handler. Other code looks elements up by id.
-4. Run `node tests/visual/snap.cjs` and look at every changed screenshot. A diff outside the
-   element you touched is a regression, not a rounding error.
+4. Run `node tests/visual/snap.cjs` and `node tests/visual/library.cjs`, and look at every
+   changed screenshot. A diff outside the element you touched is a regression, not a
+   rounding error.
 
 ## Visual baselines
 
@@ -190,19 +221,27 @@ against a stub API, freezes animation, and compares screenshots for three states
 (`compact`, `fullscreen`, `queue`) at 390×844 and 1280×800. The comparing states carry no
 saved song, so the add/remove control is absent from them; check it by hand.
 
+`tests/visual/library.cjs` does the same for the surfaces the CSS refactor touches hardest:
+`list`, `cards` and `list-playing` at 1280×800, plus `list` and `cards` at 390×844. The
+playing state is what catches the row's border, its right edge, and a separator painting
+over it.
+
 ```bash
 node tests/visual/snap.cjs            # compare against tests/visual/baseline/
 node tests/visual/snap.cjs --update   # accept a deliberate change
 node tests/visual/snap.cjs --selfcheck # prove the baselines are byte-stable
+node tests/visual/library.cjs         # compare against tests/visual/library/
 ```
 
 Changed states write `<state>.actual.png` next to the baseline for inspection.
 
 ## Known debt
 
-- `polish.css`: ~209 player blocks with repeated selectors (`#player.on` ×7,
-  `#player-full .pf-body` ×6, `#player .pctrl` ×5). Each is a future extraction candidate.
-- `web/index.html`: one 51 KB inline `<style>` block (9 player blocks) and ~352 KB of inline
-  script, so the player's markup, styling and behaviour cannot be reviewed independently.
-- The compact bar and the fullscreen foot both style `#pllike`/`#pflike`; they are meant to
-  be one heart state, so change them together.
+- **`index.html` is one ~352 KB inline script.** Markup, styling and behaviour can be
+  reviewed independently now that the CSS has left, but the script itself is still one block.
+- **Semantic class names.** `.st`, `.sartist`, `.salbum`, `.sdur`, `.send` and `.idx` are
+  generated and queried by that inline script. Renaming them is a separate pass: search the
+  CSS, the script's template strings and the tests before touching one.
+- **`#pllike`/`#pflike`.** The compact bar and the fullscreen foot both style them; they are
+  meant to be one heart state, so change them together (both rules are in
+  `components/player.css`).

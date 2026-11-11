@@ -1,6 +1,6 @@
 // Adding a playlist link: visible progress, then exactly what happened.
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
-const html=fs.readFileSync('web/index.html','utf8'),css=fs.readFileSync('web/polish.css','utf8');
+const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
 const start=html.indexOf('let addSeq = 0;');
 const end=html.indexOf('function banner(html, cls)');
 assert(start>0&&end>start,'addUrls block located');
@@ -21,7 +21,7 @@ const boot=[
 (async()=>{const browser=await chromium.launch({headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:800}});
  await page.route('**/*',r=>r.abort());
- await page.setContent(`<style>${css}</style><main><div class="addbox"><textarea id="url"></textarea><button class="primary" id="btn-add">Add</button></div><div class="addstatus" id="addstatus" role="status"></div></main>`);
+ await page.setContent(`${require('./_css.cjs').styleTag()}<main><div class="addbox"><textarea id="url"></textarea><button class="primary" id="btn-add">Add</button></div><div class="addstatus" id="addstatus" role="status"></div></main>`);
  await page.addScriptTag({content:`${stubs}\n${slice}\n${boot}`});
 
  // 1. Success: says what landed, clears the box, restores the button.

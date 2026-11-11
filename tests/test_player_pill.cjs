@@ -1,7 +1,7 @@
 // Phone mini player: four named rows, a scrub you can actually see and drag.
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
-const html=fs.readFileSync('web/index.html','utf8'),css=fs.readFileSync('web/polish.css','utf8'),prefs=fs.readFileSync('web/preferences.css','utf8');
-const inlineStyle=html.match(/<style>([\s\S]*?)<\/style>/)[1];
+const html=fs.readFileSync('web/index.html','utf8'),css=require('./_css.cjs').appCss(),prefs='';
+const inlineStyle='';
 const doc=html.replace(/<script[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,'').replace('</head>',`<style>${inlineStyle}${css}${prefs}</style></head>`);
 (async()=>{const b=await chromium.launch({headless:true});try{
  for(const width of [390,430]){

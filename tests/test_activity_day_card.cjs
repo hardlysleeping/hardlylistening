@@ -1,6 +1,6 @@
 // Activity Feed day cards: collapsed by default, five at a time, no flooding.
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
-const html=fs.readFileSync('web/index.html','utf8'),css=fs.readFileSync('web/polish.css','utf8');
+const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
 const slice=html.slice(html.indexOf('function actWho(item){'),html.indexOf('async function loadActivity(){'));
 const helpers=[
   'const openDays=new Set(); const openedMembers=[];',
@@ -23,7 +23,7 @@ const render=[
  for(const width of [1280,390]){
   const page=await browser.newPage({viewport:{width,height:900}});
   await page.route('**/*',r=>r.abort());
-  await page.setContent(`<style>${html.match(/<style>([\s\S]*?)<\/style>/)[1]}${css}</style><main><div id="activitylist"></div></main>`);
+  await page.setContent(`${require('./_css.cjs').styleTag()}<main><div id="activitylist"></div></main>`);
   await page.addScriptTag({content: `${helpers}\n${slice}\n${render}`});
 
   assert.equal(await page.locator('#activitylist .actday').count(),1);

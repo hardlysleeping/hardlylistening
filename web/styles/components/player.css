@@ -1,0 +1,928 @@
+/* Player component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+/* Playing: the tile says so on its cover, and a list row swaps the number for bars. */
+.nowbars{position:absolute;right:6px;bottom:6px;width:24px;height:24px;border-radius:8px;
+display:grid;place-items:center;background:#0b0c11cc;border:1px solid #58d3a866;color:var(--accent);
+box-shadow:0 4px 14px #0008;pointer-events:none}
+
+.nowbars svg{display:block}
+
+.artbox .nowbars{right:10px;bottom:10px;width:30px;height:30px;border-radius:10px}
+
+@media (prefers-reduced-motion:reduce){ .nowbars svg animate{display:none} }
+
+.hero{display:flex;gap:26px;align-items:flex-end;margin-bottom:22px;flex-wrap:wrap}
+
+.hero .hart{width:208px;height:208px;border-radius:14px;overflow:hidden;background:var(--panel2) center/cover;display:grid;place-items:center;
+font-size:40px;font-weight:700;color:#cfd3e1;box-shadow:0 18px 40px #0007;flex:0 0 auto}
+
+.hero .hart img{width:100%;height:100%;object-fit:cover}
+
+.hero .hmeta{min-width:0;flex:1 1 320px}
+
+.hero .kicker{color:var(--dim);font-size:11.5px;text-transform:uppercase;letter-spacing:.1em}
+
+.hero h3{margin:6px 0 4px;font-size:34px;line-height:1.08;letter-spacing:-.025em;font-weight:700;overflow-wrap:anywhere}
+
+.hero .hsub{color:var(--dim);font-size:13.5px}
+
+.hero .hsub a{color:var(--accent2);cursor:pointer;text-decoration:none}
+
+.hero .hacts{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap;align-items:center}
+
+/* player */
+#player{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;gap:10px;align-items:center;padding:9px 12px;
+padding-bottom:calc(9px + env(safe-area-inset-bottom));background:linear-gradient(180deg,#1b1b22,#14141a);
+border-top:1px solid var(--line);backdrop-filter:blur(10px)}
+
+#player.on{display:flex}
+
+#player .plartwrap{width:56px;height:56px;border-radius:8px;overflow:hidden;background:var(--panel2);border:0;padding:0;cursor:pointer;flex:0 0 auto;display:grid;place-items:center;color:var(--dim)}
+
+#player .plartwrap img{width:100%;height:100%;object-fit:cover}
+
+#player .pmeta{min-width:0;flex:0 1 240px}
+
+#player .ptitle{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* The second line is two controls: the artist, then the release. They sit in one row so
+ the album can scroll inside its own box without moving the artist beside it. */
+#player .psub{display:flex;align-items:baseline;min-width:0;white-space:nowrap;overflow:hidden;
+color:var(--dim);font-size:11.5px;margin-top:2px}
+
+#player .psub .psub-a{flex:0 1 auto;min-width:0;max-width:62%;overflow:hidden;text-overflow:ellipsis;
+color:inherit;text-decoration:none;cursor:pointer}
+
+#player .psub .psub-a:hover{color:var(--text);text-decoration:underline}
+
+#player .psub .psub-sep{flex:0 0 auto;white-space:pre}
+
+#player .psub .psub-b{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+color:inherit;text-decoration:none;cursor:pointer}
+
+#player .psub .psub-b:hover{color:var(--text);text-decoration:underline}
+
+#player .psub .psub-b.rolling{text-overflow:clip}
+
+#player .psub .plmqt{display:inline-flex;white-space:nowrap;will-change:transform;
+animation:pl-title-mq var(--mq-dur,6000ms) linear infinite}
+
+.pctrl{display:flex;align-items:center;gap:6px}
+
+/* Volume is a toggle on the transport row (desktop only): the speaker button opens a
+ horizontal fader into the band to its left, so the bar never carries a slider nobody
+ asked for. The mute button stays at the row's right end. */
+.pvol{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-right:26px}
+
+#player .pseek{flex:1 1 120px;min-width:70px}
+
+#player .ptime{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:34px;text-align:center}
+
+@media (max-width:760px){
+.hero .hart{width:132px;height:132px}
+.hero h3{font-size:24px}
+#player .pvol{display:none}
+#player .pmeta{flex:1 1 90px}
+}
+
+@media (max-width:760px){
+.hero .hacts{width:100%}
+}
+
+body.hasplayer{padding-bottom:88px}
+
+/* The player is an overlay: reserve its room only while it is actually on, so a page that
+   is not playing music does not end in a fat empty band. */
+body:has(#player.on){padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+
+#player{left:50%;right:auto;bottom:14px;width:min(1080px,calc(100vw - 24px));padding:8px 16px;background:rgba(25,26,33,.91);border:1px solid #ffffff25;border-radius:999px;backdrop-filter:blur(18px);box-shadow:0 10px 32px #0008;transform:translateX(-50%)}
+
+#player.on{animation:hl-player-in .18s cubic-bezier(.2,.7,.3,1)}
+
+#player .ptitle{font-size:14px}
+
+#player .psub{font-size:12px}
+
+@media(max-width:720px){
+#player{gap:8px;flex-wrap:wrap}
+#player .pseek{flex-basis:130px}
+}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  body:has(#player.on){padding-bottom:calc(117px + var(--nav-h) + var(--safe-b))}
+}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  /* The player stacks on top of the dock: same bottom edge, painted above it,
+     so the bar can never cover the transport controls. */
+  #player{z-index:60;bottom:calc(var(--nav-h) + var(--safe-b))}
+}
+
+/* Fullscreen player: one clean column, opened from the bar (⤢ or the title). */
+#player-full{display:none;position:fixed;inset:0;z-index:90;background:linear-gradient(180deg,#1b1b23 0%,#101014 62%);flex-direction:column;align-items:center;
+  padding:0 20px calc(22px + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain}
+
+#player-full.on{display:flex;animation:hl-full-in .18s cubic-bezier(.2,.7,.3,1)}
+
+@media(prefers-reduced-motion:reduce){
+  #player.on,#player-full.on{animation:none}
+}
+
+#player-full .pf-tab{margin:8px auto 0;border:0;background:none;color:var(--dim);font-size:22px;line-height:1;padding:8px 30px;border-radius:12px;cursor:pointer}
+
+#player-full .pf-tab:hover{color:var(--text);background:var(--panel2)}
+
+#player-full .pf-body{width:min(560px,100%);display:flex;flex-direction:column;gap:14px;margin:auto 0;padding:8px 0 4px}
+
+#player-full .pf-disc-shell{position:relative;width:min(86vw,520px,54vh);aspect-ratio:1;margin:0 auto;flex:none;touch-action:none;border-radius:50%;overflow:hidden}
+
+#player-full .pf-disc{position:absolute;inset:0;border-radius:50%;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;background:#09090d;border:1px solid #ffffff2b;box-shadow:0 20px 54px #0009,inset 0 0 0 5px #ffffff08,inset 0 0 0 11px #0008}
+
+#player-full .pf-disc.spinning{animation:pf-vinyl-spin 1.8s linear infinite}
+
+#player-full .pf-disc.dragging{animation:none!important;cursor:grabbing}
+
+#player-full .pf-grooves{position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(circle at center,transparent 0 4px,#ffffff0b 4.5px 5.3px,transparent 5.8px 8px);pointer-events:none}
+
+#player-full #pfart{position:absolute;width:44%;height:44%;left:28%;top:28%;border-radius:50%;object-fit:cover;border:1px solid #ffffff36;box-shadow:0 2px 12px #0009}
+
+#player-full .pf-spindle{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:#ddd;box-shadow:0 0 0 2px #15151a;pointer-events:none}
+
+/* Double-tap the cover swaps the record for the sleeve. Same square, so nothing around it
+   moves: the circle clip and the grooves go, the label grows to fill it, and the spin is
+   suppressed — `!important` because paintPfDisc writes the angle as an inline transform.
+   Dragging the sleeve still scrubs; the record is the default on every open. */
+#player-full.artmode .pf-disc-shell{border-radius:18px}
+
+#player-full.artmode .pf-disc{animation:none!important;transform:none!important;border-radius:18px}
+
+#player-full.artmode .pf-grooves,#player-full.artmode .pf-spindle{display:none}
+
+#player-full.artmode #pfart{width:100%;height:100%;left:0;top:0;border:0;border-radius:inherit;box-shadow:none}
+
+#player-full .pf-text{text-align:center;min-width:0}
+
+#player-full .pf-title{font-size:20px;font-weight:650;line-height:1.25;overflow-wrap:anywhere}
+
+/* Same two links as the bar's second line, on one line: the release scrolls inside its
+   own box when it is longer than the room the artist leaves it. */
+#player-full .pf-sub{display:flex;justify-content:center;align-items:baseline;min-width:0;
+  white-space:nowrap;overflow:hidden;color:var(--dim);font-size:13px;margin-top:4px;max-width:100%}
+
+#player-full .pf-sub .psub-a{flex:0 1 auto;min-width:0;max-width:62%;overflow:hidden;text-overflow:ellipsis;
+  color:inherit;text-decoration:none;cursor:pointer}
+
+#player-full .pf-sub .psub-a:hover{color:var(--text);text-decoration:underline}
+
+#player-full .pf-sub .psub-sep{flex:0 0 auto;white-space:pre}
+
+#player-full .pf-sub .psub-b{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  color:inherit;text-decoration:none;cursor:pointer}
+
+#player-full .pf-sub .psub-b:hover{color:var(--text);text-decoration:underline}
+
+#player-full .pf-sub .psub-b.rolling{text-overflow:clip}
+
+#player-full .pf-sub .pfmqt{display:inline-flex;white-space:nowrap;will-change:transform;
+  animation:pf-title-mq var(--mq-dur,6000ms) linear infinite}
+
+@media (prefers-reduced-motion:reduce){#player-full .pf-sub .pfmqt,
+  body #player.on #plsub .plmqt{animation:none}}
+
+/* Fullscreen scrub: a 6px line, as before, sitting in a 30px grab band — the hit area is
+   four times taller than the thing you see, so a thumb finds it first time. The played part
+   fills in the accent, and the knob grows under the finger as contact feedback. */
+#player-full .pf-seek{width:100%;height:30px;margin:-12px 0;background:transparent;
+  cursor:pointer;-webkit-tap-highlight-color:transparent}
+
+#player-full .pf-seek::-webkit-slider-runnable-track{height:6px;border-radius:3px;
+  background:linear-gradient(90deg,var(--accent) var(--pf-played,0%),#3a3d47 var(--pf-played,0%))}
+
+#player-full .pf-seek::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;
+  margin-top:-6px;border-radius:50%;background:var(--text);box-shadow:0 0 0 0 #ffffff00;
+  transition:box-shadow .15s ease,transform .15s ease}
+
+#player-full .pf-seek:active::-webkit-slider-thumb{transform:scale(1.2);box-shadow:0 0 0 8px #ffffff1f}
+
+#player-full .pf-seek::-moz-range-track{height:6px;border-radius:3px;background:#3a3d47}
+
+#player-full .pf-seek::-moz-range-progress{height:6px;border-radius:3px;background:var(--accent)}
+
+#player-full .pf-seek::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;
+  background:var(--text);box-shadow:0 0 0 0 #ffffff00;transition:box-shadow .15s ease}
+
+#player-full .pf-seek:active::-moz-range-thumb{box-shadow:0 0 0 8px #ffffff1f}
+
+#player-full .pf-times{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:-6px}
+
+#player-full .pf-ctrl{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:2px}
+
+#player-full .pf-ctrl .iconbtn{opacity:.8}
+
+#player-full .pf-ctrl .iconbtn.big{width:60px;height:60px}
+
+#player-full .pf-foot{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:4px}
+
+#player-full .pf-foot button{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 14px;font-size:12.5px;cursor:pointer}
+
+#player-full .pf-foot button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Volume: a fader under the transport, desktop only. A phone has hardware buttons and its
+   single column has no spare lane; a desktop has the width, and reaching for the bar to
+   change the level while the fullscreen view is open is the whole reason this exists.
+   The filled part is an accent gradient driven by `--vol`, the same paint the scrub uses. */
+#player-full .pf-vol{display:none}
+
+@media (min-width:761px){
+  /* It sits at the right end of the foot row, level with the like/queue/visualizer buttons:
+     a row of its own would have pushed the visualizer knobs off a 1280x800 screen, and the
+     transport row has no spare width beside the centred cluster. */
+  #player-full .pf-foot{position:relative}
+  #player-full .pf-vol{display:flex;align-items:center;justify-content:flex-end;gap:9px;
+    position:absolute;right:0;top:50%;transform:translateY(-50%);margin:0}
+  #player-full .pf-vol>svg{flex:none;color:var(--dim)}
+  #player-full #pfvol{-webkit-appearance:none;appearance:none;width:130px;height:20px;margin:0;
+    padding:0;background:transparent;cursor:pointer}
+  #player-full #pfvol::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+    background:linear-gradient(90deg,var(--accent) var(--vol,100%),#3a3d47 var(--vol,100%))}
+  #player-full #pfvol::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;
+    border-radius:50%;background:var(--text);box-shadow:0 1px 3px #0008}
+  #player-full #pfvol::-moz-range-track{height:4px;border-radius:2px;background:#3a3d47}
+  #player-full #pfvol::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+  #player-full #pfvol::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;
+    background:var(--text);box-shadow:0 1px 3px #0008}
+}
+
+body.fullplayer{overflow:hidden}
+
+body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
+
+@media(max-width:760px){
+  #player-full .pf-title{font-size:18px}
+  #player-full .pf-body{gap:12px}
+  /* The volume rail needs its own lane on the right: keep the record clear of it. */
+  #player-full .pf-disc-shell{width:min(78vw,50vh,520px)}
+}
+
+@media(max-width:760px) and (max-height:640px){
+  #player-full .pf-disc-shell{width:min(72vw,36vh,360px)}
+  #player-full .pf-body{gap:8px}
+  #player-full .pf-ctrl .iconbtn.big{width:50px;height:50px}
+}
+
+.actrow{padding:12px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:14px;background:#191a21}
+
+@media(max-width:640px){
+  #player.on{left:8px;right:8px;bottom:calc(var(--nav-h) + var(--safe-b));width:auto;
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-areas:"art meta meta" "ctrl ctrl ctrl" "time seek dur" "extras extras extras";
+    gap:6px 8px;padding:8px 10px;border-radius:10px 10px 0 0;transform:none;align-items:center}
+  #player .plartwrap{grid-area:art;width:38px;height:38px;border-radius:50%}
+  #player .pmeta{grid-area:meta;min-width:0;flex:auto}
+  #player .pctrl{grid-area:ctrl;justify-content:center;gap:2px}
+  #player .pctrl .iconbtn{width:30px;height:30px;min-height:0}
+  #player .pctrl .iconbtn.small{width:26px;height:26px}
+  #player .pctrl .iconbtn.big{width:34px;height:34px;min-height:0}
+  #player .pvol .iconbtn{width:28px;height:28px;min-height:0}
+  #player #pltime{grid-area:time}
+  #player #pldur{grid-area:dur}
+  /* The scrub has to be a real 20 px box: `input[type=range]` is 4 px tall, which cut
+     the thumb in half and left the bar looking clipped. */
+  #player .pseek{grid-area:seek;width:100%;min-width:0;flex:none;height:20px;background:transparent}
+  #player input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:#33333f}
+  #player input[type=range]::-webkit-slider-thumb{margin-top:-4px}
+  #player input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:#33333f}
+  #player .pvol{grid-area:extras;display:flex;align-items:center;gap:8px;width:auto;justify-self:stretch;flex:1 1 auto}
+  #player .pvol input{order:2;flex:1 1 auto;width:auto;min-width:0;height:20px;background:transparent}
+  #player #plmute{order:1;flex:none}
+}
+
+@media(max-width:640px){
+  body:has(#player.on){padding-bottom:calc(170px + var(--nav-h) + var(--safe-b))}
+}
+
+/* The marquee's moving text: the <b> stays the clipping box, so the title scrolls inside
+   the card instead of sliding out of it. */
+.songcard .st b .mqt{display:inline-block;white-space:nowrap}
+
+.acard .thumb .bubbles,.acard .nowbars{position:absolute}
+
+/* Header shuffle sits left of player connections. The right-hand cluster is pushed over by
+   #plvolslot's `margin-left:auto` (above), which is present at every width. */
+#btn-shuffle{flex:none;min-width:34px;min-height:34px;padding:0;border-radius:10px}
+
+#btn-shuffle svg{display:block}
+
+#plvolbtn,#plvolslot #plvol{display:none}
+
+@media (min-width:761px){
+  #plvolbtn{display:grid}
+  /* 72 px, not the 104 it had: the level reads from the accent fill, so a long track is
+     just more travel with no more information. 4 px track, 10 px thumb. */
+  #plvolslot #plvol{position:absolute;right:calc(100% + 8px);top:50%;transform:translateY(-50%);
+    display:none;width:72px;height:18px;margin:0;padding:0;background:transparent;
+    cursor:pointer;touch-action:auto;z-index:2}
+  #plvolslot.open #plvol{display:block}
+  /* The fill is the level: the accent runs from the left edge to `--vol` and the rest is a
+     flat dark track, so at 100% the whole slider is accent and at 0% none of it is. */
+  #plvolslot #plvol::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+    background:linear-gradient(90deg,var(--accent) var(--vol,100%),#2c2e37 var(--vol,100%))}
+  #plvolslot #plvol::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;
+    margin-top:-3px;border-radius:50%;background:var(--text);box-shadow:0 1px 3px #0008}
+  #plvolslot #plvol::-moz-range-track{height:4px;border-radius:2px;background:#2c2e37}
+  #plvolslot #plvol::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+  #plvolslot #plvol::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;
+    background:var(--text);box-shadow:0 1px 3px #0008}
+}
+
+/* Phones keep audio.volume read-only: the fader and mute are hidden there, not faked. */
+.no-volume #plvolbtn,.no-volume #player-full .pf-vol{display:none!important}
+
+  /* mute still works: iOS ignores volume, not muted */
+
+/* Mute sits with the transport; queue and fullscreen are a right-aligned pair. */
+/* Transport stays centred; queue and fullscreen are a right-aligned pair on that same row. */
+#player .pctrl{display:flex;align-items:center;gap:14px;flex:1;min-width:0}
+
+#player .ptrans{display:flex;align-items:center;gap:6px;margin:0 auto}
+
+#player .pend{display:flex;align-items:center;gap:10px;flex:none}
+
+#player .pend .iconbtn{width:34px;height:34px;min-width:34px;min-height:34px;opacity:.85}
+
+#player .pend .iconbtn:hover{opacity:1}
+
+@media(max-width:640px){
+  #player .pctrl{gap:10px}
+  #player .ptrans{gap:2px}
+  #player .pend{gap:8px}
+  #player .pend .iconbtn{width:32px;height:32px;min-width:32px;min-height:32px}
+  #player .pvol{grid-area:extras;justify-content:flex-start}
+}
+
+/* Compact bar artwork: bigger, and a squircle rather than a circle. */
+#player #plartwrap{width:60px;height:60px;border-radius:15px}
+
+#player #plartwrap img{border-radius:inherit}
+
+@media(max-width:640px){
+  #player #plartwrap{grid-area:art;width:44px;height:44px;border-radius:12px}
+}
+
+/* Long press arms the compact bar before the swipe to fullscreen. */
+#player.gesture-armed{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 60%,transparent),0 10px 32px #0008}
+
+#player.gesture-armed .plartwrap{transform:scale(1.04)}
+
+/* Fullscreen player: tighter top, more air under the record, and a bigger ☰ with a like. */
+#player-full .pf-tab{margin:0 auto;padding:4px 30px}
+
+#player-full .pf-body{padding:0 0 6px;gap:18px}
+
+#player-full .pf-text{margin-top:6px}
+
+#player-full .pf-foot{gap:12px;margin-top:2px}
+
+@media(max-width:640px){#player-full .pf-body{gap:14px}}
+
+/* The compact bar owns its vertical gesture: without this the browser treats the drag as a
+   page scroll and cancels the pointer before the swipe threshold is reached. */
+#player{touch-action:none}
+
+/* ---- Fullscreen queue: two moves, one motion -------------------------------
+   The record leaves upward (translate + fade, its layout space stays put so nothing
+   re-flows), the title and the permanent divider rise to the top edge, and the queue
+   rises from below into the space under that divider. All transforms, all composited. */
+#player-full .pf-body{position:relative;display:flex;flex-direction:column;align-items:stretch}
+
+#player-full .pf-disc-shell{transition:transform .44s cubic-bezier(.25,.8,.3,1),opacity .3s ease;will-change:transform,opacity}
+
+#player-full .pf-text{transition:transform .44s cubic-bezier(.25,.8,.3,1)}
+
+#player-full.queue-open .pf-disc-shell{transform:translateY(-115%) scale(.92);opacity:0;pointer-events:none}
+
+#player-full.queue-open .pf-text{transform:translateY(calc(-1 * var(--pf-head-travel, 40px)))}
+
+#player-full .pf-queue-slot{position:absolute;left:0;right:0;top:var(--pf-slot-top,120px);bottom:0;
+  display:none;overflow:hidden;transform:translateY(100%);opacity:.001;pointer-events:none;
+  transition:transform .44s cubic-bezier(.25,.8,.3,1),opacity .2s linear}
+
+/* While closed the slot is taken out of the layout entirely: parked below the column it still
+   counted towards the overlay's scroll area, so the player could be scrolled into empty space.
+   showFullQueue() flips it to flex before the slide starts. */
+#player-full.queue-open .pf-queue-slot{transform:translateY(0);opacity:1;pointer-events:auto}
+
+/* With the queue open the column starts at the top (under the close chevron) instead of
+   centring, so the header really lands at the top edge. */
+#player-full.queue-open{justify-content:flex-start}
+
+#player-full.queue-open .pf-body{margin:0;padding-top:0}
+
+/* Fullscreen: the header block sits a little lower, and the foot controls are bare icons.
+   One rule owns like, queue and the style toggle, so no later block can size one of them
+   differently: same 44 px box, same 24 px glyph, same baseline. --pf-foot-size is the token
+   the rest of the player reads. */
+/* 55 px is the box the queue already occupied, so equalising upwards leaves the row's height
+   — and therefore the record above it — exactly where it was. */
+#player-full{--pf-foot-size:55px;--pf-foot-glyph:30px}
+
+#player-full .pf-body{padding-top:10px}
+
+#player-full.queue-open .pf-body{padding-top:22px}
+
+#player-full .pf-foot #pflike,
+#player-full .pf-foot #pfqueue{
+  display:grid;place-items:center;box-sizing:border-box;
+  width:var(--pf-foot-size);height:var(--pf-foot-size);
+  min-width:var(--pf-foot-size);min-height:var(--pf-foot-size);
+  padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;
+  color:var(--text);font-size:var(--pf-foot-glyph);line-height:1}
+
+#player-full .pf-foot #pflike:hover{background:none;color:var(--accent)}
+
+/* Hover is a hint, not a state. The queue toggle used to take the accent on hover alone, so
+   it looked switched on for as long as the pointer rested on it — and, with nothing marking
+   the real state, it looked no different while the queue was actually open. The open state
+   now owns the accent and a ring (the same pair the visualizer toggle uses), so it survives
+   the pointer leaving the button, and a plain hover only warms the glyph. */
+#player-full .pf-foot #pfqueue:hover{background:none;
+  color:color-mix(in srgb,var(--text) 78%,var(--accent))}
+
+#player-full .pf-foot #pfqueue[aria-expanded="true"]{color:var(--accent);border-radius:10px;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+
+#player-full .pf-foot #pflike.on{color:var(--accent)}
+
+/* More air between the record and the title. */
+#player-full .pf-text{margin-top:16px}
+
+#player-full.queue-open .pf-text{margin-top:0}
+
+/* ---- Player backgrounds: dispersed glass of the album art ------------------
+   The artwork is a blurred wash behind a vertical gradient, with two soft glows for the
+   highlights. All static CSS on one layer, so it composites with the UI and costs no
+   per-frame work while audio plays. */
+#player-full{--glow-a:color-mix(in srgb,var(--accent) 55%,transparent)}
+
+#player-full.has-art::before,#player.has-art::before{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background-image:var(--player-art);background-size:cover;background-position:center;
+  filter:blur(48px) saturate(1.6) brightness(.7);transform:scale(1.25);opacity:.55}
+
+#player-full.has-art::after,#player.has-art::after{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:
+    radial-gradient(60% 45% at 18% 12%,color-mix(in srgb,var(--accent) 40%,transparent),transparent 70%),
+    radial-gradient(55% 40% at 85% 82%,color-mix(in srgb,#7aa2ff 32%,transparent),transparent 72%),
+    linear-gradient(180deg,#0b0b10d9 0%,#0b0b10b3 45%,#0b0b10f2 100%);
+  mix-blend-mode:screen;opacity:.75}
+
+#player-full.has-art{background:linear-gradient(180deg,#101014,#0c0c11)}
+
+/* The wash is a layer of its own (`::before`), so the surface under it has no reason to be
+   translucent: at 80% the page showed through the modal as ghost text over the record. */
+#player.has-art{background:rgba(18,19,25,.72)}
+
+/* The compact pill is a small floating object, not a full-screen surface: the blurred copy
+   of the cover is clipped to the pill instead of blooming out around it (on a phone that
+   halo was wider than the bar itself), and the drop shadow stays short and close. */
+#player{box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
+
+/* The blurred artwork is painted larger than the bar and clipped by the bar's own
+   rounded edge, so the wash reaches the border with no visible inner curve. */
+#player.on{overflow:hidden}
+
+#player.has-art::before{filter:blur(30px) saturate(1.35) brightness(.68);transform:scale(1.25);
+  opacity:.18}
+
+#player.has-art::after{
+  /* Broad, overlapping highlights with a feathered edge; omit the vertical bands. */
+  background:
+    radial-gradient(90% 85% at 18% 12%,color-mix(in srgb,var(--accent) 18%,transparent),transparent 88%),
+    radial-gradient(90% 85% at 85% 82%,color-mix(in srgb,#7aa2ff 14%,transparent),transparent 90%);
+  mix-blend-mode:screen;filter:blur(18px);transform:scale(1.16);opacity:.18}
+
+@media(max-width:720px){
+  #player{box-shadow:0 4px 12px #0000004d,inset 0 1px 0 #ffffff10}
+  #player.has-art::before{opacity:.34;filter:blur(22px) saturate(1.25) brightness(.62)}
+  #player.has-art::after{filter:blur(14px);transform:scale(1.12);opacity:.18}
+}
+
+#player-full>*,#player>*{position:relative;z-index:1}
+
+#player-full{padding-top:env(safe-area-inset-top)}
+
+/* Fullscreen player is a fixed surface: the page behind cannot scroll or bounce. */
+body.fullplayer{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:pan-y}
+
+html:has(body.fullplayer){overflow:hidden;height:100%;overscroll-behavior:none}
+
+body.fullplayer #player-full{touch-action:pan-y;overscroll-behavior:contain}
+
+/* Compact player: 90% of its width, 5% shorter overall. */
+#player{width:min(972px,calc((100vw - 24px) * .9));padding:7px 15px}
+
+#player #plartwrap{width:57px;height:57px;border-radius:14px}
+
+@media(max-width:720px){#player{width:calc((100vw - 24px) * .9)}}
+
+@media(max-width:720px){
+  /* Phone compact bar: 90% width, 5% shorter. */
+  #player.on{left:7%;right:7%;width:auto;padding:7px 11px;gap:7px}
+  #player.on #plartwrap{width:48px;height:48px}
+}
+
+/* The compact bar lines up with the library content box, so its edges meet the card edges. */
+#player{right:auto;left:50%;transform:translateX(-50%);width:calc(min(1120px,100vw) - 48px)}
+
+@media(max-width:720px){#player.on{right:auto;left:50%;transform:translateX(-50%);width:calc(100vw - 28px)}}
+
+/* The duplicate copy exists only while the marquee runs, so nothing ever shows twice. */
+.mqt .mt2{display:none}
+
+.mqt.rolling .mt2{display:inline-block}
+
+/* The queue lives inside its own box: closed, it slides down and is clipped there, so it
+   can never paint over the transport buttons. */
+#player-full .pf-queue-slot{overflow:hidden;z-index:0}
+
+#player-full .pf-seek,#player-full .pf-transport,#player-full .pf-foot{position:relative;z-index:2}
+
+/* Opening the queue must not re-flow the player: the column keeps the same box and only
+   the record, header and queue move. Otherwise the transport jumps up on every click. */
+#player-full.queue-open{justify-content:flex-start}
+
+#player-full.queue-open .pf-body{margin:auto 0;padding-top:10px}
+
+#player-full.queue-open .pf-text{margin-top:16px}
+
+@media (min-width: 761px){
+  #player.on{left:50%;right:auto;bottom:14px;transform:translateX(-50%);
+    width:min(1080px,calc(100vw - 24px));
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-areas:"art meta meta" "ctrl ctrl ctrl" "time seek dur";
+    gap:8px 10px;padding:10px 16px;border-radius:14px;align-items:center}
+  #player .plartwrap{grid-area:art;width:46px;height:46px;border-radius:10px}
+  #player .pmeta{grid-area:meta;min-width:0;flex:none}
+  #player .pctrl{grid-area:ctrl;justify-content:center;justify-self:stretch;gap:8px;flex:none}
+  #player .pctrl .iconbtn{width:34px;height:34px;min-height:0}
+  #player .pctrl .iconbtn.small{width:30px;height:30px;min-height:0}
+  #player .pctrl .iconbtn.big{width:42px;height:42px;min-height:0}
+  #player #pltime{grid-area:time;justify-self:start}
+  #player #pldur{grid-area:dur;justify-self:end}
+  #player .pseek{grid-area:seek;width:100%;min-width:0;flex:none;height:20px;background:transparent}
+}
+
+@media (min-width: 761px){
+  body:has(#player.on){padding-bottom:calc(150px)}
+}
+
+/* Compact bar heart: inside the bar's own top-right corner, never overhanging it. */
+#player{position:fixed}
+
+#player #pllike{position:absolute;top:6px;right:10px;width:26px;height:26px;min-width:0;min-height:0;
+  display:grid;place-items:center;padding:0;border:0;background:none;color:var(--dim);
+  font-size:16px;line-height:1;z-index:3}
+
+#player #pllike.on{color:#ff5c8a}
+
+#player #pllike:hover{color:var(--text)}
+
+@media (min-width:761px){#player .pmeta{padding-right:34px}}
+
+@media (max-width:640px){#player .pmeta{padding-right:30px}}
+
+/* A bigger fullscreen affordance in the compact bar, and the pull-up follow. */
+#player #plfull{width:34px;height:34px;min-width:0;min-height:0;font-size:15px}
+
+@media (min-width:761px){#player #plfull{width:40px;height:40px;font-size:17px}}
+
+/* `translate`, not `transform`: the bar already carries a centring transform, and
+   overriding it threw the bar sideways while it was being pulled up. */
+#player.pulling{translate:0 var(--pull,0px)}
+
+/* Queue and fullscreen are the two ways out of the bar, so they match — and the heart is
+   absolutely placed, so it adds nothing to the bar's height. */
+#player #plqueue{width:34px;height:34px;min-width:0;min-height:0}
+
+@media (min-width:761px){#player #plqueue{width:40px;height:40px}}
+
+/* The glyphs are twice the size; the boxes, rows and bar height are untouched. */
+#player #pllike{font-size:32px;overflow:visible}
+
+#player #plqueue{font-size:26px;line-height:1;overflow:visible}
+
+#player #plfull{font-size:34px;line-height:1;overflow:visible;width:34px;height:34px}
+
+@media (min-width:761px){#player #plfull{width:40px;height:40px}}
+
+/* The sheet grows out of the bar rather than fading in from nowhere. */
+#player-full.on{animation:hl-full-rise .26s cubic-bezier(.2,.7,.3,1)}
+
+/* The pull-up belongs to the bar: without this the browser treats a vertical drag as a
+   page scroll / pull-to-refresh and cancels the pointer stream mid-gesture. Horizontal
+   stays native so the scrubber can still be dragged. */
+#player{touch-action:pan-x}
+
+#player input[type=range]{touch-action:auto}
+
+/* List rows scroll their cut-off title the same way cards do: the clip stays on the <b>. */
+.songtable .songrow:not(.songcard) .st b .mqt{display:inline-block;white-space:nowrap}
+
+/* Live pull: while the gesture is in progress the pane is positioned by --pf-pull (0..1)
+   instead of the entrance animation, so it tracks the finger both ways. */
+#player-full.pulling{display:flex;animation:none!important;
+  transform:translateY(calc((1 - var(--pf-pull,0)) * 60px));
+  opacity:calc(var(--pf-pull,0) * 1);transition:none;will-change:transform,opacity}
+
+#player-full.pulling.snap{transition:transform .24s cubic-bezier(.2,.7,.3,1),opacity .24s ease}
+
+/* A fixed body needs its offset held, otherwise the first frame is the top of the document. */
+body.fullplayer{top:0}
+
+/* Fullscreen title: honoured as one line; when it does not fit it scrolls instead of
+   spilling out of the player. */
+#player-full .pf-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+#player-full .pf-title.rolling{text-overflow:clip}
+
+#player-full .pf-title .pfmqt{display:inline-flex;white-space:nowrap;will-change:transform;
+  animation:pf-title-mq var(--mq-dur,6000ms) linear infinite}
+
+/* ---- Compact bar: artwork on the left, text beside it --------------------
+   The cover is the first thing in the bar on every width, on the same row as the title
+   and artist. The transport sits on its own centred line below, then the scrub. */
+@media (max-width:760px){
+  #player.on{display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-areas:"art meta meta" "art ctrl ctrl" "time seek dur";
+    gap:8px 8px;padding:4px 12px 7px;border-radius:12px 12px 0 0;align-items:center}
+  #player .pmeta{text-align:left;padding:0;min-width:0;align-self:stretch;min-height:30px;
+    display:flex;flex-direction:column;justify-content:center}
+  #player .ptitle{font-size:13px;line-height:1.15;text-align:left}
+  #player .psub{font-size:10.5px;line-height:1.15;margin-top:1px;text-align:center}
+  /* The cover is flush to the bar's left edge, top level with the title, and its
+     outer corner matches the bar's radius. */
+  #player.on #plartwrap{grid-area:art;justify-self:start;align-self:start;width:68px;height:68px;
+    border-radius:12px 11px 11px 11px;margin:0 0 0 -12px}
+  /* Three columns: empty 1fr, the transport, empty 1fr. The queue/fullscreen pair
+     lives in the right column, in flow, so it can never sit on top of the mute. */
+  /* The lyrics button is hidden in the compact bar; leaving it in the grid made it
+     claim an implicit column, which kept the queue/fullscreen pair short of the
+     right edge. */
+  #player .pvol{display:none}
+  #player .pctrl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+    grid-column:2 / -1}
+  #player .ptrans{grid-column:2;justify-self:center;transform:translateX(8px)}
+  #player .pctrl .iconbtn{width:28px;height:28px;min-height:0}
+  #player .pctrl .iconbtn.small{width:24px;height:24px}
+  #player .pctrl .iconbtn.big{width:30px;height:30px;min-height:0}
+  #player .pend{grid-column:3;justify-self:end;position:static;transform:translateY(13px);
+    gap:20px;margin-right:-2px}
+  #player .pend .iconbtn{width:28px;height:28px;min-width:28px;min-height:28px}
+  #player #plfull{width:28px;height:28px;font-size:26px;line-height:1}
+  #player #plqueue{width:28px;height:28px}
+  #player .pseek{height:18px}
+  #player #pllike{top:4px}
+  body:has(#player.on){padding-bottom:calc(118px + var(--nav-h) + var(--safe-b))}
+}
+
+@media (min-width:761px){
+  #player.on{display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-areas:"art meta meta" "art ctrl ctrl" "time seek dur";
+    gap:6px 12px;padding:9px 18px;border-radius:16px 16px 0 0;align-items:center}
+  #player .pmeta{text-align:center;padding:0}
+  #player .ptitle{font-size:15px}
+  #player .psub{font-size:12.5px}
+  #player.on #plartwrap{grid-area:art;justify-self:start;align-self:end;width:91px;height:91px;
+    border-radius:15px;margin:0}
+  #player .pctrl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
+  #player .ptrans{grid-column:2;justify-self:center;transform:translateX(8px)}
+  #player .pend{grid-column:3;justify-self:end;position:static;transform:none}
+  /* The heart sits in the empty band above the queue/fullscreen pair. */
+  #player #pllike{top:9px;right:42px}
+  body:has(#player.on){padding-bottom:180px}
+}
+
+/* ==== Compact player bar, drawn from compact-bar-layers.svg (402x112) =======
+   One authoritative block: every earlier #player rule above is superseded here, because
+   the bar is now built to the drawing rather than to the old flex row.
+   cover 13,8 62x62 r11 · title clipped before the heart · artist centred under it ·
+   transport centred on y55 · heart top-right · queue + expand under it ·
+   seek 85..(right-95) on y85 with the two times at its ends. */
+body #player,body #player.on{position:fixed;left:14px;right:14px;bottom:calc(var(--nav-h,0px) + var(--safe-b,0px));
+  z-index:60;display:none;width:auto;max-width:none;height:112px;box-sizing:border-box;
+  margin:0;padding:0;transform:none;animation:none;overflow:hidden;
+  background:linear-gradient(180deg,#1b1b22,#14141a);
+  border:1px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;
+  backdrop-filter:blur(10px);box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
+
+body #player.on{display:block;animation:none}
+
+/* Cover: the image is clipped by its own frame radius, so the art curves with the border. */
+/* Bigger art on the title's top line: 72px at 4,5 stops one pixel short of the transport's
+   first glyph, and the clocks below it have moved down out of its way. */
+/* Flush into the bar's own top-left corner: 1px inset to sit inside the border, and the
+   radius is the bar's 14px minus that border, so the two arcs are concentric. */
+body #player.on #plartwrap{position:absolute;left:1px;top:1px;width:72px;height:72px;
+  min-width:0;min-height:0;margin:0;padding:0;display:block;overflow:hidden;
+  border:0;border-radius:13px 0 0 0;background:var(--panel2);cursor:pointer;z-index:2}
+
+body #player.on #plartwrap img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+/* Text column: starts at the drawing's x=83 and stops 56 px from the right edge, so the
+   title truncates before it can reach the heart. */
+body #player.on #plmeta{position:absolute;left:83px;right:56px;top:5px;margin:0;padding:0;
+  min-width:0;max-width:none;display:block;text-align:left;cursor:pointer;z-index:2}
+
+body #player.on #pltitle{font-size:13px;font-weight:600;line-height:18px;margin:0;text-align:left;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+body #player.on #plsub{font-size:10.5px;line-height:14px;color:var(--dim);margin:0;text-align:center;
+  display:flex;justify-content:center;white-space:nowrap;overflow:hidden}
+
+/* Heart, top-right, inside the bar's own corner. `right:9px` is the column's centre line:
+   the heart, the add/remove slot (11.5 + half of 29) and the expand button (9 + 17) all
+   centre 26 px in from the bar's right edge, so the three read as one stack. */
+body #player.on #pllike{position:absolute;right:9px;top:2px;width:34px;height:34px;
+  min-width:0;min-height:0;margin:0;padding:0;display:grid;place-items:center;
+  border:0;border-radius:0;background:none;color:var(--dim);font-size:28px;line-height:1;
+  overflow:visible;opacity:1;z-index:3}
+
+body #player.on #pllike.on{color:#ff5c8a}
+
+body #player.on #pllike:hover{color:var(--text)}
+
+/* Transport: one centred row on y55, ten pixels per stop. */
+body #player.on .pctrl{position:absolute;left:0;right:0;top:32px;height:44px;margin:0;padding:0;
+  display:flex;align-items:center;justify-content:center;gap:0;flex:none;
+  pointer-events:none;z-index:2}
+
+body #player.on .ptrans{display:flex;align-items:center;justify-content:center;gap:0;margin:0 24px 0 0;
+  transform:none;pointer-events:auto}
+
+body #player.on .ptrans .iconbtn{width:30px;height:30px;min-width:30px;min-height:30px;margin:0;
+  padding:0;border-radius:50%;background:transparent;color:var(--text);opacity:.62}
+
+body #player.on .ptrans .iconbtn:hover{opacity:1;background:transparent}
+
+body #player.on .ptrans .iconbtn.small{width:30px;height:30px;opacity:.62}
+
+body #player.on .ptrans .iconbtn.small.on{opacity:1;color:var(--accent)}
+
+/* Play and skip are a touch larger than the rest, with air either side, so the group
+   reads as three buttons rather than a run of six. */
+body #player.on #plprev,body #player.on #plnext{width:32px;height:32px;min-width:32px;min-height:32px;
+  margin:0 3px}
+
+body #player.on #plplay{width:34px;height:34px;min-width:34px;min-height:34px;margin:0 5px;
+  border-radius:50%;background:var(--text);color:#101014;opacity:1}
+
+body #player.on #plplay:hover{background:#fff}
+
+body #player.on #plplay svg{width:16px;height:16px}
+
+/* Queue and expandstack under the heart, right-aligned to the same edge. */
+/* Each of the two sits on the line it belongs to: the queue on the transport's centre,
+   level with the mute, and the expand on the duration's centre at the bottom right. */
+body #player.on .pend{position:absolute;left:0;right:0;top:0;bottom:0;margin:0;display:block;
+  transform:none;pointer-events:none}
+
+body #player.on .pend .iconbtn{position:absolute;width:34px;height:34px;min-width:34px;
+  min-height:34px;margin:0;padding:0;border-radius:0;background:transparent;color:var(--text);
+  font-size:26px;line-height:1;opacity:.85;overflow:visible;pointer-events:auto}
+
+body #player.on .pend .iconbtn:hover{opacity:1;background:transparent}
+
+body #player.on #plqueue{width:34px;height:34px;font-size:26px;line-height:1;right:55px;top:1px}
+
+body #player.on #plfull{width:34px;height:34px;font-size:26px;line-height:1;right:9px;top:36px}
+
+/* Seek: the drawing's 222 px track, with the clock at each end outside it. */
+body #player.on #plseek{position:absolute;left:85px;right:95px;bottom:19px;width:auto;min-width:0;
+  height:16px;margin:0;padding:0;flex:none;background:transparent;z-index:2;touch-action:auto}
+
+body #player.on #plseek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:#3a3d47}
+
+body #player.on #plseek::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;
+  margin-top:-3px;border-radius:50%;background:#e8eaf0}
+
+body #player.on #plseek::-moz-range-track{height:4px;border-radius:2px;background:#3a3d47}
+
+body #player.on #plseek::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:#e8eaf0}
+
+/* The scrub keeps its own track and thumb with the wave on: the wave is decoration below
+   the slider, never a substitute for it, so the position is always readable and grabable. */
+body #player.on .ptime{position:absolute;bottom:19px;width:44px;margin:0;font-size:11.5px;
+  line-height:16px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:center;z-index:2}
+
+body #player.on #pltime{left:22px}
+
+body #player.on #pldur{right:50px}
+
+/* Lyrics is dead markup app-wide; the volume control lives in the top bar now. */
+body #player.on .pvol{display:none}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  body #player.on.has-art{background:rgba(18,19,25,.72);box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
+  body #player.on.has-art::before{opacity:.34;filter:blur(22px) saturate(1.25) brightness(.62)}
+  body #player.on.has-art::after{filter:blur(14px);transform:scale(1.12);opacity:.18}
+}
+
+@media (min-width:761px){
+  body #player,body #player.on{
+    left:50%;right:auto;transform:translateX(-50%);
+    bottom:calc(16px + var(--nav-h,0px) + var(--safe-b,0px));
+    width:min(1072px,calc(100vw - 48px));max-width:none;
+    border:1px solid var(--line);border-radius:16px}
+  body:has(#player.on){padding-bottom:calc(140px + var(--nav-h,0px) + var(--safe-b,0px))}
+
+  /* The phone's composition, kept as it is: art in the corner, title and artist centred
+     above the transport, seek across the foot. Only the empty bands between them grow, so
+     nothing moves when the window does. */
+}
+
+body:has(#player.on){padding-bottom:calc(112px + var(--nav-h,0px) + var(--safe-b,0px))}
+
+/* Bar title that does not fit scrolls in place: the same clip-and-two-copies rules as the
+   fullscreen title, at the bar's own speed. */
+body #player.on #pltitle{text-align:center}
+
+body #player.on #pltitle.rolling{text-overflow:clip;text-align:left}
+
+body #player.on #pltitle .plmqt{display:inline-flex;white-space:nowrap;will-change:transform;
+  animation:pl-title-mq var(--mq-dur,6000ms) linear infinite}
+
+@media (prefers-reduced-motion:reduce){body #player.on #pltitle .plmqt{animation:none}}
+
+/* ==== Client-side waveform: three compact placements, three fullscreen ones ======
+   Everything is drawn from one AnalyserNode fed by the audio element, so nothing is
+   computed server-side. Each surface is its own canvas: delete a block (CSS geometry +
+   the two markup lines) and that option is gone without touching the others.
+   seek   = the wave is the progress line in the compact scrub
+   aura   = the glow behind the record in the fullscreen player                    */
+
+/* The wave IS the compact scrub's line. A canvas is a replaced element, so left+right
+   with width:auto would not stretch: the width is stated against the same 180 px of
+   insets the scrub uses, or the wave collapses to its intrinsic 300/24 px.
+   65 px tall (72 less a tenth) and flush with the bar's bottom edge, so the bars stand on
+   the bottom margin and grow up through the scrub — the track is 27 px up (bottom 19 +
+   half of 16), so a full bar crosses the slider and keeps going instead of hanging under
+   it. The height is the only thing that shrank; the scrub itself has not moved. Drawn
+   behind the input, which keeps its track and thumb: the position stays readable and
+   grabable. */
+body #player.on .plwave-seek{position:absolute;left:85px;bottom:0;height:65px;
+  width:calc(100% - 180px);pointer-events:none;z-index:1}
+
+/* Only while the wave is drawing the line: with the visualizer off the native track
+   is the progress bar again, exactly as it was before the wave existed. */
+/* No thumb: the light in the wave is the position. The input keeps its own height, so
+   dragging anywhere across the bar still seeks. */
+
+/* The stage is the record plus 12% of air on every side, so the glow can paint outside
+   the disc without being clipped by the shell's own circle. */
+#player-full .pf-stage{position:relative;width:min(86vw,520px,54vh,calc(100vh - 360px));aspect-ratio:1;
+  margin:0 auto;flex:none;display:grid;place-items:center}
+
+#player-full .pf-stage .pf-disc-shell{width:100%;height:100%;margin:0}
+
+#player-full .pf-disc-shell{z-index:2}
+
+#player-full .pf-tab,#player-full .pf-body{position:relative;z-index:3}
+
+/* Library add/remove in the fullscreen foot, left of the heart. Same box as its
+   siblings so the row's height does not change. */
+#player-full .pf-foot .pfsave{display:inline-flex;align-items:center;justify-content:center}
+
+/* The compact add/remove slot sits in the right-hand cluster (measured), absolutely, so it
+   never joins the flow and cannot push the transport or the title. It is the second row of
+   that column: centred between the heart above (3-37 px down, centred 24 px in from the
+   right edge) and the expand button below (69-103, centred 26 px in), so it reads as the
+   middle of three stacked controls. 29 px is 85% of the old 34 px box: at 34 it touched
+   both neighbours, at 29 it clears each by ~2 px. */
+body #player.on .plsave{display:block;position:absolute;right:11.5px;top:38px;width:29px;height:29px;z-index:3}
+
+/* The strip between the queue panel and the bar is now a control: a wide tab hanging off
+   the bar top centre, exactly the height of the reduced gap, that toggles the queue. The
+   bar must stop clipping so the tab can sit outside its own box. */
+body #player.on{overflow:visible}
+
+body #player.on .qgrip{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+  width:132px;height:10px;margin:0;padding:0;border:1px solid var(--line);border-bottom:0;
+  border-radius:9px 9px 0 0;background:var(--panel);color:var(--dim);font-size:8px;
+  line-height:1;display:grid;place-items:center;cursor:pointer;z-index:4}
+
+body #player.on .qgrip:hover{color:var(--text);background:var(--panel2)}
+
+body #player.on .qgrip span{pointer-events:none}
+
+/* Final overrides for the queue gap tab: the earlier rule change did not take effect
+   (another rule of equal weight wins later in the sheet), and the tab inherited the
+   global button min-height of 40 px, so it rendered 40 tall instead of the 10 px gap. */
+/* The tab is fixed furniture: always visible (it is the only way back into the queue) and
+   never animated. Width matches the skip pair (114 px, prev left to next right); the centre
+   is nudged 3 px right to sit on the play button, which is centred on that pair. */
+body #player.on .qgrip{min-height:0;min-width:0;width:114px;height:18px;top:-18px;font-size:9px;
+  left:calc(50% + 3px);opacity:1;transform:translate(-50%,0)}

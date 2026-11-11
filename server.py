@@ -508,7 +508,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         # Public, non-personal PWA assets only; no boot, session or database access.
         if path in ('/app.webmanifest', '/icon-192.png', '/icon-512.png',
-                    '/genres.js', '/genres.css', '/polish.css', '/preferences.js', '/preferences.css', '/lifecycle.js', '/sw.js', '/offline.html'):
+                    '/genres.js', '/preferences.js', '/lifecycle.js', '/sw.js', '/offline.html'):
             self.static(path.lstrip('/'))
             return
         if path == '/robots.txt':

@@ -1,0 +1,103 @@
+/* Status component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+.banner{border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;
+  display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14px}
+
+.dropzone{border:1.5px dashed #33333f;border-radius:12px;padding:10px 12px;
+  color:var(--dim);font-size:12.5px;text-align:center;margin-bottom:12px}
+
+.dropzone.hot{border-color:var(--accent);color:var(--accent)}
+
+.empty{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:18px;color:var(--dim)}
+
+.libcount{color:var(--dim);font-size:13px}
+
+.songtable .empty{padding:18px 14px}
+
+.dropzone.compact{padding:9px 12px;font-size:12.5px;margin-bottom:12px;border-radius:10px}
+
+#toast{position:fixed;left:50%;bottom:144px;transform:translateX(-50%) translateY(8px);background:#26262f;border:1px solid var(--line);
+color:var(--text);padding:9px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.18s;z-index:60}
+
+#toast.on{opacity:1;transform:translateX(-50%)}
+
+.banner.rate{background:#2a1b1b;border:1px solid #512a2a;color:#ffd9d9}
+
+.banner.pause{background:#26220f;border:1px solid #4a4222;color:#ffe9a8}
+
+.banner .grow{flex:1;min-width:180px}
+
+.badge{font-size:11px;text-transform:uppercase;letter-spacing:.6px;
+  border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--dim)}
+
+.empty{padding:28px;border-style:dashed}
+
+.dropzone{padding:14px;border-color:#454753}
+
+#toast{transition:opacity .18s ease,transform .18s ease}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  #toast{bottom:calc(176px + var(--nav-h) + var(--safe-b))}
+}
+
+/* What the Add button is doing, right under the box the link was pasted into:
+   reading / added N songs / why it failed. Never a frozen button with no answer. */
+.addstatus{font-size:12.5px;line-height:1.5;margin:-6px 0 14px;color:var(--dim);display:grid;gap:2px}
+
+.addstatus:empty{display:none}
+
+.addstatus.ok{color:#7ee2a8}
+
+.addstatus.err{color:#ff9b9b}
+
+.addstatus.warn{color:#ffd9a1}
+
+.addstatus.busy{color:var(--dim)}
+
+/* ---- Floating Back / Forward ----------------------------------------------
+   Every app navigation (tab, library view, album/artist/playlist page, personal
+   folder) is one history entry, so these buttons retrace it. A button only exists
+   while there is somewhere to go. Sits above the player bar; the queue sheet
+   (z-index 45) stays on top of the pair rather than being covered by it. */
+.floatingnav{position:fixed;right:14px;bottom:14px;z-index:44;display:flex;gap:8px}
+
+.floatingnav[hidden]{display:none}
+
+.floatingnav button{width:44px;height:44px;min-width:0;min-height:0;padding:0;border-radius:50%;
+  display:grid;place-items:center;font-size:23px;line-height:1;font-weight:600;
+  background:#0b0c11d9;color:#eef1f5;border:1px solid #ffffff2b;box-shadow:0 4px 16px #0007;
+  backdrop-filter:blur(8px);cursor:pointer}
+
+.floatingnav button:hover{color:var(--accent);border-color:#ffffff4d}
+
+.floatingnav button:active{transform:scale(.94)}
+
+body.hasplayer .floatingnav{bottom:128px}
+
+body.fullplayer .floatingnav{display:none}
+
+@media(max-width:600px){
+  .floatingnav{right:10px;bottom:calc(var(--nav-h,48px) + var(--safe-b,0px) + 12px)}
+  body.hasplayer .floatingnav{bottom:calc(var(--nav-h,48px) + var(--safe-b,0px) + 124px)}
+}
+
+/* Their empty rows were still contributing 24 px of margin above Back on a detail page. */
+#view-library.detail-open .libtop,
+#view-library.detail-open .libbar,
+#view-library.detail-open .libfilters,
+#view-library.detail-open #libscopehelp,
+#view-library.detail-open #dropzone{display:none}
+
+/* Phone: the hidden dropzone still reserved 12 px under the header. */
+#view-library .dropzone.compact{margin-bottom:0}
+
+/* Drag-and-drop is a pointer gesture: no drop zone on a touch screen. */
+@media (hover: none), (pointer: coarse){#dropzone{display:none!important}}
+
+/* Import copies into the shared Repository, so the drop target is Repository-only: the
+   admin rule above sets `display:revert!important`, which would otherwise outrank [hidden]. */
+#view-library #dropzone[hidden]{display:none!important}

@@ -1,0 +1,38 @@
+/* The main app's one stylesheet entry point.
+
+   Cascade layers, in this order:
+     tokens      design values
+     base        element defaults and shared button variants
+     layout      page structure
+     components  every surface: chrome, library, player, queues, dialogs
+     utilities   genuine utilities only
+
+   A component owns its rules in exactly one file under components/. Responsive rules stay in
+   the component they belong to. Nothing appends an override to another file or re-declares a
+   component further down the cascade; edit the owning rule instead. See docs/frontend-css.md. */
+
+@layer tokens, base, layout, components, utilities;
+
+@import url("./tokens.css") layer(tokens);
+@import url("./base.css") layer(base);
+@import url("./layout.css") layer(layout);
+
+@import url("./components/app-chrome.css") layer(components);
+@import url("./components/library-controls.css") layer(components);
+@import url("./components/library-row.css") layer(components);
+@import url("./components/library-cards.css") layer(components);
+@import url("./components/social.css") layer(components);
+@import url("./components/player.css") layer(components);
+@import url("./components/playback-queue.css") layer(components);
+@import url("./components/queue-view.css") layer(components);
+@import url("./components/feed.css") layer(components);
+@import url("./components/artist.css") layer(components);
+@import url("./components/activity.css") layer(components);
+@import url("./components/dialogs.css") layer(components);
+@import url("./components/status.css") layer(components);
+@import url("./components/preferences.css") layer(components);
+@import url("./components/genres.css") layer(components);
+@import url("./components/lyrics.css") layer(components);
+@import url("./motion.css") layer(components);
+
+@import url("./utilities.css") layer(utilities);

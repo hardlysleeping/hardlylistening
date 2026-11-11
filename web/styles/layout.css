@@ -1,0 +1,80 @@
+html{
+  scrollbar-color:#34343f #101014;
+  scrollbar-width:thin
+}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding:0 0 60px
+}
+
+main{
+  max-width:1000px;
+  margin:0 auto;
+  padding:16px
+}
+
+@media (max-width:640px){
+  main{padding:12px}
+}
+
+body{
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
+  line-height:1.5;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom));
+  text-rendering:optimizeLegibility
+}
+
+main{
+  max-width:1120px;
+  padding:24px
+}
+
+@media(max-width:720px){
+main{padding:18px 14px}
+}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  /* Keep the compact player glass treatment on phones while it sits above the dock. */
+  html,body{overscroll-behavior-y:none}
+  body{padding-bottom:calc(var(--nav-h) + var(--safe-b))}
+}
+
+html,body{
+  touch-action:manipulation
+}
+
+@media (max-width:760px){
+  html,body{touch-action:pan-x pan-y}
+}
+
+main{
+  padding:12px 24px 24px
+}
+
+@media(max-width:720px){
+  main{padding:8px 14px 18px}
+}
+
+main{
+  padding-top:6px
+}
+
+@media(max-width:720px){main{padding-top:4px}}
+
+html{
+  background:var(--bg,#101014);
+  min-height:100%
+}
+
+body{
+  background:var(--bg,#101014);
+  min-height:100dvh
+}

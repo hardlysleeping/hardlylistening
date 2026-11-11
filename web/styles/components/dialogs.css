@@ -1,0 +1,207 @@
+/* Dialogs component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+#dlg-social,#dlg-apple-backup{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:0;width:min(560px,94vw)}
+
+#dlg-apple-backup{width:min(480px,94vw)}
+
+#dlg-social::backdrop,#dlg-apple-backup::backdrop{background:#0008}
+
+#dlg-social .dlg-head,#dlg-apple-backup .dlg-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+
+#dlg-apple-backup .abody{padding:14px;display:grid;gap:10px;font-size:13px;line-height:1.55;max-height:70vh;overflow:auto}
+
+#dlg-apple-backup .abody ol{margin:0;padding-left:18px;display:grid;gap:9px}
+
+#dlg-apple-backup .abody b{color:var(--text)}
+
+#dlg-apple-backup .abody .hint{color:var(--dim);font-size:12px;margin:0}
+
+#dlg-social .dsoc{padding:14px;max-height:70vh;overflow:auto}
+
+.ghost.lsave.confirm{color:#58d3a8;border-color:#58d3a8;background:#16241f;animation:lsavepop .22s ease}
+
+/* The check draws itself: an add should be seen landing, not just swapped in. */
+.ghost.lsave.confirm svg path{stroke-dasharray:22;stroke-dashoffset:22;animation:lsavecheck .34s ease forwards}
+
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);
+  border-radius:16px;padding:0;max-width:520px;width:calc(100% - 32px)}
+
+dialog::backdrop{background:#000a}
+
+.dlg-head{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+
+.dlg-head b{flex:1}
+
+.dlg-body{padding:14px 16px;display:grid;gap:12px}
+
+.memlist{display:grid;gap:6px;max-height:220px;overflow:auto}
+
+.memrow{display:flex;align-items:center;gap:8px;justify-content:space-between;
+  background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 9px}
+
+.memmail{font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.memrole{font-size:10px;letter-spacing:.07em;text-transform:uppercase;margin-left:8px;
+  padding:2px 6px;border-radius:6px;background:#26262f;color:var(--dim)}
+
+.memrole.pending{background:#3a2a14;color:#ffd9a1}
+
+.memrole.admin{background:#16352a;color:#8fe7c2}
+
+.memuse{margin-left:8px;font-size:12px;opacity:.75;white-space:nowrap}
+
+.memuse.over{color:#ff8a7a;opacity:1;font-weight:600}
+
+.memacts{display:flex;gap:6px;flex:0 0 auto}
+
+.memacts button{padding:4px 8px;font-size:12px}
+
+.field{display:grid;gap:5px}
+
+.field label{font-size:12.5px;color:var(--dim)}
+
+.hint{font-size:12px;color:#71717f}
+
+.dlg-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line)}
+
+.memlist{overflow-x:hidden}
+
+.memrow{flex-wrap:wrap;min-width:0}
+
+.memmail{flex:1 1 140px;white-space:normal;overflow-wrap:anywhere}
+
+.memacts{display:flex;flex-wrap:wrap;gap:6px;min-width:0;max-width:100%}
+
+.memacts button{white-space:normal;max-width:100%}
+
+#who{max-width:100%;overflow-wrap:anywhere}
+
+#playlist-editor{width:680px;padding:20px;background:var(--panel);color:var(--text)}
+
+#playlist-editor form{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+#playlist-editor input{min-width:0;max-width:100%;flex:1}
+
+#playlist-editor label{display:block;margin:10px 0}
+
+@media(max-width:600px){
+#playlist-editor{padding:12px;box-sizing:border-box}
+}
+
+dialog{max-width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 32px);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 80px #0008;overscroll-behavior:contain}
+
+dialog::backdrop{background:#050609bb}
+
+dialog input,dialog textarea{min-width:0}
+
+dialog h2{letter-spacing:-.025em}
+
+.memberdlg{width:min(560px,calc(100vw - 24px))}
+
+.mdhead{display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+
+.mdicon{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#23242c;font-size:22px;flex:none}
+
+.mdwho{display:flex;flex-direction:column;gap:2px;min-width:0}
+
+.mdwho b{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.mdwho small{color:var(--dim);font-size:12px}
+
+.mdclose{margin-left:auto;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#191a21;color:var(--text);font-size:18px;line-height:1;cursor:pointer}
+
+.mdbody{display:grid;gap:16px;margin-top:12px;max-height:min(62dvh,520px);overflow:auto;overscroll-behavior:contain}
+
+.mds h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+
+.mdrow{display:flex;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px solid #22232b;font-size:13px}
+
+.mdrow span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.mdrow small{margin-left:auto;color:var(--dim);flex:none;font-size:12px}
+
+/* Glyph-only buttons: the generic button padding (10px 14px) pushed every icon off
+   the centre of its circle/pill, so the fill and the outline never lined up. */
+.iconbtn,.iconbtn.big,.splay,.sdl,.aplay,.plartwrap,.mdclose{padding:0;line-height:1;min-height:0}
+
+/* ---- Administrator "view as user" ------------------------------------------
+   The switch lives with Settings in the app menu, stays reachable while the site is
+   being viewed as a member (otherwise there would be no way back), and only an
+   administrator ever sees it. Hidden controls are the [data-admin-only] ones, exactly
+   as a member gets them. */
+#usermenu-viewasuser{border:1px solid transparent}
+
+/* `.tabs .tab` is an inline-flex box, so [hidden] alone would not take it out of the menu. */
+#usermenu-viewasuser[hidden]{display:none!important}
+
+html.view-as-user #usermenu-viewasuser{color:var(--accent);border-color:var(--accent)}
+
+/* ---- Player connections dialog --------------------------------------------
+   The fields were inline labels and buttons with no box of their own, which wrapped
+   badly on a phone. One column: label, full-width field, its copy button, then the
+   action; the long notes stay readable and the dialog scrolls inside the viewport. */
+#dlg-listening{padding:18px;width:min(560px,calc(100vw - 16px));box-sizing:border-box;
+  max-height:calc(100dvh - 16px);overflow:auto}
+
+#dlg-listening h2{margin:0 0 8px;font-size:18px}
+
+#dlg-listening p{margin:8px 0;font-size:12.5px;line-height:1.45;color:var(--dim)}
+
+#dlg-listening label{display:block;margin:12px 0 6px;font-size:12.5px;color:var(--text)}
+
+#dlg-listening input{display:block;width:100%;margin-top:5px;box-sizing:border-box}
+
+#dlg-listening > button{width:100%;margin-top:6px}
+
+#dlg-listening #listening-secret{border-top:1px solid var(--line);margin-top:12px;padding-top:4px}
+
+@media(max-width:600px){
+  #dlg-listening{padding:14px 12px;width:calc(100vw - 12px)}
+  #dlg-listening h2{font-size:17px}
+}
+
+/* ---- Your playlists dialog -------------------------------------------------
+   It was a fixed 680 px box, so on a phone it ran off the screen. Now it fits, the
+   create row stacks, and the two long lists scroll inside the dialog instead of
+   stretching it past the viewport. */
+#playlist-editor{width:min(680px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow:auto;
+  padding:18px;box-sizing:border-box}
+
+#playlist-editor form{margin:0 0 4px}
+
+#playlist-editor h2{font-size:18px;margin:0}
+
+#playlist-editor h3{font-size:13px;color:var(--dim);margin:14px 0 6px}
+
+#playlist-editor .hint{margin:4px 0 10px;font-size:12px}
+
+#playlist-editor label{font-size:12.5px;margin:10px 0 2px}
+
+#playlist-editor label select,#playlist-editor label input{display:block;width:100%;margin-top:5px;box-sizing:border-box}
+
+@media(max-width:600px){
+  #playlist-editor{padding:14px 12px}
+}
+
+/* A small confirm, not a full-page dialog: one question, two buttons. */
+dialog.smallconfirm{width:min(380px,calc(100vw - 24px));padding:16px 18px;box-sizing:border-box}
+
+dialog.smallconfirm h2{margin:0 0 6px;font-size:16px}
+
+dialog.smallconfirm p{margin:0 0 14px;font-size:12.5px;line-height:1.45;color:var(--dim)}
+
+dialog.smallconfirm .dlg-foot{display:flex;gap:8px;justify-content:flex-end;margin:0}
+
+.colourgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 6px}
+
+.colourgrid label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--dim)}
+
+.colourgrid input[type=color]{width:100%;height:38px;padding:2px;border-radius:9px;
+  border:1px solid var(--line);background:var(--panel2)}
+
+/* The toolbar "+" only creates: hide the existing-playlist picker in that mode. Editing
+   an existing playlist starts from the playlist page's own Edit button. */
+#playlist-editor.create-only #playlist-choice-label{display:none}

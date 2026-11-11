@@ -1,3 +1,8 @@
+/* Preferences component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
 .preference{margin:3px;font-size:13px;min-height:32px}.preference.active{color:var(--accent,#e878a0);border-color:currentColor}
 /* The pinned strip uses the whole window with a small gutter, not main's 1120 px column:
    margin-inline of (50% - 50vw + 12px) makes its width exactly 100vw - 24px. */

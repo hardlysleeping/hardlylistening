@@ -1,0 +1,194 @@
+/* App chrome component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+header{position:sticky;top:0;z-index:20;background:rgba(16,16,20,.94);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+
+.bar{display:flex;gap:10px;align-items:center;padding:7px 16px;flex-wrap:wrap;position:relative}
+
+.usermenu{position:absolute;right:16px;top:calc(100% - 2px);z-index:80;display:grid;min-width:150px;padding:6px;
+background:var(--panel);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 34px #000a}
+
+.usermenu[hidden]{display:none}
+
+.usermenu button{text-align:left;background:none;border:0;border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);cursor:pointer;min-height:0}
+
+.usermenu button:hover{background:var(--panel2)}
+
+.brand{font-weight:700;font-size:17px;letter-spacing:.2px;margin-right:auto}
+
+.brand span{color:var(--accent)}
+
+.who{color:var(--dim);font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.chip{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);border-radius:999px;padding:4px 9px;white-space:nowrap}
+
+.chip b{color:var(--text);font-weight:600}
+
+.chip.err b{color:var(--err)}
+
+.chip.warn b{color:var(--warn)}
+
+.tabs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;
+  border-bottom:1px solid var(--line);padding-bottom:10px}
+
+.tab{padding:8px 14px;border-radius:9px;border:1px solid var(--line);
+  background:transparent;color:var(--dim);cursor:pointer;font:inherit}
+
+.tab.on{background:var(--panel2);color:var(--text);border-color:#3a3a48}
+
+.followrow .who{flex:1;min-width:0}
+
+.pvol-inline{position:relative;display:flex;align-items:center}
+
+header{background:#101014;backdrop-filter:none;padding-top:env(safe-area-inset-top)}
+
+.bar{max-width:1200px;margin:auto;padding:7px 24px;gap:10px}
+
+.brand{font-size:19px;letter-spacing:-.6px}
+
+.chip{background:var(--panel);padding:5px 10px}
+
+.tabs{gap:8px;padding-bottom:16px;margin-bottom:22px}
+
+.tab{border-color:transparent;font-weight:600;padding:8px 14px}
+
+.tab.on{color:var(--accent);background:#1b2b26;border-color:#34584b}
+
+@media(max-width:720px){
+.bar{padding:6px 14px}
+.tabs{gap:4px}
+.tab{padding:9px 12px}
+}
+
+@media(max-width:720px){
+.brand{font-size:18px}
+}
+
+/* ---- Navigation: one persistent menu ------------------------------------
+   The header keeps identity only; the queue's own counters and Pause/Clear
+   live in the Queue view (.qstrip). The nav is sticky at the top on desktop
+   and a fixed bottom bar on phones and in the installed PWA. */
+/* Above the sticky tab bar (z-index 25): the user menu hangs out of the header onto that
+   row, and a child can never paint over a sibling of its ancestor's stacking context — at
+   z-index 1 the bar covered the menu's first rows and swallowed their clicks. Below the
+   player (40) and every dialog, so nothing that should float floats under it. */
+header{position:relative;top:auto;z-index:26}
+
+.tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 22px;padding:4px max(24px,calc((100vw - 1200px)/2));padding-right:max(24px,calc((100vw - 1200px)/2));position:sticky;top:0;z-index:25;background:#101014;border-bottom:1px solid var(--line);box-shadow:0 1px 0 #0006}
+
+.tabs .tab{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+
+#btn-more{display:inline-flex}
+
+.navpanel{display:none}
+
+/* Desktop: the five destinations are centred on the row and the secondary pages live in a
+   menu below More. On the Library page itself those pages also stay right-aligned in the
+   row (`#navquick`) — that is the one place they are always on screen. */
+@media (min-width:761px) and (hover:hover){
+  .tabs{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
+  .tabs .navmain{display:flex;align-items:center;gap:4px;grid-column:2;justify-self:center}
+  #navquick{grid-column:3;justify-self:end;display:flex;align-items:center;gap:4px;min-width:0}
+  #navquick[hidden]{display:none!important}
+  /* Fixed, not absolute: an absolutely-positioned grid child is laid out inside its grid
+     area, and the menu must hang off the button wherever the row's columns land. */
+  .tabs.more-open #navpanel{display:flex;flex-direction:column;gap:2px;position:fixed;
+    z-index:60;min-width:216px;padding:6px;background:#191a21;border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 18px 44px #000b}
+  .tabs.more-open #navpanel .tab{justify-content:flex-start;width:100%;min-width:0;
+    min-height:40px;padding:8px 12px;font-size:13.5px;text-align:left;letter-spacing:0}
+  .tabs.more-open #navpanel .tab:hover{background:var(--panel2);color:var(--text)}
+  .tabs.more-open #btn-more{color:var(--text);background:var(--panel2);border-color:#3a3a48}
+}
+
+/* The right-hand cluster only fits next to the centred tabs on a wide row; below this the
+   same pages are one click away in the More menu. */
+@media (max-width:1179px){#navquick{display:none!important}}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  .tabs{position:fixed;inset:auto 0 0 0;top:auto;left:0;right:0;width:auto;max-width:none;
+    transform:none;margin:0;gap:2px;height:calc(var(--nav-h) + var(--safe-b));
+    box-sizing:border-box;align-items:stretch;padding:0 4px var(--safe-b);flex-wrap:nowrap;
+    overflow:visible;border:0;border-top:1px solid var(--line);border-radius:0;
+    background:#101014;backdrop-filter:none;box-shadow:none;z-index:80}
+  .tabs .grow{display:none}
+  .tabs .navmain{display:contents}
+  .tabs .navquick{display:none!important}
+  /* Long labels shrink to fit their slot instead of clipping or pushing the bar. */
+  .tabs .tab{flex:1 1 0;min-width:0;height:auto;min-height:0;margin:4px 0;padding:0 4px;
+    border-radius:9px;font-size:11px;letter-spacing:-.2px;border-color:transparent;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tabs .tab.on{border-color:#34584b}
+  #btn-more{display:inline-flex}
+  @media (max-width:345px){ .tabs .tab{font-size:9.5px;letter-spacing:-.45px;padding:0 1px} }
+  .navpanel{display:none}
+  .tabs.more-open .navpanel{display:flex;flex-direction:column;gap:6px;position:fixed;left:8px;right:8px;bottom:calc(var(--nav-h) + var(--safe-b) + 7px);z-index:70;padding:8px;background:#191a21;border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 40px #000a}
+  .tabs.more-open .navpanel .tab{flex:none;justify-content:flex-start;text-align:left;font-size:14px;letter-spacing:0;min-height:46px;height:auto;padding:10px 14px}
+}
+
+/* Fullscreen playback is modal: the dock and the queue drawer step out of the way
+   instead of sitting under the options row. */
+body.fullplayer .tabs{display:none!important}
+
+/* The header's waveform: the playing stream's live spectrum (bass / mids / treble), drawn
+   mirrored around the bar's centre and read-only. Hidden under 900 px, where the brand and
+   the right-hand cluster take the whole row — which is also why the Web Audio graph behind
+   it is only ever built on a desktop. */
+.hdr-wave{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:none;
+  width:min(34vw,360px);height:26px;pointer-events:none}
+
+@media (min-width:900px){.hdr-wave{display:block}}
+
+/* Volume lives in the top bar, immediately left of shuffle, and only on a desktop: on a
+   phone the OS owns the level (iOS ignores writes to audio.volume), so there is no slider.
+   The speaker is a toggle — pressing it opens the fader into the space to its left, in
+   absolute so the header never reflows — and the open state survives a reload
+   (`hl.compactVolume`, see paintVolumeToggle).
+   The slot is also the header's flex spacer: `margin-left:auto` is what starts the right
+   hand cluster, so it stays in the flow even when the button is hidden (phone, or a browser
+   that refuses audio.volume writes) and shuffle cannot slide to the left with it. */
+#plvolslot{display:flex;position:relative;align-items:center;flex:none;margin-left:auto}
+
+.who{display:inline-flex;align-items:center;gap:7px;min-height:0;padding:6px 13px;
+  border-radius:999px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--user-base) 82%,#fff 8%),var(--user-base));
+  border:1px solid color-mix(in srgb,var(--user-accent) 40%,var(--user-trim));
+  box-shadow:inset 0 1px 0 #ffffff12}
+
+.who::before{content:"";width:8px;height:8px;border-radius:50%;flex:none;
+  background:var(--user-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--user-accent) 22%,transparent)}
+
+.who:hover{border-color:var(--user-accent);color:#fff}
+
+.who:focus-visible{outline:2px solid var(--user-accent);outline-offset:2px}
+
+@media(min-width:721px){.tabs{margin:0 0 12px}}
+
+@media(min-width:721px){.tabs{margin-bottom:6px}}
+
+/* Sticky top bar: its own top/bottom padding, halved. */
+.bar{padding-top:4px;padding-bottom:4px}
+
+@media(max-width:720px){.bar{padding-top:3px;padding-bottom:3px}}
+
+.tabs{background:var(--bg,#101014)}
+
+#libviews .tab{min-width:40px;padding:8px 12px;font-size:16px;line-height:1}
+
+/* Icon switch: drawn icons, sized to the row. */
+#libviews .tab svg{width:20px;height:20px;display:block}
+
+#libviews .tab{display:grid;place-items:center;min-width:44px;padding:9px 12px}
+
+/* Space above the header row, doubled from the tightened value (4 → 8, phone 3 → 6). */
+.bar{padding-top:8px}
+
+@media(max-width:720px){.bar{padding-top:6px}}
+
+@media (min-width: 761px){
+  #player .pvol,#player .pvol-inline{display:none}
+}

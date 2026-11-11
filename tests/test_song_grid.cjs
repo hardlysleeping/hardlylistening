@@ -1,7 +1,7 @@
 // Real renderer, isolated saves and browser DOM. No HTTP, database or media.
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const {chromium}=require('playwright');
-const html=fs.readFileSync('web/index.html','utf8'),css=fs.readFileSync('web/polish.css','utf8');
+const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
 const elements={},storage={};
 const el=id=>elements[id] ||= {value:'',innerHTML:'',textContent:'',hidden:false,dataset:{},
   style:{setProperty(){},removeProperty(){},getPropertyValue:()=>''},
@@ -43,7 +43,7 @@ const contextScript='// Song context actions:' + html.split('// Song context act
  try{for(const width of [1280,390]){
  const page=await browser.newPage({viewport:{width,height:900}});
  await page.route('**/*',r=>r.abort());
- await page.setContent(`<style>${html.match(/<style>([\s\S]*?)<\/style>/)[1]}${css}</style><main>${fixture}</main>`);
+ await page.setContent(`${require('./_css.cjs').styleTag()}<main>${fixture}</main>`);
  await page.evaluate(()=>{window.calls=[];window.playTrackNow=id=>calls.push(['now',id]);window.queueSong=(id,next=false)=>calls.push(['queue',id,next]);window.toggleSongPlayback=id=>calls.push(['play',id]);window.toggleListeningSave=(kind,id)=>calls.push(['save',id]);window.castVote=()=>calls.push(['vote']);window.openDiscussion=()=>calls.push(['comment']);window.listeningSaves={folders:[{id:9,parent_id:null,name:'Practice'}],folder_tracks:[]};window.libraryScope='mine';window.activeFolderId=null;window.folderPath=id=>'Practice';window.addTrackToPersonalFolder=(id,folder)=>calls.push(['folder',id,folder]);window.boostTrack=id=>calls.push(['boost',id]);HTMLMediaElement.prototype.play=()=>{throw Error('Media forbidden')};
  // The context menu reads the rendered rows; without them menuFor throws and no menu opens.
  window.currentRows=[{id:1,title:'Song 1',artist_name:'Artist',album:'Album',playable:true,status:'queued',duration:180,playlists:[]},{id:2,title:'Song 2',artist_name:'Artist',album:'Album',playable:true,status:'queued',duration:180,playlists:[]},{id:3,title:'Song 3',artist_name:'Artist',album:'Album',playable:false,status:'queued',duration:180,playlists:[]}];

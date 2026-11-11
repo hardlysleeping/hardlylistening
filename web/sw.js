@@ -1,7 +1,22 @@
 'use strict';
-const CACHE = 'hardlylistening-static-v3';
+const CACHE = 'hardlylistening-static-v4';
 const AUDIO = 'hardlylistening-audio-v1';   // named in web/index.html as well
-const STATIC = ['/offline.html','/polish.css','/lifecycle.js','/icon-192.png','/icon-512.png','/app.webmanifest'];
+// The app's stylesheet is a tree (app.css imports each owner under @layer). Every file in it
+// is precached, because the browser fetches each import as its own request: a missing entry
+// would leave an offline page unstyled. Adding a stylesheet means adding it here.
+const STYLES = [
+  '/styles/app.css', '/styles/tokens.css', '/styles/base.css', '/styles/layout.css',
+  '/styles/motion.css', '/styles/utilities.css',
+  '/styles/components/app-chrome.css', '/styles/components/library-controls.css',
+  '/styles/components/library-row.css', '/styles/components/library-cards.css',
+  '/styles/components/social.css', '/styles/components/player.css',
+  '/styles/components/playback-queue.css', '/styles/components/queue-view.css',
+  '/styles/components/feed.css', '/styles/components/artist.css',
+  '/styles/components/activity.css', '/styles/components/dialogs.css',
+  '/styles/components/status.css', '/styles/components/preferences.css',
+  '/styles/components/genres.css', '/styles/components/lyrics.css',
+];
+const STATIC = ['/offline.html','/lifecycle.js','/icon-192.png','/icon-512.png','/app.webmanifest', ...STYLES];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)));
 });
@@ -58,7 +73,10 @@ async function cachedAudio(request, url) {
 
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.search) return;
+  // Versioned stylesheet URLs (`/styles/app.css?v=…`) must still be served from the cache by
+  // path, so the query string is deliberately not a reason to skip this handler: every branch
+  // below keys its cache lookup on url.pathname and leaves the network request intact.
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   // A kept song is served from the copy, with Range support. Everything else about the
   // route — auth, headers, a missing file — stays the server's business.
   if (AUDIO_PATH.test(url.pathname)) {

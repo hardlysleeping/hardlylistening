@@ -4,9 +4,8 @@
 // close control sat at the far end of a long scroll on a device with no Escape key.
 const fs = require("fs"), assert = require("assert"), { chromium } = require("playwright");
 const html = fs.readFileSync("web/index.html", "utf8");
-const polish = fs.readFileSync("web/polish.css", "utf8");
-const prefs = fs.readFileSync("web/preferences.css", "utf8");
-const inlineStyle = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+const polish = require("./_css.cjs").appCss();
+const prefs = "", inlineStyle = "";
 const doc = html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<link[^>]*>/g, "")
   .replace("</head>", `<style>${inlineStyle}${polish}${prefs}</style></head>`);
 

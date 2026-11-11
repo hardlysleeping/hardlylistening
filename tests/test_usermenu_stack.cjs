@@ -3,9 +3,8 @@
 // context, so this asserts the hit test on the overlap, not the numbers.
 const fs = require("fs"), assert = require("assert"), { chromium } = require("playwright");
 const html = fs.readFileSync("web/index.html", "utf8");
-const css = fs.readFileSync("web/polish.css", "utf8");
-const prefs = fs.readFileSync("web/preferences.css", "utf8");
-const inlineStyle = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+const css = require("./_css.cjs").appCss();
+const prefs = "", inlineStyle = "";
 const doc = html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<link[^>]*>/g, "")
   .replace("</head>", `<style>${inlineStyle}${css}${prefs}</style></head>`);
 

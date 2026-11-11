@@ -1,0 +1,235 @@
+/* Queue view component.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+.addbox{display:flex;gap:8px;align-items:stretch;margin-bottom:14px}
+
+.pill{font-size:11px;padding:2px 7px;border-radius:20px;border:1px solid var(--line);color:var(--dim)}
+
+.pill.new{color:var(--accent);border-color:#2c6b57}
+
+.pill.queued{color:#8fb3ff;border-color:#2f3f6b}
+
+.pill.ignored{opacity:.55}
+
+.followrow{display:flex;gap:12px;align-items:center;padding:11px 14px;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+
+.followrow .name{font-weight:600}
+
+.followrow .acts{display:flex;gap:6px;flex:0 0 auto}
+
+.followrow .acts button{padding:6px 10px;font-size:12.5px}
+
+.followrow .acts .syncbtn{display:inline-grid;place-items:center;width:32px;padding:0}
+
+.followrow .acts .syncbtn.busy svg{animation:syncspin .9s linear infinite}
+
+.followbox{display:flex;gap:8px;margin-bottom:12px}
+
+.followbox input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
+
+@media (max-width:640px){
+  .followbox{flex-direction:column}
+}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  margin-bottom:12px;overflow:hidden}
+
+.card-head{display:flex;gap:12px;padding:12px;align-items:center}
+
+/* The playlist the worker is actually on: accent edge plus a live line naming the
+   track, so a queue of cards cannot be mistaken for a stalled one. */
+.card.active{border-color:#34584b;box-shadow:0 0 0 1px #34584b66}
+
+.card .livebadge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:#08110d;
+  background:var(--accent);border-radius:999px;padding:1px 8px}
+
+.card .livenow{display:flex;align-items:center;gap:6px;margin-top:6px;min-width:0;font-size:12px;color:var(--accent2)}
+
+.card .livenow .livename{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.card .livenow b{font-weight:600;color:var(--text)}
+
+.card .livedot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent2);
+  box-shadow:0 0 0 3px rgba(122,162,255,.16);animation:npulse 1.2s infinite}
+
+@media (prefers-reduced-motion:reduce){.card .livedot{animation:none}}
+
+.tracks{border-top:1px solid var(--line);max-height:460px;overflow:auto;background:#141419;
+  overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+
+.trow{display:flex;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid #1e1e26;font-size:13.5px}
+
+.trow:last-child{border-bottom:none}
+
+.trow .no{width:26px;color:var(--dim);font-variant-numeric:tabular-nums;flex:none}
+
+.trow .name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.trow .name small{color:var(--dim);font-weight:400}
+
+.trow .why{color:var(--err);font-size:12px;max-width:38%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:#3a3a48}
+
+.dot.done{background:var(--ok)}
+
+ .dot.downloading{background:var(--accent2)}
+
+.dot.failed{background:var(--err)}
+
+ .dot.queued{background:var(--warn)}
+
+.dot.skipped{background:#5a5a6a}
+
+.dot.review{background:var(--warn);box-shadow:0 0 0 2px rgba(255,193,94,.25)}
+
+/* The source-candidate panel. Not `.review`: the status dot is `.dot.review`, and a
+   shared name made every review dot paint as this whole block. */
+.revbox{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;
+  background:#15151b;display:grid;gap:5px}
+
+.revbox .cand{display:flex;gap:8px;align-items:center;font-size:12.5px}
+
+.revbox .cand b{min-width:38px;color:var(--text)}
+
+.revbox .cand span{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.trow.has-review{flex-wrap:wrap}
+
+/* What the worker is doing right now, above the list. */
+.now{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;margin-bottom:12px}
+
+.now .nrow{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13.5px}
+
+.now .ndot{width:8px;height:8px;border-radius:50%;background:var(--accent2);flex:none;
+  box-shadow:0 0 0 3px rgba(122,162,255,.18);animation:npulse 1.2s infinite}
+
+.now .ndot.idle{background:#3a3a48;box-shadow:none;animation:none}
+
+.now .ndim{color:var(--dim);font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.now .nnum{margin-left:auto;color:var(--accent2);font-variant-numeric:tabular-nums;font-size:12.5px}
+
+.now .nbar{height:6px;background:#242430;border-radius:3px;overflow:hidden;margin-top:8px}
+
+.now .nbar i{display:block;height:100%;width:0;transition:width .35s linear;
+  background:linear-gradient(90deg,var(--accent2),var(--accent))}
+
+/* The playlist being filled, in front of the track that is downloading. */
+.now .nfrom{font-size:11px;padding:1px 8px;border-radius:999px;background:#1b2b26;border:1px solid #34584b;
+  color:var(--accent);white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+
+/* One box for every chip. The action chip is a <button>, so the UA's own line box
+   made it taller than the spans beside it and stretch-baselined the row: the borders
+   no longer lined up. Same display, line-height and padding for both. */
+.now .nchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+
+.nchip{display:inline-flex;align-items:center;justify-content:center;height:24px;min-height:0;
+  box-sizing:border-box;font-size:11.5px;line-height:1;padding:0 9px;border-radius:999px;
+  border:1px solid var(--line);color:var(--dim);background:none}
+
+.nchip.live{color:var(--accent2);border-color:rgba(122,162,255,.4)}
+
+.nchip.warn{color:var(--warn);border-color:rgba(255,207,92,.35)}
+
+.nchip.err{color:var(--err);border-color:rgba(255,107,107,.35)}
+
+.trow .state{font-size:12px;color:var(--dim);white-space:nowrap;
+  font-variant-numeric:tabular-nums;flex:none}
+
+.trow .state.live{color:var(--accent2)}
+
+.trow .state.warn{color:var(--warn)}
+
+.trow .state.err{color:var(--err)}
+
+.trow .state.ok{color:var(--ok)}
+
+.trow .tprog{width:108px;height:4px;border-radius:2px;background:#242430;overflow:hidden;flex:none}
+
+.trow .tprog i{display:block;height:100%;width:0;background:var(--accent2);transition:width .35s linear}
+
+.trow button[disabled]{opacity:.55}
+
+.trow button{padding:3px 7px;font-size:12px;border-radius:7px}
+
+.trow input{width:100%;padding:5px 8px;font-size:12.5px}
+
+.logs{margin-top:18px;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden}
+
+.logs summary{padding:10px 12px;cursor:pointer;color:var(--dim);font-size:13px}
+
+.logbody{max-height:260px;overflow:auto;padding:0 12px 12px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+
+.logline{color:#b9b9c6;white-space:pre-wrap;word-break:break-word}
+
+.logline.err{color:var(--err)}
+
+ .logline.warn{color:var(--warn)}
+
+.logline.ok{color:var(--ok)}
+
+.logline time{color:#5f5f72;margin-right:6px}
+
+@media (max-width:640px){
+  .addbox{flex-direction:column}
+  .addbox button{width:100%}
+}
+
+@media (max-width:640px){
+  .trow .why{display:none}
+  .trow .tprog{display:none}
+  .now .nnum{margin-left:0;width:100%}
+}
+
+.pq-now .pq-tag.now{display:none}
+
+.feedcard,.followrow{padding:16px}
+
+@media(max-width:720px){
+.feedacts,.followrow .acts{flex-wrap:wrap}
+.followrow{flex-wrap:wrap}
+}
+
+@media(max-width:720px){
+.addbox{flex-wrap:wrap}
+.addbox textarea{flex:1 1 220px}
+}
+
+.qstrip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+
+.qstrip .grow{flex:1 1 auto}
+
+.qstrip button{min-height:36px;padding:8px 12px}
+
+#qsearch .addbox{margin-bottom:10px}
+
+#qsearch #songsearch{flex:1 1 260px;min-width:0}
+
+.revgroup{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:12px;overflow:hidden}
+
+.revhead{display:flex;align-items:baseline;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+
+.revtitle{font-weight:600;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.revmeta{margin-left:auto;color:var(--dim);font-size:12px;white-space:nowrap}
+
+/* The candidate list is the point of this page, so it gets its own line under the track
+   instead of squeezing in beside the row's buttons on a wide screen. */
+#qrev-list .trow.has-review .revbox{flex-basis:100%}
+
+/* The page scrolls; a scroll box inside a card here would trap the list. */
+.revgroup .tracks{max-height:none;overflow:visible;border-top:0}
+
+.revempty{border:1px solid var(--line);border-radius:14px;background:var(--panel);
+  padding:18px;color:var(--dim);font-size:13.5px}
+
+@media(max-width:600px){.revhead{padding:10px 12px;gap:8px;flex-wrap:wrap}
+  .revmeta{margin-left:0;flex-basis:100%}}

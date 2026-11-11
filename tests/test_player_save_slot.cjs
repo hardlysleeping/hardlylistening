@@ -19,7 +19,7 @@ const srv = http.createServer((req, res) => {
 });
 
 (async () => {
-  const css = fs.readFileSync(path.join(ROOT, "polish.css"), "utf8");
+  const css = require("./_css.cjs").appCss();
   assert(!/\.plsave/.test(css), "no rule may place a save control in the compact bar");
 
   await new Promise(r => srv.listen(0, r));
