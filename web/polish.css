@@ -283,6 +283,25 @@ html[data-cols-tier="dense"] .songcard .salbum{padding-right:0}
 html[data-cols-tier="dense"] .songcard .st b{font-size:12.5px}
 html[data-cols-tier="dense"] .songcard .sartist,
 html[data-cols-tier="dense"] .songcard .salbum{font-size:11.5px}
+/* Desktop is not a phone with 12 columns. On a phone the tier removes a row because the
+   card genuinely cannot hold it; on a desktop card the same controls sit on the artwork's
+   corners and a narrower card just draws them smaller. So from 761 px up the tiers stop
+   deleting anything: like, pin, upvote, downvote and discuss stay in car and album cards
+   at every column count. These selectors match the tier rules above exactly and come
+   later, so nothing else about the tiers changes. */
+@media (min-width:761px){
+  html[data-cols-tier="trio"] .songcard .votes,
+  html[data-cols-tier="dense"] .songcard .votes,
+  html[data-cols-tier="trio"] .acard .votes,
+  html[data-cols-tier="dense"] .acard .votes{display:flex}
+  html[data-cols-tier="dense"] .songcard .pref-pair,
+  html[data-cols-tier="dense"] .acard .pref-pair{display:flex}
+  /* One line is right while the card can hold one line. At 8+ columns it cannot, and the
+     shared rule that forbids wrapping would push the chips out of the card instead. */
+  html[data-cols-tier="trio"] .songcard .votes,
+  html[data-cols-tier="dense"] .songcard .votes{flex-wrap:wrap}
+}
+
 /* Every control that sits on the artwork is sized by the card, not by the column
    count: the same width must look the same whether the grid got there by 6 on a
    desktop or 4 on a phone. */
@@ -298,11 +317,21 @@ html[data-cols-tier="dense"] .songcard .salbum{font-size:11.5px}
   .songcard .thumb .snext{width:26px;height:26px;min-width:0;min-height:0}
   .songcard .sdur{margin:0 0 4px 4px}
   .songcard .send{padding:0 4px 4px 0}
-  .songcard .pref-pair{top:calc(var(--card-pad) + 4px);right:calc(var(--card-pad) + 4px)}
+  .songcard .pref-pair{top:calc(var(--card-pad) + 4px);right:calc(var(--card-pad) + 4px);
+    gap:3px;padding:2px}
+  .songcard .preference{width:23px;height:23px;min-height:23px;font-size:11px}
+  .songcard .votes{gap:2px}
+  .songcard .votes .vbtn{padding:0 5px;font-size:11px;height:23px;min-height:23px}
+  .songcard .votes .ccount{height:23px;min-height:23px;padding:0 4px;font-size:10.5px}
 }
 @container (max-width:150px){
   .songcard .lsave{width:33px;height:33px;border-radius:11px}
   .songcard .lsave svg{width:16px;height:16px}
+  .songcard .pref-pair{gap:2px;padding:1px;border-radius:8px}
+  .songcard .preference{width:20px;height:20px;min-height:20px;font-size:10px}
+  .songcard .votes{gap:2px;flex-wrap:wrap}
+  .songcard .votes .vbtn{padding:0 3px;font-size:10px;height:20px;min-height:20px}
+  .songcard .votes .ccount{height:20px;min-height:20px;padding:0 3px;font-size:9.5px}
   .songcard .sdur{font-size:10px;padding:1px 5px}
   .songcard .send{gap:4px}
   .songcard .splay{width:37px;height:37px;min-width:37px;min-height:37px}
@@ -432,24 +461,29 @@ header{position:relative;top:auto;z-index:1}
 #player-full .pf-foot{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:4px}
 #player-full .pf-foot button{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 14px;font-size:12.5px;cursor:pointer}
 #player-full .pf-foot button:hover{border-color:var(--accent);color:var(--accent)}
-/* Volume rail: upright on the right edge of the popup, centred on the viewport so it
-   stays put while the column scrolls on a short screen. `writing-mode` is what makes a
-   range input run bottom-up in Chromium; `-webkit-appearance:slider-vertical` is the
-   older path for engines that still want it. */
-#player-full .pf-vol{position:fixed;right:10px;top:50%;transform:translateY(-50%);z-index:3;
-  display:flex;align-items:center;justify-content:center;padding:10px 6px;border-radius:999px;
-  background:#16171ecc;border:1px solid var(--line);backdrop-filter:blur(8px)}
-/* `writing-mode` alone is enough in Chromium and it keeps our own thumb/track styling;
-   the legacy appearance keyword hands it back to the native (blue, off-theme) paint. */
-#player-full #pfvol{writing-mode:vertical-lr;direction:rtl;
-  width:22px;height:min(34vh,220px);background:transparent;margin:0;accent-color:var(--accent)}
-#player-full #pfvol::-webkit-slider-runnable-track{width:4px;height:100%;border-radius:999px;background:#33333f}
-#player-full #pfvol::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin:0 -6px;border-radius:50%;background:var(--text);cursor:pointer}
-#player-full #pfvol::-moz-range-track{width:4px;border-radius:999px;background:#33333f}
-#player-full #pfvol::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:var(--text);cursor:pointer}
-@media(max-width:760px){
-  #player-full .pf-vol{right:6px;padding:8px 4px}
-  #player-full #pfvol{height:min(30vh,190px)}
+/* Volume: a fader under the transport, desktop only. A phone has hardware buttons and its
+   single column has no spare lane; a desktop has the width, and reaching for the bar to
+   change the level while the fullscreen view is open is the whole reason this exists.
+   The filled part is an accent gradient driven by `--vol`, the same paint the scrub uses. */
+#player-full .pf-vol{display:none}
+@media (min-width:761px){
+  /* It sits at the right end of the foot row, level with the like/queue/visualizer buttons:
+     a row of its own would have pushed the visualizer knobs off a 1280x800 screen, and the
+     transport row has no spare width beside the centred cluster. */
+  #player-full .pf-foot{position:relative}
+  #player-full .pf-vol{display:flex;align-items:center;justify-content:flex-end;gap:9px;
+    position:absolute;right:0;top:50%;transform:translateY(-50%);margin:0}
+  #player-full .pf-vol>svg{flex:none;color:var(--dim)}
+  #player-full #pfvol{-webkit-appearance:none;appearance:none;width:130px;height:20px;margin:0;
+    padding:0;background:transparent;cursor:pointer}
+  #player-full #pfvol::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+    background:linear-gradient(90deg,var(--accent) var(--vol,100%),#3a3d47 var(--vol,100%))}
+  #player-full #pfvol::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;
+    border-radius:50%;background:var(--text);box-shadow:0 1px 3px #0008}
+  #player-full #pfvol::-moz-range-track{height:4px;border-radius:2px;background:#3a3d47}
+  #player-full #pfvol::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+  #player-full #pfvol::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;
+    background:var(--text);box-shadow:0 1px 3px #0008}
 }
 /* Lyrics is parked until it works: the buttons stay in the DOM (and in lyrics.js) but
    nothing renders them, so bringing the feature back is deleting this line. */
@@ -833,7 +867,7 @@ dialog.smallconfirm .dlg-foot{display:flex;gap:8px;justify-content:flex-end;marg
 .detaillist{background:none;border:0;border-radius:0;overflow:visible;margin:0}
 
 /* Phones keep audio.volume read-only: the fader and mute are hidden there, not faked. */
-.no-volume .pvol-vert{display:none!important}  /* mute still works: iOS ignores volume, not muted */
+.no-volume .pvol-vert,.no-volume #player-full .pf-vol{display:none!important}  /* mute still works: iOS ignores volume, not muted */
 
 /* Mute sits with the transport; queue and fullscreen are a right-aligned pair. */
 /* Transport stays centred; queue and fullscreen are a right-aligned pair on that same row. */
@@ -888,9 +922,6 @@ dialog.smallconfirm .dlg-foot{display:flex;gap:8px;justify-content:flex-end;marg
 #player-full .pf-body{padding:0 0 6px;gap:18px}
 #player-full .pf-text{margin-top:6px}
 #player-full .pf-foot{gap:12px;margin-top:2px}
-#player-full .pf-foot #pfqueue,#player-full .pf-foot #pflike{width:40px;height:40px;min-width:40px;min-height:40px;
-  display:grid;place-items:center;padding:0;border-radius:12px;font-size:20px;line-height:1}
-#player-full .pf-foot #pflike.on{color:var(--accent);border-color:var(--accent)}
 @media(max-width:640px){#player-full .pf-body{gap:14px}}
 
 /* The compact bar owns its vertical gesture: without this the browser treats the drag as a
@@ -964,13 +995,39 @@ dialog.smallconfirm .dlg-foot{display:flex;gap:8px;justify-content:flex-end;marg
 #player-full .pf-queue-slot #playback-items{position:static;grid-row:3;min-height:0;overflow-y:auto;
   -webkit-overflow-scrolling:touch}
 
-/* Fullscreen: the header block sits a little lower, and like/queue are bare icons. */
+/* Fullscreen: the header block sits a little lower, and the foot controls are bare icons.
+   One rule owns like, queue and the style toggle, so no later block can size one of them
+   differently: same 44 px box, same 24 px glyph, same baseline. --pf-foot-size is the token
+   the rest of the player reads. */
+/* 55 px is the box the queue already occupied, so equalising upwards leaves the row's height
+   — and therefore the record above it — exactly where it was. */
+#player-full{--pf-foot-size:55px;--pf-foot-glyph:30px;--pf-wave-size:44px;--pf-wave-glyph:24px}
 #player-full .pf-body{padding-top:10px}
 #player-full.queue-open .pf-body{padding-top:22px}
-#player-full .pf-foot #pflike,#player-full .pf-foot #pfqueue{
-  background:none;border:0;box-shadow:none;border-radius:0;color:var(--text);
-  width:44px;height:44px;min-width:44px;min-height:44px;font-size:24px;line-height:1;padding:0}
-#player-full .pf-foot #pflike:hover,#player-full .pf-foot #pfqueue:hover{background:none;color:var(--accent)}
+#player-full .pf-foot #pflike,
+#player-full .pf-foot #pfqueue{
+  display:grid;place-items:center;box-sizing:border-box;
+  width:var(--pf-foot-size);height:var(--pf-foot-size);
+  min-width:var(--pf-foot-size);min-height:var(--pf-foot-size);
+  padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;
+  color:var(--text);font-size:var(--pf-foot-glyph);line-height:1}
+#player-full .pf-foot #pfwave{
+  display:grid;place-items:center;box-sizing:border-box;
+  width:var(--pf-wave-size);height:var(--pf-wave-size);
+  min-width:var(--pf-wave-size);min-height:var(--pf-wave-size);
+  padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--text)}
+#player-full .pf-foot #pflike:hover{background:none;color:var(--accent)}
+#player-full .pf-foot #pfwave:hover{background:none;
+  color:color-mix(in srgb,var(--text) 78%,var(--accent))}
+/* Hover is a hint, not a state. The queue toggle used to take the accent on hover alone, so
+   it looked switched on for as long as the pointer rested on it — and, with nothing marking
+   the real state, it looked no different while the queue was actually open. The open state
+   now owns the accent and a ring (the same pair the visualizer toggle uses), so it survives
+   the pointer leaving the button, and a plain hover only warms the glyph. */
+#player-full .pf-foot #pfqueue:hover{background:none;
+  color:color-mix(in srgb,var(--text) 78%,var(--accent))}
+#player-full .pf-foot #pfqueue[aria-expanded="true"]{color:var(--accent);border-radius:10px;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
 #player-full .pf-foot #pflike.on{color:var(--accent)}
 
 /* More air between the record and the title. */
@@ -1940,13 +1997,7 @@ body #player.on .plwave-seek{position:absolute;left:85px;bottom:15px;height:24px
 #player-full .pf-disc-shell{z-index:2}
 #player-full .pf-tab,#player-full .pf-body{position:relative;z-index:3}
 
-/* 1.25x the queue's 44 px box, so it reads as the bigger control next to the like. */
-#player-full .pf-foot #pfqueue{width:55px;height:55px;min-width:55px;min-height:55px;font-size:30px}
-/* The style toggle is a bare icon like like/queue, sitting immediately right of the queue. */
-#player-full .pf-foot #pfwave{background:none;border:0;box-shadow:none;border-radius:0;
-  color:var(--text);width:44px;height:44px;min-width:44px;min-height:44px;padding:0;
-  display:grid;place-items:center}
-#player-full .pf-foot #pfwave svg{width:24px;height:24px;display:block}
+#player-full .pf-foot #pfwave svg{width:var(--pf-wave-glyph);height:var(--pf-wave-glyph);display:block}
 #player-full .pf-foot #pfwave:hover,#player-full .pf-foot #pfwave.on{color:var(--accent)}
 #player-full .pf-foot #pfwave.on{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent);
   border-radius:12px}
@@ -1991,6 +2042,9 @@ body #player.on .plsave{display:block;position:absolute;right:56px;top:33px;widt
 body #player.on .plsave .ghost.lsave{width:34px;height:34px;min-width:0;min-height:0;
   padding:0;border:0;border-radius:0;background:none;color:var(--dim);opacity:.85}
 body #player.on .plsave .ghost.lsave.on{color:var(--accent);border:0;background:none;opacity:1}
+/* The armed minus has to win over `.on` here too, or the foot would warn in green. */
+body #player.on .plsave .ghost.lsave.armed,
+#player-full .pf-foot .pfsave .ghost.lsave.armed{color:var(--err);border:0;background:none;opacity:1}
 /* The strip between the queue panel and the bar is now a control: a wide tab hanging off
    the bar top centre, exactly the height of the reduced gap, that toggles the queue. The
    bar must stop clipping so the tab can sit outside its own box. */
@@ -2023,3 +2077,115 @@ body #player.on .qgrip{min-height:0;min-width:0;width:114px;height:18px;top:-18p
    made the card border end below the arrows. A negative top margin removes it from the
    row's height (a transform would not), so the row ends on the arrows' bottom edge. */
 .songcard .rowactions .lsave{align-self:flex-end;margin:-14px 0 0 0}
+
+/* ==== Desktop compact player: one authoritative block =======================
+   Everything above builds the phone bar to the 402x112 drawing: art and meta hung off
+   fixed X coordinates, heart and the queue/expand pair stacked in the right-hand column.
+   Stretching that drawing across a desktop is what made the bar read as a phone mockup.
+
+   From 761 px up this block replaces that composition. Same DOM, same ids, same handlers:
+   the bar becomes three grid columns — a flexible left region holding art and text, the
+   transport in its own auto column, a flexible right region holding the actions. Because
+   the two side columns are both 1fr, the transport sits on the bar's true centre whatever
+   the title length does. The seek line under them spans all three columns.
+
+   Geometry measured at 820x88: art 0-64, meta 74-290, transport 300-490 (centre 395),
+   like/full right-aligned in the third column, and on the second row clock 70-110,
+   seek 112-600, clock 604-638, lyrics 652-702, volume 712-776. */
+@media (min-width:761px){
+  body #player,body #player.on{
+    left:50%;right:auto;transform:translateX(-50%);
+    bottom:calc(16px + var(--nav-h,0px) + var(--safe-b,0px));
+    width:min(820px,calc(100vw - 48px));max-width:none;height:88px;
+    margin:0;padding:0 14px;box-sizing:border-box;overflow:visible;
+    border:1px solid var(--line);border-radius:16px}
+  body #player.on{
+    display:grid;column-gap:10px;row-gap:0;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    grid-template-rows:44px 24px;align-content:center}
+  body:has(#player.on){padding-bottom:calc(104px + var(--nav-h,0px) + var(--safe-b,0px))}
+
+  /* The add/remove pair belongs to the cards. In the bar it rendered the card's heart+pin
+     over the expand button, so the bar does not carry it. */
+  body #player.on .plsave{display:none}
+
+  /* Cover: square, vertically centred on both rows, its own rounded frame. */
+  body #player.on #plartwrap{position:relative;grid-row:1/3;grid-column:1;
+    justify-self:start;align-self:center;
+    width:64px;height:64px;min-width:64px;min-height:64px;margin:0;
+    border-radius:12px;overflow:hidden;z-index:1}
+  body #player.on #plartwrap img{border-radius:inherit}
+
+  /* Text: starts clear of the cover and stops at the transport's column, so a long title
+     truncates instead of running underneath the controls. */
+  body #player.on #plmeta{position:static;grid-row:1;grid-column:1;
+    justify-self:start;align-self:center;
+    left:auto;right:auto;top:auto;width:calc(100% - 74px);margin:0 0 0 74px;padding:0;
+    min-width:0;max-width:none;text-align:left;cursor:pointer;z-index:2}
+  body #player.on #pltitle{font-size:14px;line-height:19px;text-align:left;margin:0}
+  body #player.on #plsub{font-size:11.5px;line-height:16px;text-align:left;margin:0}
+
+  /* Transport: its own column, so the centre is the bar's centre. */
+  body #player.on .pctrl,body #player.on .pend{display:contents}
+  /* 26 px of right margin pulls the cluster 13 px left, which is the offset that puts the
+     play button — not the run of six — on the bar's centre line, as the phone bar does. */
+  body #player.on .ptrans{grid-row:1;grid-column:2;justify-self:center;align-self:center;
+    position:static;margin:0 26px 0 0;transform:none;gap:0;z-index:2}
+  body #player.on .ptrans .iconbtn{width:26px;height:26px;min-width:26px;min-height:26px;
+    margin:0;opacity:.7}
+  body #player.on .ptrans .iconbtn.small{width:26px;height:26px;min-width:26px;min-height:26px}
+  body #player.on #plprev,body #player.on #plnext{width:30px;height:30px;
+    min-width:30px;min-height:30px;margin:0 2px}
+  body #player.on #plplay{width:36px;height:36px;min-width:36px;min-height:36px;margin:0 4px}
+  body #player.on #plmute{width:26px;height:26px;min-width:26px;min-height:26px}
+
+  /* Actions: heart then expand, right-aligned, one box each, on the transport's line. */
+  body #player.on #pllike,body #player.on #plfull{
+    position:static;left:auto;right:auto;top:auto;bottom:auto;
+    grid-row:1;grid-column:3;justify-self:end;align-self:center;
+    width:34px;height:34px;min-width:34px;min-height:34px;margin:0;padding:0;
+    border-radius:0;background:none;color:var(--text);font-size:26px;line-height:1;
+    display:grid;place-items:center;opacity:.85;pointer-events:auto;z-index:3}
+  body #player.on #pllike{margin-right:46px;font-size:28px}
+  body #player.on #plfull{margin-right:6px}
+  body #player.on #pllike:hover,body #player.on #plfull:hover{opacity:1;background:none;color:var(--text)}
+  body #player.on #pllike.on{color:#ff5c8a;opacity:1}
+
+  /* Second row: clock, track, clock, then the two extras the phone has no room for.
+     Everything on this row hangs off the same column edges as the row above. */
+  body #player.on .ptime{position:static;grid-row:2;bottom:auto;
+    justify-self:start;align-self:center;width:40px;margin:0 0 0 70px;
+    font-size:11px;line-height:16px;text-align:right;color:var(--dim);
+    font-variant-numeric:tabular-nums;z-index:2}
+  body #player.on #pldur{grid-column:3;justify-self:end;width:auto;margin:0 128px 0 0;text-align:left}
+  body #player.on #plseek{position:static;grid-row:2;grid-column:1/4;
+    justify-self:stretch;align-self:center;
+    left:auto;right:auto;bottom:auto;width:auto;min-width:0;height:18px;
+    margin:0 168px 0 112px;padding:0;background:transparent;z-index:2}
+  /* A canvas is a replaced element, so left+right with width:auto would leave it at its
+     intrinsic 300 px: the width is stated against the same insets the scrub uses. */
+  body #player.on .plwave-seek{position:absolute;left:127px;right:auto;top:auto;bottom:10px;
+    height:24px;width:calc(100% - 310px);pointer-events:none;z-index:1}
+
+  /* Volume: the one extra the phone has no room for, right-hand end of the seek line.
+     The lyrics slot is dead markup app-wide (#pllyrics is display:none), so it stays out
+     of the row rather than reserving a hole next to the volume. */
+  /* Volume: the phone's own row 4 hides this (`max-width:640px`), so on a desktop it is the
+     one extra the bar gets. A 4 px input box made the old 64 px fader read as part of the
+     scrub line; a real 20 px box with an accent-filled track reads as a control. */
+  body #player.on .pvol-vert{position:static;display:flex;grid-row:2;grid-column:3;
+    justify-self:end;align-self:center;right:auto;left:auto;top:auto;bottom:auto;
+    height:20px;width:auto;margin:0 16px 0 0;align-items:center;justify-content:flex-end;z-index:2}
+  body #player.on .pvol-vert input{-webkit-appearance:none;appearance:none;
+    width:96px;height:20px;margin:0;padding:0;transform:none;background:transparent;
+    cursor:pointer;touch-action:auto}
+  body #player.on .pvol-vert input::-webkit-slider-runnable-track{height:4px;border-radius:2px;
+    background:linear-gradient(90deg,var(--accent) var(--vol,100%),#3a3d47 var(--vol,100%))}
+  body #player.on .pvol-vert input::-webkit-slider-thumb{-webkit-appearance:none;
+    width:12px;height:12px;margin-top:-4px;border-radius:50%;background:var(--text);
+    box-shadow:0 1px 3px #0008}
+  body #player.on .pvol-vert input::-moz-range-track{height:4px;border-radius:2px;background:#3a3d47}
+  body #player.on .pvol-vert input::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+  body #player.on .pvol-vert input::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;
+    background:var(--text);box-shadow:0 1px 3px #0008}
+}

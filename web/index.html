@@ -421,6 +421,10 @@
 .ghost.lsave{width:32px;height:32px;min-width:0;min-height:0;padding:0;display:inline-grid;place-items:center;
   white-space:nowrap;flex:0 0 auto;box-sizing:border-box}
 .ghost.lsave.on{color:var(--accent);border-color:#2f6b57;background:#16241f}
+/* The armed minus is the second half of a remove: it has to look like a warning, not like
+   the check it replaced, and it has to disappear on its own if you think better of it. */
+.ghost.lsave.armed{color:var(--err);border-color:#6b2f37;background:#241a1e}
+.ghost.lsave.armed svg{display:block}
 .ghost.lsave.confirm{color:#58d3a8;border-color:#58d3a8;background:#16241f;animation:lsavepop .22s ease}
 @keyframes lsavepop{from{transform:scale(.82)}to{transform:scale(1)}}
 .ghost.lsave svg{display:block}
@@ -755,7 +759,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   }
 .memlist{overflow-x:hidden}.memrow{flex-wrap:wrap;min-width:0}.memmail{flex:1 1 140px;white-space:normal;overflow-wrap:anywhere}.memacts{display:flex;flex-wrap:wrap;gap:6px;min-width:0;max-width:100%}.memacts button{white-space:normal;max-width:100%}#who{max-width:100%;overflow-wrap:anywhere}
 </style>
-<link rel="stylesheet" href="/polish.css?v=20261110x">
+<link rel="stylesheet" href="/polish.css?v=20261110a">
 <link rel="stylesheet" href="/preferences.css">
 <script src="/preferences.js" defer></script>
 <link rel="stylesheet" href="/lyrics.css">
@@ -1124,10 +1128,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     <div class="pf-foot">
       <span class="pfsave" id="pfsave"></span>
       <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
-      <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue">☰</button>
+      <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue" aria-expanded="false">☰</button>
       <button type="button" class="iconbtn" id="pfwave" title="Visualizer style" aria-label="Visualizer style" aria-expanded="false"
         aria-controls="pfwaveknobs"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 6.5v11M12 3.5v17M16 8v8M20 10.5v3"/></svg></button>
       <button type="button" id="pflyrics" disabled>Lyrics</button>
+      <div class="pf-vol">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input type="range" id="pfvol" min="0" max="100" step="1" value="100" title="Volume" aria-label="Volume">
+      </div>
     </div>
     <div class="pf-wave-knobs" id="pfwaveknobs" hidden>
       <label class="pfwk-toggle"><input type="checkbox" id="pfwkenabled"> Visualizer on (off saves battery)</label>
@@ -2382,19 +2390,64 @@ async function loadListeningSaves(){
   } catch(e){ listeningSaves = null; }
   if (typeof paintPlayerSave === "function") paintPlayerSave();   // a restored player paints first
 }
-// Idle is a plus, an add flashes a check for a beat, and a saved song shows a minus that
-// removes it. Three states, one square, so nothing reflows when the state changes.
+// Idle is a plus, an add flashes a check for a beat, and a saved song stays a check: it is
+// in your library, and saying so is the point. The minus that removes it is a second step —
+// click the check and only then does the minus appear — so a stray tap on a card cannot
+// delete a song. One control is armed at a time, and it lets go on its own.
 const SAVE_CONFIRM_MS = 900;
+const SAVE_ARM_MS = 4000;
 const listeningConfirmed = new Set();
+let saveArmed = null, saveArmedTimer = null;
+function disarmSave(){
+  if (!saveArmed) return;
+  const {kind, id} = saveArmed;
+  saveArmed = null;
+  clearTimeout(saveArmedTimer);
+  paintSaveControl(kind, id);
+}
+function armSave(kind, id){
+  if (saveArmed && saveArmed.kind === kind && saveArmed.id === Number(id)) return;
+  disarmSave();
+  saveArmed = {kind, id: Number(id)};
+  clearTimeout(saveArmedTimer);
+  saveArmedTimer = setTimeout(disarmSave, SAVE_ARM_MS);
+  paintSaveControl(kind, Number(id));
+}
 function listeningSaveControl(kind, id){
   if (!listeningSaves) return '';
   const key = kind + id;
   const saved = listeningSaves[kind === 'track' ? 'tracks' : 'playlists'].includes(Number(id));
+  const armed = saved && !!saveArmed && saveArmed.kind === kind && saveArmed.id === Number(id);
   const confirming = listeningConfirmed.has(key);
-  const label = confirming ? 'Added to your library' : saved ? 'Remove from library' : 'Add to library';
-  const glyph = confirming ? SVG.check(14) : saved ? SVG.minus(14) : SVG.plus(14);
-  return `<button class="ghost lsave${saved && !confirming ? ' on' : ''}${confirming ? ' confirm' : ''}" data-save-key="${esc(key)}" aria-pressed="${saved}" aria-label="${label}" title="${label}" ${listeningBusy.has(key) ? 'disabled' : ''} onclick="event.stopPropagation();toggleListeningSave('${kind}',${Number(id)})">${glyph}</button>`;
+  const label = armed ? 'Click again to remove from your library'
+    : confirming ? 'Added to your library'
+    : saved ? 'In your library — click to remove'
+    : 'Add to library';
+  const glyph = armed ? SVG.minus(14) : (confirming || saved) ? SVG.check(14) : SVG.plus(14);
+  return `<button class="ghost lsave${saved && !confirming ? ' on' : ''}${armed ? ' armed' : ''}${confirming ? ' confirm' : ''}" data-save-key="${esc(key)}" aria-pressed="${saved}" aria-label="${esc(label)}" title="${esc(label)}" ${listeningBusy.has(key) ? 'disabled' : ''} onclick="event.stopPropagation();saveControlClick('${kind}',${Number(id)})">${glyph}</button>`;
 }
+// A saved item answers the first click by showing the minus; the second click removes it.
+function saveControlClick(kind, id){
+  const key = kind + id;
+  if (!listeningSaves || listeningBusy.has(key)) return;
+  const saved = listeningSaves[kind === 'track' ? 'tracks' : 'playlists'].includes(Number(id));
+  if (saved && !(saveArmed && saveArmed.kind === kind && saveArmed.id === Number(id))) {
+    armSave(kind, Number(id));
+    return;
+  }
+  saveArmed = null;
+  clearTimeout(saveArmedTimer);
+  toggleListeningSave(kind, Number(id));
+}
+// The armed minus belongs to one item and one moment: pointing anywhere else, or Escape,
+// puts the check back before it can be hit by accident.
+document.addEventListener('pointerdown', event => {
+  if (!saveArmed) return;
+  const armed = `.lsave[data-save-key="${saveArmed.kind}${saveArmed.id}"]`;
+  if (event.target.closest && event.target.closest(armed)) return;
+  disarmSave();
+}, true);
+document.addEventListener('keydown', event => { if (event.key === 'Escape') disarmSave(); });
 // Repaint only these buttons, never the whole library: a full render inserts or reorders
 // cards and reloads every cover, which made the grid jump as soon as you saved a song.
 function paintSaveControl(kind, id){
@@ -2407,6 +2460,7 @@ function paintSaveControl(kind, id){
 async function toggleListeningSave(kind, id){
   const key = kind+id;
   if (!listeningSaves || listeningBusy.has(key)) return;
+  if (saveArmed && saveArmed.kind === kind && saveArmed.id === Number(id)) { saveArmed = null; clearTimeout(saveArmedTimer); }
   const collection = kind === 'track' ? 'tracks' : 'playlists';
   const saved = !listeningSaves[collection].includes(id);
   listeningBusy.add(key);
@@ -5689,12 +5743,25 @@ $("#plseek").addEventListener("input", e => {
   if (playerAudio.duration)
     playerAudio.currentTime = (e.target.value / 1000) * playerAudio.duration;
 });
-$("#plvol").addEventListener("input", e => {
-  const value = Number(e.target.value) / 100;
+// The bar and the fullscreen view each carry a fader on desktop. Both are painted from the
+// audio element, never from each other, so they cannot drift apart.
+const volumeFaders = [...document.querySelectorAll("#plvol,#pfvol")];
+function paintVolume(){
+  const pct = Math.round((playerAudio.muted ? 0 : playerAudio.volume) * 100);
+  for (const fader of volumeFaders){
+    fader.value = String(pct);
+    fader.style.setProperty("--vol", pct + "%");
+  }
+}
+for (const fader of volumeFaders) fader.addEventListener("input", () => {
+  const value = Number(fader.value) / 100;
   playerAudio.muted = false;
   playerAudio.volume = value;
   localStorage.setItem("hl.volume", String(value));
   $("#plmute").innerHTML = SVG.volume(16);
+  $("#plmute").classList.remove("on");
+  $("#plmute").setAttribute("aria-pressed", "false");
+  paintVolume();
 });
 // Mute is a flag, not "drag the fader to zero": the level survives a mute/unmute.
 $("#plmute").onclick = () => {
@@ -5703,6 +5770,7 @@ $("#plmute").onclick = () => {
   $("#plmute").innerHTML = muted ? SVG.mute(16) : SVG.volume(16);
   $("#plmute").classList.toggle("on", muted);
   $("#plmute").setAttribute("aria-pressed", String(muted));
+  paintVolume();
 };
 
 window.addEventListener("pagehide", () => {
@@ -5722,7 +5790,7 @@ $("#pfshuffle").innerHTML = SVG.shuffle(16);
 $("#pfprev").innerHTML = SVG.prev(20);
 $("#pfnext").innerHTML = SVG.next(20);
 playerAudio.volume = Math.min(1, Math.max(0, Number(localStorage.getItem("hl.volume") ?? 0.85)));
-$("#plvol").value = Math.round(playerAudio.volume * 100);
+paintVolume();
 // iOS ignores writes to audio.volume, so the fader and mute would be decoration: hide them
 // where the element refuses to take a level. Hardware buttons remain the real control there.
 const VOLUME_SETTABLE = (() => {
@@ -7305,6 +7373,9 @@ $("#history-items").addEventListener("click", event => {
   });
   panel.addEventListener("pointermove", event => {
     if (!start || event.pointerId !== start.id) return;
+    // A row being reordered owns the gesture. Pulling the history open mid-drag grew this
+    // panel by 80px, so every row moved up and the finger ended rows below where it began.
+    if (items && items.dataset.dragging === "1") { start = null; return; }
     const dy = event.clientY - start.y;
     if (dy > 44 && !panel.classList.contains("history-open")) { setHistory(true); start = null; }
     else if (dy < -44 && panel.classList.contains("history-open")) { setHistory(false); start = null; }
@@ -7451,6 +7522,9 @@ function bindOrderDrag(host, commit){
     if (!grip && e.target.closest('button,input')) return;
     const row = (grip || e.target).closest('.pq-row');
     if (!row || row.parentElement !== host) return;
+    // The flag that suppresses the click trailing a drop belongs to one gesture. Clearing it
+    // as the next gesture starts stops a drag that ended without a click from eating a tap.
+    delete host.dataset.justDragged;
     drag = {row, pointer: e.pointerId, y: e.clientY, x: e.clientX, moved: false,
             ids: [...host.children].map(n => +n.dataset.id).filter(Boolean)};
     armed = !!grip || e.pointerType !== 'touch';
@@ -7482,19 +7556,17 @@ function bindOrderDrag(host, commit){
       if (!drag.row.classList.contains('pq-lift')){ drag.row.classList.add('pq-lift'); host.dataset.dragging = '1'; }
       try { drag.row.setPointerCapture?.(drag.pointer); } catch (_) {}
     }
-    // The lifted row sits under the finger, so hit-testing returns the dragged row
-    // itself and the swap never happens. Fall back to geometry in that case.
-    let target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pq-row');
-    if (!target || target === drag.row || target.parentElement !== host){
-      target = [...host.children].find(node => {
-        if (node === drag.row || !+node.dataset.id) return false;
-        const box = node.getBoundingClientRect();
-        return e.clientY >= box.top && e.clientY <= box.bottom;
-      }) || null;
-    }
-    if (target && target.parentElement === host && target !== drag.row){
-      const box = target.getBoundingClientRect();
-      host.insertBefore(drag.row, e.clientY > box.top + box.height / 2 ? target.nextSibling : target);
+    // Place the lifted row before the first row whose middle is below the finger. That is
+    // one idempotent answer for every position — hit-testing here returned the lifted row
+    // itself (it sits under the finger) and the old geometry fallback could swap twice per
+    // move, so a short drag slid the row several places.
+    const others = [...host.children].filter(node => node !== drag.row && +node.dataset.id);
+    const next = others.find(node => {
+      const box = node.getBoundingClientRect();
+      return e.clientY < box.top + box.height / 2;
+    });
+    if (host.children[host.children.length - 1] !== drag.row || next) {
+      host.insertBefore(drag.row, next || null);
     }
     const box = host.getBoundingClientRect();
     if (e.clientY < box.top + 32) host.scrollTop -= 14;
@@ -7514,6 +7586,13 @@ function bindOrderDrag(host, commit){
     if (!cancel) host.dataset.justDragged = '1';
     commit(cancel ? null : ids, !cancel);
   };
+  // Once a row is lifted the touch drag has to own the gesture. `touch-action` is latched
+  // when the finger lands, so the row's `pan-y` still lets the list scroll — and the
+  // browser then cancels the pointer mid-drag, which silently ended every phone reorder.
+  // Blocking the touch scroll only while a row is lifted leaves ordinary scrolling alone.
+  host.addEventListener('touchmove', e => {
+    if (host.dataset.dragging === '1' && e.cancelable) e.preventDefault();
+  }, { passive: false });
   host.addEventListener('pointerup', e => end(e, false));
   host.addEventListener('pointercancel', e => end(e, true));
   // A long press belongs to the drag, not to the browser's copy/share menu.
