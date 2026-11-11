@@ -1,44 +1,75 @@
 // The player's library control. 0.16.1 parked it in the compact bar's right-hand column at
 // exactly the expand button's box (right 9 / top 36, z-index 3 over the expand's 2), so the
 // fullscreen button sat under a save square and blinked as the saves poll repainted the slot.
-// It now belongs to the fullscreen foot only; this pins that, and pins that the compact bar's
-// heart, queue and expand are each the top element at their own centre.
+// 0.16.6 gave it a real slot: the second of three stacked controls, between the heart and the
+// expand. This pins that it stays a slot of its own — its own centre hit-tests into its own
+// button, and it overlaps neither neighbour at either width — and that the fullscreen foot
+// keeps the same control for the playing track.
 const fs = require("fs"), http = require("http"), path = require("path"), assert = require("assert");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 
 const srv = http.createServer((req, res) => {
   const p = req.url.split("?")[0];
   if (p.startsWith("/api/")) return res.writeHead(200, { "content-type": "application/json" })
-    .end(JSON.stringify({ ok: true, tracks: [], playlists: [], folders: [], favorites: [], songs: [], queue: [] }));
+    .end(JSON.stringify({ ok: true, songs: [], queue: [], tracks: [], playlists: [], folders: [],
+      favorites: [], pins: [], likes: [], album_likes: [], library: [], items: [], entries: [], results: [] }));
   const f = path.join(ROOT, p === "/" ? "/index.html" : p);
   if (fs.existsSync(f) && fs.statSync(f).isFile())
     return res.writeHead(200, { "content-type": TYPES[path.extname(f)] || "application/octet-stream" }).end(fs.readFileSync(f));
   res.writeHead(404).end("no");
 });
 
-(async () => {
-  const css = require("./_css.cjs").appCss();
-  assert(!/\.plsave/.test(css), "no rule may place a save control in the compact bar");
+const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
+(async () => {
   await new Promise(r => srv.listen(0, r));
   const browser = await chromium.launch({ headless: true });
   try {
+    // The slot must behave the same on the phone cluster and the desktop bar.
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+      const page = await browser.newPage({ viewport });
+      await page.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "load" });
+      await page.waitForTimeout(600);
+      const bar = await page.evaluate(() => {
+        document.getElementById("player").classList.add("on");
+        playingId = 42;
+        listeningSaves = { tracks: [42], playlists: [], folders: [] };
+        paintPlayerSave();
+        const box = id => {
+          const el = document.getElementById(id);
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { id, left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+            hit: hit ? (hit.closest("button")?.id || hit.id || hit.tagName) : "none",
+            // The slot's own button carries no id, so it is identified by containment.
+            own: !!hit && el.contains(hit) };
+        };
+        const slot = document.getElementById("plsave");
+        const button = slot.querySelector("button.lsave");
+        return {
+          boxes: ["pllike", "plsave", "plfull"].map(box),
+          saveFill: button ? { key: button.dataset.saveKey, pressed: button.getAttribute("aria-pressed") } : null,
+          slotDisplay: getComputedStyle(slot).display,
+        };
+      });
+      const [like, save, full] = bar.boxes;
+      const at = viewport.width + "px";
+      assert.notStrictEqual(bar.slotDisplay, "none", `${at}: the compact save slot is not shown`);
+      assert(bar.saveFill, `${at}: the compact save slot is empty for a playing track`);
+      assert.strictEqual(bar.saveFill.key, "track42", `${at}: the compact save is bound to the playing track`);
+      assert.strictEqual(bar.saveFill.pressed, "true", `${at}: a saved track reads as pressed`);
+      assert.strictEqual(save.own, true, `${at}: the compact save is covered by ${save.hit}`);
+      assert(!overlaps(save, like), `${at}: the compact save overlaps #pllike`);
+      assert(!overlaps(save, full), `${at}: the compact save overlaps #plfull`);
+      for (const box of [like, full]) assert.strictEqual(box.hit, box.id, `${at}: #${box.id} is covered by ${box.hit}`);
+      await page.close();
+    }
+
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "load" });
     await page.waitForTimeout(600);
-    const bar = await page.evaluate(() => {
-      document.getElementById("player").classList.add("on");
-      const centre = el => { const r = el.getBoundingClientRect(); const n = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return n ? (n.closest("button")?.id || n.id || n.tagName) : "none"; };
-      return {
-        saveSlot: !!document.querySelector("#player .plsave"),
-        hit: ["pllike", "plqueue", "plfull"].map(id => [id, centre(document.getElementById(id))]),
-        rects: ["pllike", "plqueue", "plfull"].map(id => { const r = document.getElementById(id).getBoundingClientRect(); return [id, Math.round(r.left), Math.round(r.top), Math.round(r.width)]; }),
-      };
-    });
-    assert.strictEqual(bar.saveSlot, false, "the compact bar must not carry a save slot");
-    for (const [id, hit] of bar.hit) assert.strictEqual(hit, id, `#${id} is covered by ${hit} (${JSON.stringify(bar.rects)})`);
 
     // Fullscreen foot: the same control, repainted for the playing track.
     const foot = await page.evaluate(() => {
@@ -67,6 +98,6 @@ const srv = http.createServer((req, res) => {
     });
     assert.strictEqual(stable, true, "an unchanged state must not rebuild the button");
 
-    console.log("Player save slot PASS: compact bar free of it, expand on top, fullscreen foot bound to the track");
+    console.log("Player save slot PASS: compact save in its own slot, heart and expand on top, fullscreen foot bound to the track");
   } finally { await browser.close(); srv.close(); }
 })().catch(e => { console.error("FAIL " + e.message); process.exitCode = 1; });

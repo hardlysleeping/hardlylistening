@@ -5042,11 +5042,14 @@ function paintPlayerSave(){
   const raw = playingId == null ? "" : listeningSaveControl("track", playingId);
   const end = raw.indexOf("</button>");
   const html = end === -1 ? "" : raw.slice(0, end + 9);
+  // `slot.innerHTML` reads back the browser's serialisation, not the string above: void tags come
+  // back as `<path …></path>`, so the two never match and the guard rebuilt the button on every
+  // paint, swapping the node out from under a finger mid-press. Remember the source we painted.
   for (const sel of ["#pfsave", "#plsave"]){
     const slot = $(sel);
     if (!slot) continue;
-    if (slot.innerHTML !== html) slot.innerHTML = html;
-    if (slot.childElementCount > 1) slot.innerHTML = "";
+    if (slot.childElementCount > 1) { slot.innerHTML = ""; slot.dataset.painted = ""; }
+    else if (slot.dataset.painted !== html) { slot.innerHTML = html; slot.dataset.painted = html; }
   }
 }
 // One heart state, two surfaces: the fullscreen player and the compact bar.
