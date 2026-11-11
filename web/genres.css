@@ -1,6 +1,6 @@
 .genre-panel{margin:0 0 14px;padding:10px;border:1px solid var(--line);border-radius:10px}.genre-panel summary{cursor:pointer}.genre-panel label{display:inline-flex;align-items:center;gap:4px;margin:4px 10px 4px 0;font-size:12px}.genre-panel input[type=checkbox]{width:auto}.genre-panel p{font-size:12px;color:var(--muted)}.genre-panel>input{max-width:320px;margin:5px}.genre-panel button{margin:5px}
 
-/* Genres is a popup, opened from a chip beside the search box. */
+/* Genres is a popup, opened from a chip on the library's filter row. */
 #genres-pop{width:min(560px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow:auto;
   padding:18px;box-sizing:border-box;background:var(--panel);color:var(--text);
   border:1px solid var(--line);border-radius:18px}

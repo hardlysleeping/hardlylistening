@@ -11,7 +11,7 @@
 
 ## Verification
 
-Run with `NODE_PATH=<NODE_PATH>`:
+Run with `NODE_PATH=/tmp/hardlylistening-ui-deps/node_modules`:
 
 ```
 node tests/test_playback_queue_ui.cjs

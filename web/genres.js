@@ -18,12 +18,14 @@ window.Genres = (() => {
   async function init() {
     const bar = document.querySelector('.libbar');
     if (!bar) return;
-    // A chip beside the search box opens a popup; the taxonomy never takes a row of its own.
+    // A chip on the filter row opens a popup; the taxonomy never takes a row of its own.
     const button = document.createElement('button');
     button.type = 'button'; button.id = 'genresbtn'; button.className = 'chip small';
     button.title = 'Filter by genre'; button.textContent = 'Genres';
-    const searchBox = document.getElementById('libsearch');
-    (searchBox ? searchBox.parentElement : bar).append(button);
+    button.setAttribute('aria-haspopup', 'dialog');
+    // The filter row is the row the Filter button opens: the chip appears with the other
+    // filters, not beside the search box.
+    (document.getElementById('libfilters') || bar).append(button);
 
     const pop = document.createElement('dialog');
     pop.id = 'genres-pop';

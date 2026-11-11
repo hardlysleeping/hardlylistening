@@ -27,22 +27,21 @@ vm.runInContext(fs.readFileSync('web/preferences.js','utf8'),ctx);
  // Favorites is a dynamic playlist card in the playlists grid, not a panel under Pinned.
  assert.equal(w.document.querySelectorAll('.favorites-playlist').length,0,'the old favorites panel is gone');
  const dyn=w.document.querySelectorAll('.plcard.dyn');
- assert.equal(dyn.length,2,'two dynamic playlists');
+ assert.equal(dyn.length,1,'My Library holds your own Favorites only');
  assert.equal(w.document.querySelector('[data-open-favorites] .pt').textContent,'Favorites');
  assert(w.document.querySelector('[data-open-favorites] .ps').textContent.includes('1 song · yours'));
- const pub=w.document.querySelector('[data-open-public]');
- assert.equal(pub.querySelector('.pt').textContent,"Everyone's Favorites");
- assert(pub.querySelector('.ps').textContent.includes('2 songs · 6 members'),pub.querySelector('.ps').textContent);
- assert.equal(pub.querySelectorAll('.miniwho').length,4,'who liked them is on the card');
+ assert.equal(w.document.querySelector('[data-open-public]'),null,"Everyone's Favorites is not in My Library");
  // Shared scope keeps the public playlist and drops the personal one.
  vm.runInContext("libraryScope='shared';renderLibrary()",ctx);
  assert.equal(w.document.querySelectorAll('.plcard.dyn').length,1);
- assert(w.document.querySelector('[data-open-public]'),'public playlist survives shared scope');
+ const pub=w.document.querySelector('[data-open-public]');
+ assert.equal(pub.querySelector('.pt').textContent,"Everyone's Favorites");
+ assert(pub.querySelector('.ps').textContent.includes('2 songs · 6 members'),pub.querySelector('.ps').textContent);
+ assert.equal(w.document.querySelector('[data-open-favorites]'),null,'no personal favorites in the Repository');
  assert.equal(w.document.querySelectorAll('.mixed-pinned').length,0);
- vm.runInContext("libraryScope='mine';renderLibrary()",ctx);
 
  // Opening it lists every liked song with the members who liked it.
- w.document.querySelector('[data-open-public]').click();
+ pub.click();
  assert(w.document.querySelector('#liblist').textContent.includes("Everyone's Favorites"));
  assert(w.document.querySelector('#liblist').textContent.includes('2 songs liked by 6 members'));
  const rows=w.document.querySelectorAll('.favrow');
@@ -57,6 +56,7 @@ vm.runInContext(fs.readFileSync('web/preferences.js','utf8'),ctx);
  assert.deepEqual(vm.runInContext('playedIds',ctx),[1],'clicking a row plays that song');
  // The personal detail still uses the normal song list.
  w.document.querySelector('[data-close-favorites]').click();
+ vm.runInContext("libraryScope='mine';renderLibrary()",ctx);
  w.document.querySelector('[data-open-favorites]').click();
  assert(w.document.querySelector('#liblist').textContent.includes('1 song · liked by you'));
 

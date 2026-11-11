@@ -641,13 +641,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/catalogue":
             from urllib.parse import parse_qs as _qs, urlparse as _up
-            raw = (_qs(_up(self.path).query).get("watch") or [""])[0].strip()
+            query = _qs(_up(self.path).query)
+            raw = (query.get("watch") or [""])[0].strip()
             if not raw.isdigit():
                 self.json({"error": "watch is required"}, 400)
                 return
+            try:
+                offset = int((query.get("offset") or ["0"])[0])
+                limit = int((query.get("limit") or ["60"])[0])
+                if offset < 0 or limit < 1 or limit > 200:
+                    raise ValueError
+            except ValueError:
+                self.json({"error": "invalid catalogue page"}, 400)
+                return
             from discovery import tracklist
             try:
-                self.json(tracklist.catalogue(store, int(raw)))
+                self.json(tracklist.catalogue(store, int(raw), offset=offset, limit=limit))
             except ValueError as error:
                 self.json({"error": str(error)}, 400)
             except Exception as error:                      # noqa: BLE001
@@ -671,7 +680,20 @@ class Handler(BaseHTTPRequestHandler):
                 artist_art.warm(store)
             except Exception:
                 pass
-            self.json({"tracks": annotate(store.library()), "all_tracks": annotate(store.library(include_pending=True)), "artist_art": store.artist_art_map(), "playlists": [dict(r) for r in store.conn.execute("SELECT id,title,provider,source_url FROM playlists ORDER BY position,id")]})
+            # Who added each playlist travels with it: the tile names them on the
+            # count line. A playlist added before owners were recorded simply has
+            # no name, and the tile says nothing rather than inventing one.
+            try:
+                playlists = [dict(r) for r in store.conn.execute(
+                    "SELECT p.id,p.title,p.provider,p.source_url,"
+                    " COALESCE(NULLIF(TRIM(m.display_name),''),'') AS added_by"
+                    " FROM playlists p LEFT JOIN member_playlists o ON o.playlist_id=p.id"
+                    " LEFT JOIN members m ON m.id=o.member_id"
+                    " ORDER BY p.position,p.id")]
+            except Exception:
+                playlists = [dict(r) for r in store.conn.execute(
+                    "SELECT id,title,provider,source_url FROM playlists ORDER BY position,id")]
+            self.json({"tracks": annotate(store.library()), "all_tracks": annotate(store.library(include_pending=True)), "artist_art": store.artist_art_map(), "playlists": playlists})
             return
         if path == "/api/library/export":
             # Hand-off to DJ software, not an audio download: m3u8 for anything

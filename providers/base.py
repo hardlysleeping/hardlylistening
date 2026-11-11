@@ -28,6 +28,7 @@ class TrackRef:
     isrc: str = ""
     artwork: str = ""
     source_url: str = ""      # empty means "resolve by search"
+    release_id: str = ""      # the release this song was listed under, when known
 
 
 @dataclass
@@ -81,6 +82,16 @@ class Provider:
         """The songs behind a release page, so one can be picked on its own.
 
         Only called when a person opens an album — never on a poll.
+        """
+        return []
+
+    def catalogue_tracks(self, artist_url: str, limit: int = 2000,
+                         releases: list[Release] | None = None) -> list[TrackRef]:
+        """Every song this artist has published, for the artist page.
+
+        A catalogue read, not a poll: called when somebody opens the artist's
+        page, so it is allowed to cost more than one request. `releases` is the
+        list already fetched for the same page, when the provider can reuse it.
         """
         return []
 

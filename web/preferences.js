@@ -28,7 +28,7 @@
     const glyph = (action === 'favorite' || action === 'like') ? (active ? '♥' : '♡') : pinIcon(active);
     return `<button type="button" class="preference ${active ? 'active' : ''}" data-pref-action="${action}" data-pref-kind="${kind}" data-pref-id="${esc(String(id))}" aria-pressed="${active}" aria-label="${label}" title="${label}" ${busy.has(key) || full ? 'disabled' : ''}>${glyph}</button>`;
   };
-  window.PreferenceUI = {rank, togglePinned, syncPinnedState, applyServerPins, marked}
+  window.PreferenceUI = {rank, togglePinned, syncPinnedState, applyServerPins, marked, control}
   const originalLoad = loadListeningSaves;
   loadListeningSaves = async function(){
     await originalLoad();
@@ -92,26 +92,40 @@
   const likerColor = id => LIKER_COLORS[[...String(id)].reduce((a,c)=>((a*31+c.charCodeAt(0))>>>0), 7) % LIKER_COLORS.length];
   const likerChip = m => `<button type="button" class="liker" style="--c:${likerColor(m.id)}" data-person-id="${esc(m.id)}"
     title="${esc(m.name)} liked this" aria-label="${esc(m.name)} liked this">${profileSymbol(m.icon)}</button>`;
-  // Four covers make the classic 2x2, one would look like a broken tile.
-  const dynCollage = list => {
-    const arts = list.map(t => t.artwork).filter(Boolean).slice(0, 4);
-    if (!arts.length) return `<div class="collage big dynempty"><i>♥</i></div>`;
-    return `<div class="collage ${arts.length === 1 ? 'big' : ''}">${arts.map(a => `<i style="background-image:url('${esc(a)}')"></i>`).join('')}</div>`;
-  };
+  // Four covers make the classic 2x2; one would look like a broken tile.
+  const VIRTUAL = { favorites: 'Favorites', 'public-favorites': "Everyone's Favorites" };
+  const dynSaved = list => !!list.length && list.every(t => (listeningSaves?.tracks || []).includes(t.id));
+  // Adding a computed playlist means saving its songs, one by one, through the same
+  // endpoint a song's plus uses. Every song in the library is the finished state.
+  function dynSaveControl(id, list){
+    if (!listeningSaves || !list.length) return '';
+    const saved = dynSaved(list);
+    const label = saved ? 'Every song is in your library' : 'Add every song to your library';
+    return `<button type="button" class="ghost lsave${saved ? ' on' : ''}" data-dyn-save="${id}" aria-pressed="${saved}"
+      aria-label="${label}" title="${label}" ${saved || busy.has('save' + id) ? 'disabled' : ''}>${saved ? SVG.check(14) : SVG.plus(14)}</button>`;
+  }
+  function dynCard({open, title, list, by, extra}){
+    const id = open === 'public' ? 'public-favorites' : 'favorites';
+    return `<div class="plcard dyn ${extra || ''}" data-open-${open} tabindex="0" role="button" aria-label="${esc(title)}">
+      ${playlistCollage(list.map(t => t.artwork).filter(Boolean), title)}
+      <div class="pbody">
+        <div class="pt"><span class="dynheart" aria-hidden="true">♥</span>${esc(title)}</div>
+        <div class="ps"><span class="plcount">${list.length} song${list.length === 1 ? '' : 's'}</span><span class="plby">${esc(by)}</span></div>
+        <div class="pacts">${downloadControl('/api/library/download?ids=' + list.map(t => t.id).join(','), list.length > 0, 'ZIP')}${dynSaveControl(id, list)}${control('pin', 'playlist', id)}</div>
+      </div>
+    </div>`;
+  }
   function dynCards(){
     if (!state) return '';
     const mine = favTracks(), pub = publicEntries();
-    const people = new Map();
-    pub.forEach(e => e.likers.forEach(m => people.set(m.id, m)));
-    const who = [...people.values()].slice(0, 4).map(m => `<span class="miniwho" style="--c:${likerColor(m.id)}" title="${esc(m.name)}">${profileSymbol(m.icon)}</span>`).join('');
+    const people = new Set(pub.flatMap(e => e.likers.map(m => m.id)));
+    const me = (typeof last !== 'undefined' && last?.viewer?.display_name) || 'You';
     const cards = [];
-    if (libraryScope === 'mine') cards.push(`<div class="plcard dyn" data-open-favorites tabindex="0" role="button" aria-label="Favorites — your liked songs">
-      ${dynCollage(mine)}<div class="pt">Favorites</div>
-      <div class="ps">${mine.length} song${mine.length === 1 ? '' : 's'} · yours</div></div>`);
-    cards.push(`<div class="plcard dyn public" data-open-public tabindex="0" role="button" aria-label="Everyone's Favorites">
-      ${dynCollage(pub.map(e => e.track))}<div class="pt">Everyone's Favorites</div>
-      <div class="ps">${pub.length} song${pub.length === 1 ? '' : 's'} · ${people.size} member${people.size === 1 ? '' : 's'}</div>
-      ${who ? `<div class="dynwho">${who}</div>` : ''}</div>`);
+    // Favorites is yours. Everyone's Favorites is the Repository's own list — it is not
+    // yours to add or remove, so it belongs beside the shared playlists, not in My Library.
+    if (libraryScope === 'mine') cards.push(dynCard({open:'favorites', title:'Favorites', list:mine, by:me}));
+    else cards.push(dynCard({open:'public', title:"Everyone's Favorites", list:pub.map(e => e.track),
+      by: `${people.size} member${people.size === 1 ? '' : 's'}`, extra:'public'}));
     return cards.join('');
   }
   function publicRow({track, likers}){
@@ -131,9 +145,16 @@
   function pinnedPanel(){
     if (!state || libraryScope !== 'mine' || detail) return '';
     const albums = albumsOf(libAll);
+    // A computed playlist has no row in `playlists`; its pin resolves to the same list
+    // the card shows, so the strip can name it and open it.
+    const virtualPin = target => {
+      if (!VIRTUAL[target]) return null;
+      const list = target === 'favorites' ? favTracks() : publicEntries().map(e => e.track);
+      return {title: VIRTUAL[target], artwork: list.map(t => t.artwork).find(Boolean) || ''};
+    };
     const tiles = state.pins.slice(0, PIN_LIMIT).map(p => {
       const item = p.kind === 'track' ? libAll.find(t=>String(t.id)===p.target)
-        : p.kind === 'playlist' ? libPlaylists.find(t=>String(t.id)===p.target)
+        : p.kind === 'playlist' ? (libPlaylists.find(t=>String(t.id)===p.target) || virtualPin(p.target))
         : albums.find(a=>a.key===p.target);
       if (!item) return '';
       const art = p.kind === 'album' ? item.art : item.artwork;
@@ -366,16 +387,26 @@
 
   // Capture before row/card inline handlers: personal actions never start playback.
   document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-pref-action],[data-open-favorites],[data-open-public],[data-close-favorites],[data-open-pin-kind],[data-fav-id]');
+    const button = event.target.closest('[data-pref-action],[data-open-favorites],[data-open-public],[data-close-favorites],[data-open-pin-kind],[data-dyn-save],[data-fav-id]');
     if (!button) return;
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     if (button.hasAttribute('data-open-favorites')) { detail={kind:'favorites'}; renderLibrary(); return; }
     if (button.hasAttribute('data-open-public')) { detail={kind:'public-favorites'}; renderLibrary(); return; }
     if (button.hasAttribute('data-close-favorites')) { detail=null; renderLibrary(); return; }
     if (button.dataset.favId) { toggleSongPlayback(Number(button.dataset.favId)); return; }
+    if (button.dataset.dynSave){
+      const target = button.dataset.dynSave, key = 'save' + target;
+      if (busy.has(key)) return;
+      busy.add(key); button.disabled = true;
+      try { await api('/api/listening/saves', {kind:'playlist', id:target, saved:true}); await loadListeningSaves(); }
+      catch (e) { showToast(e.message || 'Could not add those songs'); }
+      finally { busy.delete(key); renderLibrary(); }
+      return;
+    }
     if (pinClickMuted) return;
     if (button.dataset.openPinKind){
       const kind=button.dataset.openPinKind, id=button.dataset.openPinId;
+      if (kind==='playlist' && VIRTUAL[id]) { detail={kind: id==='favorites' ? 'favorites' : 'public-favorites'}; renderLibrary(); return; }
       if (kind==='track') { detail=null; libView='songs'; $('#libsearch').value=libAll.find(t=>String(t.id)===id)?.title || ''; }
       else if (kind==='album') detail={kind:'album',key:id};
       else detail={kind:'playlist',id:Number(id)};

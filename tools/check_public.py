@@ -8,7 +8,7 @@ import urllib.request
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--origin', default='https://music.example.com')
+    parser.add_argument('--origin', default='https://music.hardlysleep.ing')
     args = parser.parse_args()
     failures = 0
     checks = [('/api/health', 200), ('/party', 200), ('/party.js', 200),

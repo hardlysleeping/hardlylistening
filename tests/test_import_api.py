@@ -44,8 +44,8 @@ class ImportAndMove(unittest.TestCase):
         self.old_auth = os.environ.get("HARDLYLISTENING_AUTH_REQUIRED")
         self.old_origin = os.environ.get("HARDLYLISTENING_PUBLIC_ORIGIN")
         os.environ["HARDLYLISTENING_AUTH_REQUIRED"] = "1"
-        os.environ["HARDLYLISTENING_PUBLIC_ORIGIN"] = "https://music.example.com"
-        server.SECURITY.config = lambda: ("", "", "https://music.example.com")
+        os.environ["HARDLYLISTENING_PUBLIC_ORIGIN"] = "https://music.hardlysleep.ing"
+        server.SECURITY.config = lambda: ("", "", "https://music.hardlysleep.ing")
         server.SECURITY.csrf = lambda handler: None
         class FakeQueue:
             paused = False

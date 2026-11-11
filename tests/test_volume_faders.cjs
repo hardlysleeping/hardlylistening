@@ -1,6 +1,7 @@
-// Desktop volume: the bar and the fullscreen view each carry a fader, both drive the one
-// audio element, and neither collides with the clocks, the scrub or the transport.
-// Phone widths keep the hardware buttons: no fader there.
+// Desktop volume: the header carries a speaker that opens a fader, the fullscreen view
+// carries its own, and both drive the one audio element. The opener is a fixed point --
+// opening the fader must not move shuffle -- and the open state survives a reload. Phone
+// widths keep the hardware buttons: no toggle and no fader there.
 const fs = require("fs"), path = require("path"), http = require("http"), assert = require("assert");
 const { chromium } = require("playwright");
 const ROOT = path.join(__dirname, "..", "web");
@@ -51,12 +52,32 @@ const server = () => http.createServer((req, res) => {
     await start();
     assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("player-full")).display), "none");
 
-    // The bar fader is a real 96x20 control, not a 4px line mistaken for the scrub.
-    const bar = await page.evaluate(() => {
+    // The header's speaker opens a compact fader to its left; closed, it is not laid out.
+    const closed = await page.evaluate(() => ({
+      shown: getComputedStyle(document.getElementById("plvol")).display,
+      shuffle: Math.round(document.getElementById("btn-shuffle").getBoundingClientRect().left),
+      gap: (() => {
+        const a = document.getElementById("plvolbtn").getBoundingClientRect();
+        const b = document.getElementById("btn-shuffle").getBoundingClientRect();
+        return Math.round(b.left - a.right);
+      })(),
+    }));
+    check("the fader starts closed", closed.shown, "none");
+    check("the speaker sits 10px left of shuffle", closed.gap, 10);
+
+    await page.click("#plvolbtn");
+    await page.waitForTimeout(200);
+    const opened = await page.evaluate(() => {
       const b = document.getElementById("plvol").getBoundingClientRect();
-      return [Math.round(b.width), Math.round(b.height)];
+      return { shown: getComputedStyle(document.getElementById("plvol")).display,
+        box: [Math.round(b.width), Math.round(b.height)],
+        pressed: document.getElementById("plvolbtn").getAttribute("aria-pressed"),
+        shuffle: Math.round(document.getElementById("btn-shuffle").getBoundingClientRect().left),
+        stored: localStorage.getItem("hl.compactVolume") };
     });
-    check("bar fader has a usable hit box", bar, [96, 20]);
+    check("the toggle opens a 72x18 fader", [opened.shown, opened.box, opened.pressed], ["block", [72, 18], "true"]);
+    check("opening the fader does not move shuffle", opened.shuffle, closed.shuffle);
+    check("the open state is stored", opened.stored, "1");
 
     await nudge("plvol", 40);
     let s = await state();
@@ -76,6 +97,17 @@ const server = () => http.createServer((req, res) => {
     s = await state();
     check("unmute restores the level", [s.muted, s.vol, s.pfFill], [false, 0.7, "70%"]);
 
+    // The toggle and the level are both remembered.
+    await page.reload({ waitUntil: "load" });
+    await page.waitForTimeout(600);
+    check("the toggle and level survive a reload", await page.evaluate(() => ({
+      open: document.getElementById("plvolslot").classList.contains("open"),
+      shown: getComputedStyle(document.getElementById("plvol")).display,
+      pressed: document.getElementById("plvolbtn").getAttribute("aria-pressed"),
+      level: +playerAudio.volume.toFixed(2),
+    })), { open: true, shown: "block", pressed: "true", level: 0.7 });
+    await start();
+
     // Geometry at every desktop width: nothing sits on top of anything else.
     await page.evaluate(() => { if (typeof openFullPlayer === "function") openFullPlayer(); });
     await page.waitForTimeout(400);
@@ -88,14 +120,17 @@ const server = () => http.createServer((req, res) => {
             w: Math.round(b.width), h: Math.round(b.height) }; };
         const vol = box("#player-full .pf-vol");
         return { seek: box("#plseek"), dur: box("#pldur"), barVol: box("#plvol"),
-          wave: box("#pfwave"), fullVol: box("#pfvol"), volBox: vol,
+          queue: box("#pfqueue"), fullVol: box("#pfvol"), volBox: vol,
           inside: vol.t >= 0 && vol.l >= 0 && vol.r <= innerWidth && vol.b <= innerHeight,
           overflowX: document.documentElement.scrollWidth > innerWidth };
       });
-      check(`${w}: duration clears the bar fader`, geo.dur.r <= geo.barVol.l, true);
+      // The wide desktop bar puts the right clock on the scrub row and the fader in the
+      // cluster above it, so they may share columns — what must never happen is overlap.
+      const hit = (a, c) => a.l < c.r && c.l < a.r && a.t < c.b && c.t < a.b;
+      check(`${w}: duration does not sit under the bar fader`, hit(geo.dur, geo.barVol), false);
       check(`${w}: scrub clears the duration`, geo.seek.r <= geo.dur.l, true);
-      check(`${w}: bar fader stays 96x20`, [geo.barVol.w, geo.barVol.h], [96, 20]);
-      check(`${w}: fullscreen fader clears the visualizer button`, geo.wave.r <= geo.fullVol.l, true);
+      check(`${w}: header fader stays 72x18`, [geo.barVol.w, geo.barVol.h], [72, 18]);
+      check(`${w}: fullscreen fader clears the queue button`, geo.queue.r <= geo.fullVol.l, true);
       check(`${w}: fullscreen fader is on screen`, [geo.fullVol.w, geo.fullVol.h, geo.inside], [130, 20, true]);
       check(`${w}: no horizontal overflow`, geo.overflowX, false);
     }
@@ -120,7 +155,8 @@ const server = () => http.createServer((req, res) => {
     await page.evaluate(() => { if (typeof closeFullPlayer === "function") closeFullPlayer(); });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(300);
-    check("phone hides the bar fader", await page.evaluate(() => getComputedStyle(document.querySelector("#player .pvol-vert")).display), "none");
+    check("phone hides the volume toggle", await page.evaluate(() => getComputedStyle(document.getElementById("plvolbtn")).display), "none");
+    check("phone hides the header fader", await page.evaluate(() => getComputedStyle(document.getElementById("plvol")).display), "none");
     check("phone hides the fullscreen fader", await page.evaluate(() => getComputedStyle(document.querySelector("#player-full .pf-vol")).display), "none");
   } finally {
     await browser.close();

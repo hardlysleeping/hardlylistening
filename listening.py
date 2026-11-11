@@ -205,7 +205,24 @@ def browser(handler, store, security):
             store.conn.execute('UPDATE listening_devices SET revoked=1 WHERE id=? AND member_id=?', (str(body.get('id', '')), uid))
         elif path == '/api/listening/saves':
             kind, identity, saved = body.get('kind'), body.get('id'), body.get('saved')
-            if kind not in ('track', 'playlist') or type(identity) is not int or identity < 1 or type(saved) is not bool:
+            import preferences
+            virtual = kind == 'playlist' and isinstance(identity, str) and identity in preferences.VIRTUAL_PLAYLISTS
+            if type(saved) is not bool:
+                raise Denied(400, 'kind, id and boolean saved required')
+            if virtual:
+                # A computed playlist saves its songs: there is no playlist row to
+                # reference, and removing it removes exactly those songs again.
+                ids = preferences.virtual_tracks(store, uid, identity)
+                if saved:
+                    store.conn.executemany('INSERT OR IGNORE INTO listening_tracks VALUES(?,?)',
+                                           [(uid, track_id) for track_id in ids])
+                else:
+                    store.conn.executemany('DELETE FROM listening_tracks WHERE member_id=? AND track_id=?',
+                                           [(uid, track_id) for track_id in ids])
+                store.conn.commit()
+                handler.json({'saved': saved, 'tracks': len(ids)})
+                return
+            if kind not in ('track', 'playlist') or type(identity) is not int or identity < 1:
                 raise Denied(400, 'kind, positive integer id and boolean saved required')
             table = 'tracks' if kind == 'track' else 'playlists'
             if not store.conn.execute('SELECT id FROM ' + table + ' WHERE id=?', (identity,)).fetchone():

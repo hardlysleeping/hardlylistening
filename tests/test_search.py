@@ -150,8 +150,8 @@ class SearchApi(unittest.TestCase):
         self.old_env = {k: os.environ.get(k) for k in
                         ("HARDLYLISTENING_AUTH_REQUIRED", "HARDLYLISTENING_PUBLIC_ORIGIN")}
         os.environ["HARDLYLISTENING_AUTH_REQUIRED"] = "1"
-        os.environ["HARDLYLISTENING_PUBLIC_ORIGIN"] = "https://music.example.com"
-        server.SECURITY.config = lambda: ("", "", "https://music.example.com")
+        os.environ["HARDLYLISTENING_PUBLIC_ORIGIN"] = "https://music.hardlysleep.ing"
+        server.SECURITY.config = lambda: ("", "", "https://music.hardlysleep.ing")
         server.SECURITY.csrf = lambda handler: None
         server.boot = lambda: (self.store, self.queue)
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)

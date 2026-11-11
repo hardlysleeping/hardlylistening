@@ -12,8 +12,8 @@ const ROOT = path.join(__dirname, "..", "..", "web");
 const OUT = path.join(__dirname, "baseline");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
 const STUB = { ok: true, songs: [], queue: [], tracks: [], playlists: [], folders: [], favorites: [], library: [] };
-const STATES = ["compact", "fullscreen", "queue", "knobs"];
-// The four states at the two phone widths and the desktop width, then the compact bar alone
+const STATES = ["compact", "fullscreen", "queue"];
+// The three states at the two phone widths and the desktop width, then the compact bar alone
 // across the widths where its edges have to keep lining up with the library.
 const VIEWPORTS = [[390, 844], [430, 932], [1280, 800]];
 const WIDTHS = [[1024, 800], [1440, 900], [1920, 1080]];
@@ -53,11 +53,6 @@ async function render(page, state) {
   if (state !== "compact") await page.evaluate(() => { if (typeof openFullPlayer === "function") openFullPlayer(); });
   await page.waitForTimeout(250);
   if (state === "queue") await page.evaluate(() => { if (typeof showFullQueue === "function") showFullQueue(true); });
-  if (state === "knobs") await page.evaluate(() => {
-    const panel = document.getElementById("pfwaveknobs"), btn = document.getElementById("pfwave");
-    if (panel) { panel.hidden = false; panel.style.display = ""; }
-    if (btn) { btn.classList.add("on"); btn.setAttribute("aria-expanded", "true"); }
-  });
   await page.evaluate(FREEZE);
   await page.waitForTimeout(200);
   await page.evaluate(() => { window.requestAnimationFrame = () => 0; });

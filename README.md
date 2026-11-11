@@ -77,6 +77,12 @@ second player to drift out of sync.
   glow). It shares a column with the queue, so opening one closes the other.
 * **Where you left off** is remembered — queue, current song and position — and comes
   back paused, because a browser will not start audio on its own.
+* **Offline audio** (user menu → Offline audio…) keeps a song that has played, whole, in
+  the service worker's cache, so playing it again starts from disk. The budget is per device
+  (off, 1, 2, 5 or 10 GB), the oldest copy is dropped first, and *Remove copies* empties it.
+  The worker answers the element's Range requests with 206 slices of the stored file, which is
+  what lets seeking work without the network. A browser may evict the whole cache when its
+  storage runs short — that is the browser's rule, not the app's.
 
 Both volume faders (bar and fullscreen) are painted from the audio element rather than
 from each other, so they cannot disagree: muting empties both fills, and dragging either

@@ -152,7 +152,25 @@ class SignupLinks(unittest.TestCase):
             sec.mint_member_signup(store, member)                    # allowed again
             # Consuming it brings Generate back, and the state never carries the secret.
             state = sec.signup_invite_state(store, member)
-            self.assertEqual(set(state), {'active', 'expires_at'})
+            self.assertEqual(set(state), {'active', 'expires_at', 'unlimited'})
+            self.assertFalse(state['unlimited'])
+            close(store)
+
+    def test_admin_account_panel_mints_without_a_cap(self):
+        with patch.dict(os.environ, ORIGIN):
+            store, sec, _ = fresh()
+            add_member(store, 'a1', 'admin')
+            admin = {'id': 'a1', 'role': 'admin'}
+            first = sec.mint_member_signup(store, admin)
+            second = sec.mint_member_signup(store, admin)            # no 409 for an admin
+            self.assertTrue(first['unlimited'] and second['unlimited'])
+            self.assertNotEqual(first['url'], second['url'])
+            state = sec.signup_invite_state(store, admin)
+            self.assertTrue(state['active'])
+            self.assertTrue(state['unlimited'])
+            with store.lock:
+                self.assertEqual(store.conn.execute(
+                    'SELECT COUNT(*) FROM signup_invites WHERE consumed_at IS NULL').fetchone()[0], 2)
             close(store)
 
     def test_admin_mints_freely(self):

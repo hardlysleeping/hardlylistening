@@ -129,9 +129,11 @@ class Queue:
         for position, track in enumerate(release.tracks, start=1):
             track_id = self.store.track(
                 track.provider, track.provider_track_id, track.title,
-                artist_name=track.artist, album=track.album or release.title,
+                artist_name=track.artist, album=track.album or "",
                 track_number=track.track_number or position,
-                duration=track.duration, artwork=track.artwork,
+                # One cover per release: a provider that names the release but not each
+                # track still fills the album, the player and the car.
+                duration=track.duration, artwork=track.artwork or release.artwork,
                 source_url=track.source_url, release_id=release_row,
                 artist_id=artist_id, isrc=track.isrc)
             row = self.store.track_by_id(track_id)
@@ -447,6 +449,10 @@ class Queue:
                 "UPDATE tracks SET file=?, size=? WHERE id=?",
                 (str(written), written.stat().st_size, track["id"]))
             self.store.conn.commit()
+            # The row may have been queued before the release's cover was recorded,
+            # so an empty artwork column is filled from the release now that the
+            # track is on disk. A cover already on the row is never overwritten.
+            self.store.fill_release_artwork(track["id"])
             self._finish(job, "completed", "", "",
                          size=written.stat().st_size if written else 0)
             self.store.set_provider(job["provider"], last_success=time.time())

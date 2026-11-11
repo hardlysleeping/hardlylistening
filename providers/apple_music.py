@@ -84,12 +84,14 @@ def catalog(path: str, timeout: int = 40) -> dict | None:
 
 
 def _lookup(artist_id: str, store: str = "us", *, entity: str = "",
-            limit: int = 200) -> list[dict]:
+            limit: int = 200, offset: int = 0) -> list[dict]:
     """Public iTunes lookup — no auth, no token, dates included."""
     url = (f"https://itunes.apple.com/lookup?id={artist_id}&country={store}"
            f"&limit={limit}")
     if entity:
         url += f"&entity={entity}"
+    if offset:
+        url += f"&offset={offset}"
     try:
         payload = json.loads(_get(url))
     except Exception:
@@ -110,6 +112,7 @@ def _track_from_lockup(item: dict) -> TrackRef | None:
         title=title,
         artist=artist.strip(),
         duration=round((item.get("duration") or 0) / 1000.0, 1),
+        album=(item.get("collectionName") or "").strip(),
         artwork=artwork(item.get("artwork")),
         source_url="",          # resolved by search, never downloaded from Apple
     )
@@ -162,7 +165,11 @@ class AppleMusicProvider(Provider):
                     track = _track_from_lockup(item)
                     if track:
                         track.track_number = len(tracks) + 1
-                        track.album = title
+                        # A playlist's name is not an album. Only an album page
+                        # names the release its tracks belong to; a playlist
+                        # relies on each track's own collectionName.
+                        if "/playlist/" not in url and not track.album:
+                            track.album = title
                         tracks.append(track)
 
         # Pasting one song off an album (…?i=<id>) must not queue the album.
@@ -173,6 +180,11 @@ class AppleMusicProvider(Provider):
             track.track_number = index + 1
             if not track.artist:
                 track.artist = release_artist
+            # An album page carries the cover on its header, not on each track lockup.
+            # Without this, a release grabbed from the Feed imported its tracks with no
+            # artwork at all and the app fell back to a frame pulled out of the audio file.
+            if not track.artwork:
+                track.artwork = art
 
         declared = len(tracks)
         found = re.search(r"(\d+)\s+songs?\b", page)
@@ -342,3 +354,60 @@ class AppleMusicProvider(Provider):
             if len(fresh) >= limit:
                 break
         return fresh
+
+    #: One lookup page is 200 songs. Ten pages is a discography; past that the
+    #: artist page stops being a page and becomes a data export.
+    CATALOGUE_CAP = 2000
+
+    def catalogue_tracks(self, artist_url: str, limit: int = 2000,
+                         releases=None) -> list[TrackRef]:
+        """Every song the artist has on Apple, one lookup page at a time.
+
+        `entity=song` returns tracks with their album name, which is the only
+        reliable way to know which release a song belongs to without one request
+        per album.
+        """
+        match = (re.search(r"/artist/(?:[^/]+/)?(\d{4,})(?:[/?#]|$)", artist_url)
+                 or re.search(r"artistId=(\d{4,})", artist_url))
+        if not match:
+            return []
+        artist_id = match.group(1)
+        store = (STOREFRONT.search(artist_url) or [None, "us"])[1].lower()
+        cap = max(1, min(int(limit or self.CATALOGUE_CAP), self.CATALOGUE_CAP))
+        out: list[TrackRef] = []
+        seen: set[str] = set()
+        offset = 0
+        while len(out) < cap:
+            rows = _lookup(artist_id, store, entity="song", limit=200, offset=offset)
+            if not rows:
+                break
+            added = 0
+            for row in rows:
+                if row.get("wrapperType") != "track":
+                    continue
+                track_id = str(row.get("trackId") or "")
+                title = (row.get("trackName") or "").strip()
+                if not track_id or not title or track_id in seen:
+                    continue
+                seen.add(track_id)
+                added += 1
+                art = str(row.get("artworkUrl100") or "")
+                collection = str(row.get("collectionId") or "")
+                out.append(TrackRef(
+                    provider=self.name,
+                    provider_track_id=track_id,
+                    title=title,
+                    artist=(row.get("artistName") or "").strip(),
+                    album=(row.get("collectionName") or "").strip(),
+                    track_number=int(row.get("trackNumber") or 0),
+                    duration=round((row.get("trackTimeMillis") or 0) / 1000.0, 1),
+                    artwork=(art.replace("100x100", "600x600") if art else ""),
+                    source_url=str(row.get("trackViewUrl") or ""),
+                    release_id=f"album:{collection}" if collection else ""))
+                if len(out) >= cap:
+                    break
+            # A short page is the end; a page with nothing new would loop forever.
+            if len(rows) < 200 or not added:
+                break
+            offset += 200
+        return out

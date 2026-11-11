@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>HardlyListening</title>
 <link rel="manifest" href="/app.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -202,37 +203,53 @@
   .faart img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   .fahead .faname{font-size:19px;font-weight:700;line-height:1.2}
   .fahead .fameta{color:var(--dim);font-size:12.5px;margin-top:3px}
-  .fasec{display:flex;align-items:center;justify-content:space-between;gap:8px;
-    margin:16px 0 8px;color:var(--dim);font-size:12px;font-weight:600;
-    letter-spacing:.03em;text-transform:uppercase;min-height:34px}
-  .fasec .seg{padding:2px}
-  .fasec .seg button{width:34px;min-height:30px;padding:0;display:grid;place-items:center}
-  /* Four albums, always two per row, whichever width the sheet has — and whichever
-     grid style the library is set to. Honeycomb is display:flex and mosaic stretches
-     its feature tile, so both have to be undone here or the album sheet stops being
-     a 2x2. */
-  .covergrid.fagrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  html[data-gridstyle="hex"] .covergrid.fagrid{display:grid;gap:10px}
-  html[data-gridstyle="hex"] .covergrid.fagrid .covercell{width:auto;flex-basis:auto;
-    margin-bottom:0;clip-path:none;transform:none}
-  html[data-gridstyle="mosaic"] .covergrid.fagrid{grid-auto-flow:row}
-  html[data-gridstyle="mosaic"] .covergrid.fagrid .covercell{grid-row:auto;grid-column:auto}
-  html[data-gridstyle="hex"] .covergrid.fagrid .covercell .coverart,
-  html[data-gridstyle="mosaic"] .covergrid.fagrid .covercell .coverart{aspect-ratio:1}
-  .covergrid.fagrid .covercell .coverart{aspect-ratio:1}
-  .fapalbumhead{display:flex;align-items:center;justify-content:space-between;gap:10px;
-    padding:9px 14px;border-bottom:1px solid var(--line);font-size:13px}
-  .fapalbumhead .ghost.small{min-height:28px;padding:3px 9px;font-size:12px}
+  .fahead .faid{flex:1;min-width:0}
+  /* The artist's own search: right-aligned on the name's line, and it filters the
+     pane below (albums and songs alike). On a phone it wraps onto its own line. */
+  .fahead .fasearch{margin-left:auto;flex:0 1 240px;min-width:0;display:flex}
+  .fahead .fasearch input{width:100%;height:34px;min-height:34px;margin:0;padding:0 12px;
+    border-radius:999px;background:var(--panel);border:1px solid var(--line);
+    font-size:13px;color:var(--text)}
+  .fahead .fasearch input::placeholder{color:var(--dim)}
+  .fahead .fasearch input:focus{border-color:color-mix(in srgb,var(--accent) 45%,transparent);
+    outline:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+  @media(max-width:560px){
+    .fahead{flex-wrap:wrap}
+    .fahead .fasearch{flex-basis:100%;margin-left:0}
+  }
+  /* Tabs and layout share one row; the layout switch sits at its right end. */
+  .fatop{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+  .fatop .seg{padding:2px}
+  .fatop .seg button{width:34px;min-height:30px;padding:0;display:grid;place-items:center}
+  .fatop #fapLayout{margin-left:auto}
+  .fapchev{color:var(--dim);font-size:18px;line-height:1}
+  #fap-foot[hidden]{display:none!important}
+  /* The song count and the page control under the list: the discography is paged,
+     so it says how much is shown and offers the rest. */
+  #fap-song-meter{color:var(--dim);font-size:12px;margin:-4px 0 8px}
+  .fafoot{display:flex;flex-direction:column;align-items:center;gap:6px;margin:14px 0 4px}
+  .fafoot .ghost{padding:8px 16px}
+  .fafoot #fap-more-status{color:var(--dim);font-size:12px}
+  /* The artist head gives way to the album page; [hidden] has to beat its flex. */
+  #feedartistpage .fahead[hidden]{display:none!important}
+  /* A catalogue album is not in the library, so its rows keep one control — the
+     download — in the same place the Repo album page keeps its play button. */
+  .fapalbumtable.songtable .songrow .send{display:flex;grid-area:more}
+  .fapalbumtable.songtable .songrow .send .sdl-grab{width:30px;height:30px;
+    padding:0;display:inline-grid;place-items:center}
   /* Songs, list layout: one panel of dense rows, download pinned right. The
      feed's own phone rule wraps the actions onto a second line, which is too
      tall for a section that sits under a 2x2 grid. */
-  #fapSongs .falist{border:1px solid var(--line);border-radius:12px;
+  #fapbody .falist{border:1px solid var(--line);border-radius:12px;
     background:var(--panel);overflow:hidden}
-  #fapSongs .falist .feedcard{flex-wrap:nowrap;margin:0;padding:10px 12px;gap:11px;
+  #fapbody .falist .feedcard{flex-wrap:nowrap;margin:0;padding:10px 12px;gap:11px;
     border:0;border-top:1px solid var(--line);border-radius:0;background:none}
-  #fapSongs .falist .feedcard:first-child{border-top:0}
-  #fapSongs .falist .feedacts{width:auto;flex:0 0 auto}
-  #fapSongs .falist .feedtitle{font-size:13.5px}
+  #fapbody .falist .feedcard:first-child{border-top:0}
+  #fapbody .falist .feedacts{width:auto;flex:0 0 auto}
+  #fapbody .falist .feedtitle{font-size:13.5px}
+  #fapbody .falist [data-faalbum]{cursor:pointer}
+  #fapbody .falist [data-faalbum]:hover .feedcard{background:var(--panel2)}
+  #fapbody .falist [data-faalbum]:focus-visible{outline:2px solid var(--accent2);outline-offset:-2px}
   /* Songs, cards layout: cover, title, one line of meta, the download control. */
   .facard{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);
     border-radius:12px;background:var(--panel)}
@@ -323,9 +340,22 @@
 .albumgrid.list .votes{grid-area:votes;margin:0}
 .albumgrid.list .aplay{width:30px;height:30px;right:5px;bottom:5px;opacity:1}
 .albumgrid.list .bubbles{display:none}
+.acard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;
   transition:transform .16s,border-color .16s,background .16s;position:relative}
+.acard .acover{aspect-ratio:1/1;border-radius:10px;background:var(--panel2) center/cover;position:relative;overflow:hidden;
   display:grid;place-items:center;color:#cfd3e1;font-weight:700;font-size:22px;letter-spacing:-.02em}
+.acard .aplay{position:absolute;right:9px;bottom:9px;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#08110d;
   border:0;display:grid;place-items:center;opacity:0;transform:translateY(4px);transition:.16s;cursor:pointer;box-shadow:0 6px 18px #0009}
+/* Removed on this visit: the card stays, plainly marked, so it can be put back. */
+.acard.removed{border-style:dashed;border-color:#3a3a45;animation:acardout .4s ease}
+.acard.removed .thumb{filter:grayscale(.6) brightness(.72)}
+.acard.removed .st,.acard.removed .sartist,.acard.removed .salbum,.acard.removed .votes{opacity:.72}
+/* The cover carries the state: the count line beside it is too narrow to say a sentence. */
+.removed-chip{position:absolute;top:6px;right:6px;z-index:3;padding:2px 8px;border-radius:999px;
+  background:#0b0c11d9;border:1px solid #3a3a45;color:#b9bcc9;font-size:10.5px;font-weight:600;
+  letter-spacing:.02em;backdrop-filter:blur(6px);pointer-events:none;white-space:nowrap}
+/* One dip when the removal lands; the dashed state is what stays. */
+@keyframes acardout{0%{transform:scale(1)}45%{transform:scale(.97);opacity:.55}100%{transform:scale(1);opacity:1}}
 .artbox{position:relative;display:block}
 .bubbles{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:10px}
 .bubble{position:absolute;left:8px;right:56px;bottom:12px;padding:7px 9px;border-radius:10px;
@@ -356,6 +386,15 @@
 .songrow .send{display:flex;gap:2px;align-items:center;justify-content:flex-end}
 .songrow .sdl{color:var(--dim);text-decoration:none;font-size:14px;padding:0 3px;opacity:.6}
 .songrow .sdl:hover{color:var(--accent);opacity:1}
+/* A song the album lists but the library has not got yet: dimmed, with one action —
+   grab it. The row still names it, so the release reads complete. */
+.songrow.absent{opacity:.55}
+.songrow.absent:hover{opacity:.85}
+.songrow .send .sdl-grab{display:inline-grid;place-items:center;width:26px;height:26px;min-width:26px;
+  border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+  cursor:pointer;padding:0}
+.songrow .send .sdl-grab:hover{color:var(--accent);border-color:#2f6b57}
+.songrow .send .sdl-grab svg{display:block}
 #dlg-social,#dlg-apple-backup{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:0;width:min(560px,94vw)}
 #dlg-apple-backup{width:min(480px,94vw)}
 #dlg-social::backdrop,#dlg-apple-backup::backdrop{background:#0008}
@@ -427,6 +466,21 @@
 .ghost.lsave.armed svg{display:block}
 .ghost.lsave.confirm{color:#58d3a8;border-color:#58d3a8;background:#16241f;animation:lsavepop .22s ease}
 @keyframes lsavepop{from{transform:scale(.82)}to{transform:scale(1)}}
+/* The check draws itself: an add should be seen landing, not just swapped in. */
+.ghost.lsave.confirm svg path{stroke-dasharray:22;stroke-dashoffset:22;animation:lsavecheck .34s ease forwards}
+@keyframes lsavecheck{to{stroke-dashoffset:0}}
+/* A song kept on the page after removal reads as removed, not as a row that never saved. */
+.songrow.removed .st,.songrow.removed .sartist,.songrow.removed .listtags{opacity:.72}
+.songrow.removed .idx{color:var(--dim)}
+.songrow.removed .sdur,.songrow.removed .votes{opacity:.72}
+.removed-badge{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:2px 8px;border-radius:999px;
+  font-size:10.5px;font-weight:600;letter-spacing:.02em;color:#c3c3ce;background:#26262e;border:1px solid #3f3f4a;white-space:nowrap}
+.removed-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#8b8b98}
+.songcard.removed{border-style:dashed;border-color:#3a3a45}
+.songcard.removed .thumb{filter:grayscale(.6) brightness(.72)}
+/* The cover-wall tile says the same thing, so the state never depends on the layout. */
+.covercell.removed .coverart{filter:grayscale(.7) brightness(.7)}
+.covercell.removed .covername b{color:var(--dim)}
 .ghost.lsave svg{display:block}
 @media (max-width:760px){ .ghost.lsave{width:34px;height:34px} }
 .songhead .h-votes{justify-content:center}
@@ -504,16 +558,32 @@
   .songrow .ccount{margin-left:0}
 }
 
-/* playlist cards */
-.plgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
-.plcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;transition:.16s}
-.plcard:hover{border-color:#3a3a48;transform:translateY(-2px)}
-.collage{display:grid;grid-template-columns:1fr 1fr;gap:2px;aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:var(--panel2)}
-.collage i{background:var(--panel2) center/cover;display:block}
-.collage.big{grid-template-columns:1fr}
-.plcard .pt{margin-top:10px;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plcard .ps{color:var(--dim);font-size:12px;margin-top:2px}
-.plcard .pacts{display:flex;gap:6px;margin-top:9px;align-items:center;flex-wrap:wrap}
+/* Playlists are rectangles made of the records inside them: a mosaic of covers fills the
+   card edge to edge, with the facts underneath, so a set reads at a glance and a wide
+   card holds more music instead of empty panel. */
+.plgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(198px,1fr));gap:14px;align-items:stretch}
+.plcard{display:flex;flex-direction:column;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;transition:border-color .16s}
+.plcard:hover{border-color:#3a3a48}
+/* The mosaic steps 1 → 2 → 3 → 4 → 6 → 8 → 9 → 12 covers, every step a shape that fills
+   the rectangle exactly, so there is never a blank cell at the end of the grid. */
+.collage{width:100%;aspect-ratio:4/3;display:grid;gap:1px;border-radius:10px;overflow:hidden;background:#0b0c11}
+.collage i{background:var(--panel2) center/cover;display:block;min-width:0}
+.collage i.ph{display:grid;place-items:center;font-style:normal;font-weight:700;font-size:clamp(18px,6vw,30px);color:#cfd3e1}
+.collage.c1{grid-template-columns:1fr;grid-template-rows:1fr}
+.collage.c2{grid-template-columns:repeat(2,1fr);grid-template-rows:1fr}
+.collage.c3{grid-template-columns:repeat(3,1fr);grid-template-rows:1fr}
+.collage.c4{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr)}
+.collage.c6{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr)}
+.collage.c8{grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
+.collage.c9{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr)}
+.collage.c12{grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr)}
+.plcard .pbody{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px}
+.plcard .pt{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plcard .ps{display:flex;align-items:baseline;gap:10px;color:var(--dim);font-size:12px;min-width:0}
+/* The count gives way before the name does: "365/365" still reads, "Dil…" does not. */
+.plcard .plcount{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plcard .plby{flex:1 1 auto;min-width:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plcard .pacts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
 /* detail views */
 .backbtn{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:6px 11px;font-size:12.5px;cursor:pointer;margin-bottom:16px}
@@ -555,7 +625,7 @@ a.ghost{text-decoration:none;display:inline-flex;align-items:center;gap:6px;line
 .apitem .apt small{display:block;color:var(--dim);font-size:11.5px}
 
 .dropzone.compact{padding:9px 12px;font-size:12.5px;margin-bottom:12px;border-radius:10px}
-#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(8px);background:#26262f;border:1px solid var(--line);
+#toast{position:fixed;left:50%;bottom:144px;transform:translateX(-50%) translateY(8px);background:#26262f;border:1px solid var(--line);
   color:var(--text);padding:9px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.18s;z-index:60}
 #toast.on{opacity:1;transform:translateX(-50%)}
 
@@ -568,7 +638,20 @@ a.ghost{text-decoration:none;display:inline-flex;align-items:center;gap:6px;line
 #player .plartwrap img{width:100%;height:100%;object-fit:cover}
 #player .pmeta{min-width:0;flex:0 1 240px}
 #player .ptitle{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#player .psub{color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+/* The second line is two controls: the artist, then the release. They sit in one row so
+   the album can scroll inside its own box without moving the artist beside it. */
+#player .psub{display:flex;align-items:baseline;min-width:0;white-space:nowrap;overflow:hidden;
+  color:var(--dim);font-size:11.5px;margin-top:2px}
+#player .psub .psub-a{flex:0 1 auto;min-width:0;max-width:62%;overflow:hidden;text-overflow:ellipsis;
+  color:inherit;text-decoration:none;cursor:pointer}
+#player .psub .psub-a:hover{color:var(--text);text-decoration:underline}
+#player .psub .psub-sep{flex:0 0 auto;white-space:pre}
+#player .psub .psub-b{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  color:inherit;text-decoration:none;cursor:pointer}
+#player .psub .psub-b:hover{color:var(--text);text-decoration:underline}
+#player .psub .psub-b.rolling{text-overflow:clip}
+#player .psub .plmqt{display:inline-flex;white-space:nowrap;will-change:transform;
+  animation:pl-title-mq var(--mq-dur,6000ms) linear infinite}
 .pctrl{display:flex;align-items:center;gap:6px}
 .iconbtn{background:transparent;border:0;color:var(--text);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;cursor:pointer;opacity:.75}
 .iconbtn:hover{opacity:1;background:var(--panel2)}
@@ -576,17 +659,20 @@ a.ghost{text-decoration:none;display:inline-flex;align-items:center;gap:6px;line
 .iconbtn.small.on{opacity:1;color:var(--accent)}
 .iconbtn.big{width:40px;height:40px;background:var(--text);color:#101014;opacity:1}
 .iconbtn.big:hover{background:#fff}
-/* Volume is a small vertical fader at the top-right of the player bar, not a 120 px
-   horizontal slider taking a third of the row. The mute button stays next to it. */
+/* Volume is a toggle on the transport row (desktop only): the speaker button opens a
+   horizontal fader into the band to its left, so the bar never carries a slider nobody
+   asked for. The mute button stays at the row's right end. */
 .pvol{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-right:26px}
-.pvol-vert{position:absolute;right:8px;top:6px;height:58px;width:20px;display:flex;align-items:center;justify-content:center;z-index:2}
-.pvol-vert input{width:58px;height:4px;transform:rotate(-90deg);transform-origin:center;margin:0}
+.pvol-inline{position:relative;display:flex;align-items:center}
 input[type=range]{-webkit-appearance:none;height:4px;border-radius:2px;background:#33333f;outline:0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--text);cursor:pointer}
 #player .pseek{flex:1 1 120px;min-width:70px}
 #player .ptime{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:34px;text-align:center}
 
 @media (hover:none){.acard .aplay{opacity:1;transform:none}}
+/* On a phone the facts column is ~150 px wide: "365/365" plus the name fits, the
+   word "downloaded" does not. The number alone is unambiguous under a playlist. */
+@media (max-width:480px){.plcard .plword{display:none}}
 @media (max-width:760px){
   .songhead{display:none}
   .songrow{grid-template-columns:26px 38px minmax(0,1fr) 56px;gap:8px;padding:9px 10px}
@@ -607,7 +693,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   .albumgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
   .hero .hart{width:132px;height:132px}
   .hero h3{font-size:24px}
-  #player .pvol,#player .pvol-vert{display:none}
+  #player .pvol{display:none}
   #player .pmeta{flex:1 1 90px}
   .libbar{flex-wrap:wrap}
   .libbar .libsearch{flex:1 1 100%}
@@ -675,11 +761,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   .dot.failed{background:var(--err)} .dot.queued{background:var(--warn)}
   .dot.skipped{background:#5a5a6a}
   .dot.review{background:var(--warn);box-shadow:0 0 0 2px rgba(255,193,94,.25)}
-  .review{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;
+  /* The source-candidate panel. Not `.review`: the status dot is `.dot.review`, and a
+     shared name made every review dot paint as this whole block. */
+  .revbox{margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;
     background:#15151b;display:grid;gap:5px}
-  .review .cand{display:flex;gap:8px;align-items:center;font-size:12.5px}
-  .review .cand b{min-width:38px;color:var(--text)}
-  .review .cand span{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .revbox .cand{display:flex;gap:8px;align-items:center;font-size:12.5px}
+  .revbox .cand b{min-width:38px;color:var(--text)}
+  .revbox .cand span{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .trow.has-review{flex-wrap:wrap}
   /* What the worker is doing right now, above the list. */
   .now{background:var(--panel);border:1px solid var(--line);border-radius:12px;
@@ -696,13 +784,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   /* The playlist being filled, in front of the track that is downloading. */
   .now .nfrom{font-size:11px;padding:1px 8px;border-radius:999px;background:#1b2b26;border:1px solid #34584b;
     color:var(--accent);white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}
-  .now .nchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-  .nchip{font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  /* One box for every chip. The action chip is a <button>, so the UA's own line box
+     made it taller than the spans beside it and stretch-baselined the row: the borders
+     no longer lined up. Same display, line-height and padding for both. */
+  .now .nchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .nchip{display:inline-flex;align-items:center;justify-content:center;height:24px;min-height:0;
+    box-sizing:border-box;font-size:11.5px;line-height:1;padding:0 9px;border-radius:999px;
+    border:1px solid var(--line);color:var(--dim);background:none}
   .nchip.live{color:var(--accent2);border-color:rgba(122,162,255,.4)}
   .nchip.warn{color:var(--warn);border-color:rgba(255,207,92,.35)}
   .nchip.err{color:var(--err);border-color:rgba(255,107,107,.35)}
   .nchip.act{cursor:pointer;background:#1b2130;color:var(--text);
-    border-color:rgba(122,162,255,.5);font-family:inherit;line-height:1.6}
+    border-color:rgba(122,162,255,.5);font-family:inherit}
   .nchip.act:hover{background:#222a3d}
   @keyframes npulse{50%{opacity:.3}}
   .trow .state{font-size:12px;color:var(--dim);white-space:nowrap;
@@ -771,11 +864,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 <header>
   <div class="bar">
     <div class="brand">Hardly<span>Listening</span></div>
-    <button type="button" class="iconbtn small" id="btn-search" onclick="toggleSearchDock()" aria-pressed="false"
-      title="Search" aria-label="Search">
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"
-        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/></svg>
-    </button>
+    <canvas class="hdr-wave" id="hdr-wave" aria-hidden="true"></canvas>
+    <span class="pvol-inline" id="plvolslot">
+      <input type="range" id="plvol" min="0" max="100" value="100" title="Volume" aria-label="Volume">
+      <button type="button" class="iconbtn small" id="plvolbtn" title="Volume" aria-label="Volume" aria-pressed="false"></button>
+    </span>
     <button type="button" class="iconbtn small" id="btn-shuffle" onclick="shuffleLibrary()"
       title="Shuffle your library" aria-label="Shuffle your library">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -803,6 +896,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     <div class="usermenu" id="usermenu" role="menu" hidden>
       <button type="button" role="menuitem" onclick="hideUserMenu();openProfile()">Profile</button>
       <button type="button" role="menuitem" onclick="hideUserMenu();openThemeDialog()">Colours…</button>
+      <button type="button" role="menuitem" onclick="hideUserMenu();openOfflineDialog()">Offline audio…</button>
       <button type="button" role="menuitem" id="usermenu-viewasuser" hidden onclick="hideUserMenu();toggleViewAsUser()">View as user</button>
       <button type="button" role="menuitem" onclick="hideUserMenu();document.getElementById('btn-signout').click()">Sign out</button>
     </div>
@@ -831,6 +925,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   <div class="seg qsegtabs" role="tablist" aria-label="Queue">
     <button class="segbtn on" id="qtab-queue" role="tab" aria-selected="true" onclick="setQueueTab('queue')">Queue</button>
     <button class="segbtn" id="qtab-search" role="tab" aria-selected="false" onclick="setQueueTab('search')">Search</button>
+    <button class="segbtn" id="qtab-review" role="tab" aria-selected="false" onclick="setQueueTab('review')">Review<span class="segcount" id="qrev-badge" hidden></span></button>
   </div>
   <div id="qmain">
   <div class="qstrip">
@@ -865,6 +960,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     </div>
     <div class="hint" id="songsearch-status" role="status" aria-live="polite"></div>
     <div id="songsearch-results"></div>
+  </div>
+  <div id="qreview" hidden>
+    <div class="seg qrevtabs" role="tablist" aria-label="Review">
+      <button class="segbtn on" id="qrevtab-needs" role="tab" aria-selected="true"
+        onclick="setReviewTab('needs')">Needs review<span class="segcount" id="qrev-needs">0</span></button>
+      <button class="segbtn" id="qrevtab-failed" role="tab" aria-selected="false"
+        onclick="setReviewTab('failed')">Failed<span class="segcount" id="qrev-failed">0</span></button>
+    </div>
+    <div id="qrev-list"></div>
   </div>
   </section>
 
@@ -927,6 +1031,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
         aria-label="Hide pinned" onclick="event.stopPropagation();PreferenceUI.togglePinned()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
       </button>
+      <button type="button" id="btn-search" class="iconbtn small" onclick="toggleSearchDock()"
+        aria-pressed="false" title="Search songs" aria-label="Search songs">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/></svg>
+      </button>
       <button type="button" id="admintoolsbtn" class="iconbtn small" data-admin-only aria-expanded="false"
         title="Library tools" aria-label="Library tools" onclick="event.stopPropagation();toggleAdminTools()">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -972,7 +1081,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
       </nav>
     </div>
     <div class="searchrow">
-      <input class="libsearch" id="libsearch" placeholder="Search songs">
+      <div class="searchbox">
+        <input class="libsearch" id="libsearch" placeholder="Search songs">
+        <button type="button" id="libsearchclose" title="Close search" aria-label="Close search"
+          onclick="toggleSearchDock(false)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
     </div>
     <div class="liblayout">
     <div class="density" id="densityrow" hidden>
@@ -1088,10 +1204,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
   <div class="pvol">
     <button type="button" id="pllyrics" title="Lyrics and karaoke view" disabled>Lyrics</button>
   </div>
-
-  <div class="pvol-vert">
-    <input type="range" id="plvol" min="0" max="100" value="100" title="Volume" aria-label="Volume">
-  </div>
 </div>
 <audio id="player-audio" preload="metadata"></audio>
 
@@ -1129,20 +1241,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
       <span class="pfsave" id="pfsave"></span>
       <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
       <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue" aria-expanded="false">☰</button>
-      <button type="button" class="iconbtn" id="pfwave" title="Visualizer style" aria-label="Visualizer style" aria-expanded="false"
-        aria-controls="pfwaveknobs"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 6.5v11M12 3.5v17M16 8v8M20 10.5v3"/></svg></button>
       <button type="button" id="pflyrics" disabled>Lyrics</button>
       <div class="pf-vol">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <input type="range" id="pfvol" min="0" max="100" step="1" value="100" title="Volume" aria-label="Volume">
       </div>
-    </div>
-    <div class="pf-wave-knobs" id="pfwaveknobs" hidden>
-      <label class="pfwk-toggle"><input type="checkbox" id="pfwkenabled"> Visualizer on (off saves battery)</label>
-      <label>Bars <input type="range" id="pfwkbars" min="12" max="96" step="4" value="48"><b id="pfwkbarsv">48</b></label>
-      <label>Level <input type="range" id="pfwklevel" min="5" max="80" step="1" value="30"><b id="pfwklevelv">30%</b></label>
-      <label>Smooth <input type="range" id="pfwksmooth" min="0" max="95" step="5" value="80"><b id="pfwksmoothv">80</b></label>
-      <label class="pfwk-toggle pfwk-inline"><input type="checkbox" id="pfwkmirror" checked> Mirrored</label>
     </div>
   </div>
 </div>
@@ -1204,6 +1307,39 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     <div class="dlg-foot">
       <button value="cancel" class="chip small">Cancel</button>
       <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="dlg-offline" class="smallconfirm">
+  <form method="dialog">
+    <h2>Offline audio</h2>
+    <p>A song you have played is kept on this device, so playing it again starts from disk
+      instead of the network. The oldest copy goes first when the space is needed. This is a
+      per-device setting, and a browser may still clear copies if its storage runs short.</p>
+    <div class="field">
+      <label for="offline-budget">Keep up to</label>
+      <select id="offline-budget" onchange="setOfflineBudget(this.value)">
+        <option value="0">Off — stream everything</option>
+        <option value="1073741824">1 GB</option>
+        <option value="2147483648">2 GB</option>
+        <option value="5368709120">5 GB</option>
+        <option value="10737418240">10 GB</option>
+      </select>
+    </div>
+    <p id="offline-status" class="hint" role="status">—</p>
+    <div class="dlg-foot">
+      <button type="button" class="chip small" onclick="clearOfflineAudio()">Remove copies</button>
+      <button value="cancel" class="primary">Close</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="dlg-grab" class="smallconfirm">
+  <form method="dialog">
+    <h2>Grab the missing songs?</h2>
+    <p id="dlg-grab-text"></p>
+    <div class="dlg-foot">
+      <button value="cancel" class="chip small">Cancel</button>
+      <button value="go" class="primary">Grab</button>
     </div>
   </form>
 </dialog>
@@ -1470,17 +1606,88 @@ async function addUrls(){
 let songHits = [];
 let songSearchSeq = 0;
 function setQueueTab(tab){
-  const search = tab === "search";
-  const main = $("#qmain"), panel = $("#qsearch");
-  if (main) main.hidden = search;
-  if (panel) panel.hidden = !search;
-  for (const [id, on] of [["qtab-queue", !search], ["qtab-search", search]]){
+  const which = tab === "search" ? "search" : tab === "review" ? "review" : "queue";
+  const main = $("#qmain"), panel = $("#qsearch"), review = $("#qreview");
+  if (main) main.hidden = which !== "queue";
+  if (panel) panel.hidden = which !== "search";
+  if (review) review.hidden = which !== "review";
+  for (const [id, on] of [["qtab-queue", which === "queue"], ["qtab-search", which === "search"],
+                          ["qtab-review", which === "review"]]){
     const button = document.getElementById(id);
     if (!button) continue;
     button.classList.toggle("on", on);
     button.setAttribute("aria-selected", String(on));
   }
-  if (search) setTimeout(() => { const box = $("#songsearch"); if (box) box.focus(); }, 30);
+  if (which === "review") renderReview();
+  if (which === "search") setTimeout(() => { const box = $("#songsearch"); if (box) box.focus(); }, 30);
+}
+
+// Everything the downloader could not settle by itself, on one page: the tracks that
+// need a person to pick the source, and the ones that failed, with the playlist each
+// came from. Reuses the queue's own row, so the actions are the ones already there.
+let reviewTab = "needs";
+function setReviewTab(kind){
+  reviewTab = kind === "failed" ? "failed" : "needs";
+  for (const [id, on] of [["qrevtab-needs", reviewTab === "needs"], ["qrevtab-failed", reviewTab === "failed"]]){
+    const button = document.getElementById(id);
+    if (!button) continue;
+    button.classList.toggle("on", on);
+    button.setAttribute("aria-selected", String(on));
+  }
+  const host = $("#qrev-list");
+  if (host) delete host.dataset.sig;
+  renderReview();
+}
+function reviewGroups(kind){
+  const want = kind === "failed" ? "failed" : "review";
+  const groups = [];
+  for (const playlist of (last && last.playlists) || []){
+    const tracks = (playlist.tracks || []).filter(t => t.status === want);
+    if (tracks.length) groups.push({playlist, tracks});
+  }
+  return groups;
+}
+function setCount(id, n, always){
+  const el = document.getElementById(id);
+  if (!el) return;
+  // A sub-tab always states its count (a real "0" answers "is anything failed?"), and
+  // the tab badge hides at zero so an empty pill never floats beside "Review".
+  el.textContent = always ? String(n) : (n ? String(n) : "");
+  el.hidden = always ? false : !n;
+}
+function renderReview(){
+  const host = $("#qrev-list");
+  if (!host) return;
+  const stats = (last && last.stats) || {};
+  const needs = Number(stats.review || 0), failed = Number(stats.failed || 0);
+  setCount("qrev-needs", needs, true);
+  setCount("qrev-failed", failed, true);
+  // The tab itself carries the total, so a review item cannot sit unnoticed behind it.
+  setCount("qrev-badge", needs + failed);
+  for (const [id, on] of [["qrevtab-needs", reviewTab === "needs"], ["qrevtab-failed", reviewTab === "failed"]]){
+    const button = document.getElementById(id);
+    if (button) button.classList.toggle("on", on);
+  }
+  const groups = reviewGroups(reviewTab);
+  // The state poll repaints constantly; only rebuild when something on this page
+  // actually changed, or a Source field would lose focus mid-typing.
+  const sig = reviewTab + "|" + [...editing].join(",") + "|" + [...busy].join(",")
+    + JSON.stringify(groups.map(({playlist, tracks}) =>
+      [playlist.id, tracks.map(t => [t.id, t.status, t.error, t.match, t.candidates])]));
+  if (host.dataset.sig === sig) return;
+  host.dataset.sig = sig;
+  const empty = reviewTab === "failed"
+    ? "No failed downloads. Anything that fails lands here with its reason."
+    : "Nothing needs a person right now — every song the downloader found was a confident match.";
+  host.innerHTML = groups.length
+    ? groups.map(({playlist, tracks}) => `<div class="revgroup">
+        <div class="revhead">
+          <span class="revtitle">${esc(playlist.title)}</span>
+          <span class="revmeta">${esc(playlist.platform || "")} · ${tracks.length} track${tracks.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="tracks">${tracks.map(t => trackRow(t, playlist.id)).join("")}</div>
+      </div>`).join("")
+    : `<div class="revempty">${empty}</div>`;
 }
 function songSearchStatus(text, bad){
   const el = $("#songsearch-status");
@@ -1595,7 +1802,7 @@ function reviewBlock(t){
       <button onclick="useCandidate(${t.id}, ${i})">Use</button>
     </div>`).join("");
   // The row already prints t.error; do not say it twice.
-  return `<div class="review">
+  return `<div class="revbox">
       ${rows || `<div class="hint">nothing usable — paste a URL with the Source button</div>`}
     </div>`;
 }
@@ -1977,6 +2184,7 @@ async function refreshSnapshot(){
   if (s.cooldown_until > 0 || s.paused || s.disk_blocked) renderBanners(st);
   else $("#banners").innerHTML = "";
   renderQueue(st.playlists);
+  renderReview();
   ensureDecisionHistory();
   renderLogs(st.logs);
 }
@@ -2347,6 +2555,13 @@ async function saveProfile(event){
 
 let listeningSaves = null;
 let libraryScope = 'shared';
+// Removed on this visit, kept on the page: a mistaken remove is one click from coming back.
+// The set is dropped as soon as the person leaves this view, which is when a removed album
+// or song really has to be gone from the Library.
+const libraryPeek = new Set();
+function clearLibraryPeek(){
+  if (libraryPeek.size) libraryPeek.clear();
+}
 function scopedPlaylists(){
   return libraryScope === 'shared' ? libPlaylists : libPlaylists.filter(p => listeningSaves?.playlists.includes(p.id));
 }
@@ -2354,7 +2569,7 @@ function scopedTracks(){
   if (libraryScope === 'shared') return libAll;
   if (!listeningSaves) return [];
   const ids = new Set([...listeningSaves.tracks, ...(listeningSaves.playlist_tracks || []).map(t => t.track_id),
-    ...(listeningSaves.folder_tracks || []).map(t => t.track_id)]);
+    ...(listeningSaves.folder_tracks || []).map(t => t.track_id), ...libraryPeek]);
   return libAll.filter(t => ids.has(t.id));
 }
 function playlistTracks(id){
@@ -2366,6 +2581,7 @@ function playlistTracks(id){
 }
 function setLibraryScope(scope){
   libraryScope = scope === 'mine' ? 'mine' : 'shared';
+  clearLibraryPeek();
   detail = null;
   activeFolderId = null;
   if (libraryScope === 'shared' && libView === 'folders') {
@@ -2467,6 +2683,12 @@ async function toggleListeningSave(kind, id){
   try {
     await api('/api/listening/saves', {kind,id,saved});
     await loadListeningSaves();
+    // A removed song stays on the page, dimmed, so the same row can put it back. Adding
+    // one back clears that, and the row goes straight back to normal.
+    if (kind === 'track'){
+      if (saved) libraryPeek.delete(Number(id)); else libraryPeek.add(Number(id));
+      paintRowRemoved(id);
+    }
     // Answer the tap where it happened: a check for a beat, a line saying what it did.
     showToast(saved ? 'Added to your library' : 'Removed from your library');
     if (saved){
@@ -2475,6 +2697,21 @@ async function toggleListeningSave(kind, id){
     }
   } catch(e){ alert(e.message); }
   finally { listeningBusy.delete(key); paintSaveControl(kind, Number(id)); }
+}
+// Repaint one row's removed state in place: a full library render reloads every cover.
+function paintRowRemoved(id){
+  const removed = libraryPeek.has(Number(id));
+  for (const row of document.querySelectorAll(`.songrow[data-id="${Number(id)}"]`)){
+    row.classList.toggle('removed', removed);
+    const title = row.querySelector('.sttext');
+    const badge = row.querySelector('.removed-badge');
+    if (removed && title && !badge){
+      const chip = document.createElement('span');
+      chip.className = 'removed-badge';
+      chip.textContent = 'Removed';
+      title.appendChild(chip);
+    } else if (!removed && badge) badge.remove();
+  }
 }
 let activeFolderId = null;
 function personalFolder(id){ return (listeningSaves?.folders || []).find(f => f.id === Number(id)); }
@@ -2664,6 +2901,7 @@ let currentRows = [];
 let renderedAlbums = [];
 let artistArt = {};   // name_key -> stored artist picture
 let renderedArtists = [];
+let renderedArtistSongs = [];
 let socialIndex = {album: {}, track: {}, playlist: {}};   // batched counts per card
 let lastLibraryHtml = "";
 const artistProfiles = new Map();   // name → /api/artist payload  // a poll that changes nothing must not restart animations
@@ -2844,7 +3082,7 @@ async function restoreNowState(){
   if (typeof applyPlayerArtwork === "function") applyPlayerArtwork();
   $("#plart").style.visibility = row.artwork ? "visible" : "hidden";
   paintPlTitle(row.title || "Untitled");
-  $("#plsub").textContent = [row.artist_name, row.album].filter(Boolean).join(" · ");
+  paintPlayerSub(row);
   $("#player").classList.add("on");
   document.body.classList.add("hasplayer");
   paintTransport(null);
@@ -3160,10 +3398,13 @@ function showToast(message){
 function albumsOf(rows){
   const map = new Map();
   for (const t of rows){
-    const key = t.album_id || `${t.artist_name || "Unknown artist"}\u0000${t.album || "Singles"}`;
+    // A single with no album is not an album: it stays in Songs (and under its
+    // artist) instead of inventing a "Singles" shelf or borrowing its playlist's name.
+    if (!(t.album || "").trim()) continue;
+    const key = t.album_id || `${t.artist_name || "Unknown artist"}\u0000${t.album}`;
     let album = map.get(key);
     if (!album){
-      album = {key, title: t.album || "Singles", artist: t.artist_name || "Unknown artist",
+      album = {key, title: t.album, artist: t.artist_name || "Unknown artist",
                tracks: [], art: "", added: 0, duration: 0,
                albumId: t.album_id ? Number(t.album_id) : 0};
       map.set(key, album);
@@ -3173,31 +3414,30 @@ function albumsOf(rows){
     album.duration += t.duration || 0;
     album.added = Math.max(album.added, t.added || 0);
   }
-  // SoundCloud sets carry the playlist name where a release name would sit. A
-  // card headed by that name would repeat for every artist, so those read as
-  // the artist with "from <set>" under it instead.
-  for (const album of map.values()){
-    const names = new Set(album.tracks.flatMap(t => (t.playlists || []).map(p => p.title)));
-    album.loose = names.has(album.title);
-    album.source = album.loose ? album.title : "";
-    if (album.loose) album.title = album.tracks.length === 1 ? album.tracks[0].title : album.artist;
-  }
   for (const album of map.values())
     album.tracks.sort((a, b) => (a.track_number || 0) - (b.track_number || 0) || String(a.title).localeCompare(b.title));
   return [...map.values()];
 }
 
-function artistsOf(albums){
+// Every track names its artist, album or not — so the artist list is built from
+// the tracks and only borrows albums when the artist actually has one.
+function artistsOf(rows){
   const map = new Map();
-  for (const album of albums){
-    let artist = map.get(album.artist);
-    if (!artist){ artist = {name: album.artist, albums: [], art: "", added: 0}; map.set(album.artist, artist); }
-    artist.albums.push(album);
-    if (!artist.art){
-      const key = String(artist.name || "").trim().toLowerCase().replace(/\s+/g, " ");
-      artist.art = artistArt[key] || album.art;
-    }
-    artist.added = Math.max(artist.added, album.added);
+  for (const t of rows){
+    const name = t.artist_name || "Unknown artist";
+    let artist = map.get(name);
+    if (!artist){ artist = {name, albums: [], tracks: [], art: "", added: 0}; map.set(name, artist); }
+    artist.tracks.push(t);
+    if (!artist.art) artist.art = t.artwork || "";
+    artist.added = Math.max(artist.added, t.added || 0);
+  }
+  for (const album of albumsOf(rows)){
+    const artist = map.get(album.artist);
+    if (artist){ artist.albums.push(album); artist.art = artist.art || album.art; }
+  }
+  for (const artist of map.values()){
+    const key = String(artist.name || "").trim().toLowerCase().replace(/\s+/g, " ");
+    artist.art = artistArt[key] || artist.art;
   }
   return [...map.values()];
 }
@@ -3350,6 +3590,12 @@ function renderAlbums(rows, q){
   return `<div class="songgrid">${renderedAlbums.map((a, i) => albumCard(a, i)).join("")}</div>`;
 }
 
+// The line under an album's name: its artist, or — for a SoundCloud set — the name of
+// the set those songs came from, because a set card is already headed by the artist.
+function albumArtistLine(album){
+  return album.artist || "—";
+}
+
 // An album as a song row: the song row's own markup and classes, filled with album values.
 function albumRow(album, index){
   const count = album.tracks.length;
@@ -3357,11 +3603,12 @@ function albumRow(album, index){
   const on = album.tracks.some(t => t.id === playingId);
   const playable = album.tracks.filter(t => t.playable).length;
   const zip = "/api/library/download?ids=" + album.tracks.map(t => t.id).join(",");
-  return `<div class="songrow${on ? " playing" : ""}" data-album="${esc(album.key)}" tabindex="0" aria-label="${esc(album.title)} — album actions available with Shift+F10" onclick="openAlbumByKey('${esc(album.key)}')">
+  const removed = libraryScope === 'mine' && albumRemoved(album);
+  return `<div class="songrow${on ? " playing" : ""}${removed ? " removed" : ""}" data-album="${esc(album.key)}" tabindex="0" aria-label="${esc(album.title)} — album actions available with Shift+F10" onclick="openAlbumByKey('${esc(album.key)}')">
     <div class="idx${on ? " playing" : ""}">${on ? SVG.bars(11) : index + 1}</div>
     <div class="thumb">${album.art ? artImg(album.art, "", true) : ""}</div>
-    <div class="st"><span class="sttext"><b>${esc(album.title)}</b></span><div class="rowactions">${albumSaveControl(album)}</div></div>
-    <div class="sartist">${esc(album.artist || "—")}</div>
+    <div class="st"><span class="sttext"><b>${esc(album.title)}</b>${removed ? `<span class="removed-badge">Removed</span>` : ""}</span><div class="rowactions">${albumSaveControl(album)}</div></div>
+    <div class="sartist">${esc(albumArtistLine(album))}</div>
     <div class="salbum">${count} song${count === 1 ? "" : "s"}${pending ? ` · ${pending} pending` : ""}</div>
     ${voteRow("album", album.key)}
     <div class="sdur">${album.duration ? fmtLong(album.duration) : count + " songs"}</div>
@@ -3376,7 +3623,8 @@ function albumRow(album, index){
 function albumCoverWall(albums){
   const tiles = albums.map((a, i) => {
     const on = a.tracks.some(t => t.id === playingId);
-    return `<button type="button" class="covercell${on ? " playing" : ""}" data-album="${esc(a.key)}"
+    const removed = libraryScope === 'mine' && albumRemoved(a);
+    return `<button type="button" class="covercell${on ? " playing" : ""}${removed ? " removed" : ""}" data-album="${esc(a.key)}"
       title="${esc(a.title)}" aria-label="${esc(a.title)} — open album" onclick="openAlbumByKey('${esc(a.key)}')">
       ${artBox(a.art, a.title, "coverart")}
       ${statusMarks("album", a.key)}
@@ -3399,10 +3647,12 @@ function albumCard(album, index){
   const on = album.tracks.some(t => t.id === playingId);
   const playable = album.tracks.filter(t => t.playable).length;
   const zip = "/api/library/download?ids=" + album.tracks.map(t => t.id).join(",");
+  const removed = libraryScope === 'mine' && albumRemoved(album);
   // Cards: the same shape as a song card — cover with queue-next, duration, download and
   // play on the artwork, a save button under the cover, artist/album lines, vote row.
-  return `<div class="songcard acard ${on ? "playing" : ""} ${goneCount ? "gone-any" : ""}" data-album="${esc(album.key)}" onclick="openAlbumAt(${index})">
+  return `<div class="songcard acard ${on ? "playing" : ""} ${goneCount ? "gone-any" : ""} ${removed ? "removed" : ""}" data-album="${esc(album.key)}" onclick="openAlbumAt(${index})">
     <div class="thumb">${artBox(album.art, album.title, "acover")}
+      ${removed ? `<span class="removed-chip">Removed</span>` : ""}
       <div class="album-tools"></div>
       <button type="button" class="snext" title="Queue album next" aria-label="Queue album next"
         onclick="event.stopPropagation();queueAlbumNext(${index})">${SVG.toNext(16)}</button>
@@ -3418,32 +3668,60 @@ function albumCard(album, index){
     </span>
     <div class="st"><span class="sttext"><b>${esc(album.title)}</b></span>
       <div class="rowactions">${albumSaveControl(album)}</div></div>
-    <div class="sartist">${esc(album.artist || "—")}</div>
+    <div class="sartist">${esc(albumArtistLine(album))}</div>
     <div class="salbum">${count} song${count === 1 ? "" : "s"}${pending ? ` · ${pending} pending` : ""}</div>
     ${voteRow("album", album.key)}
   </div>`;
 }
 
-// Albums are added by saving their playable songs — the saves API speaks per-track ids.
+// An album is in the library when any of its songs is: clicking minus then removes what is
+// there instead of topping up the gaps. A removal also stays on the page (see libraryPeek),
+// so the same button turns into an undo until the person leaves this view.
+function albumRemoved(album){
+  const ids = album.tracks.filter(t => t.playable).map(t => t.id);
+  return ids.length > 0 && ids.every(id => libraryPeek.has(id));
+}
+const albumConfirmed = new Set();
 function albumSaveControl(album){
   if (!listeningSaves) return '';
   const ids = album.tracks.filter(t => t.playable).map(t => t.id);
-  const saved = ids.length > 0 && ids.every(id => (listeningSaves.tracks || []).includes(id));
-  const label = saved ? 'Remove album from library' : 'Add album to library';
-  return `<button class="ghost lsave${saved ? ' on' : ''}" title="${label}" aria-label="${label}" aria-pressed="${saved}"
-    onclick="event.stopPropagation();toggleAlbumSave('${esc(album.key)}')">${saved ? SVG.minus(14) : SVG.plus(14)}</button>`;
+  const savedIds = new Set(listeningSaves.tracks || []);
+  const savedCount = ids.filter(id => savedIds.has(id)).length;
+  if (albumRemoved(album)) return `<button class="ghost lsave" title="Add album back to library" aria-label="Add album back to library" aria-pressed="false"
+    onclick="event.stopPropagation();toggleAlbumSave('${esc(album.key)}')">${SVG.plus(14)}</button>`;
+  const saved = savedCount > 0;
+  const confirming = saved && albumConfirmed.has(album.key);
+  const label = confirming ? 'Album added to your library'
+    : !saved ? 'Add album to library'
+    : savedCount < ids.length ? `Remove album from library (${savedCount} of ${ids.length} songs are saved)`
+    : 'Remove album from library';
+  return `<button class="ghost lsave${saved && !confirming ? ' on' : ''}${confirming ? ' confirm' : ''}" title="${label}" aria-label="${label}" aria-pressed="${saved}"
+    onclick="event.stopPropagation();toggleAlbumSave('${esc(album.key)}')">${confirming ? SVG.check(14) : saved ? SVG.minus(14) : SVG.plus(14)}</button>`;
 }
 async function toggleAlbumSave(key){
-  const album = albumsOf(libAll).find(a => a.key === key);
+  // The album as it is on screen: in the Library that is the saved songs, so undoing a
+  // remove puts back exactly those instead of adding the rest of the release as well.
+  const album = (renderedAlbums || []).find(a => a.key === key)
+             || albumsOf(scopedTracks()).find(a => a.key === key)
+             || albumsOf(libAll).find(a => a.key === key);
   if (!album || !listeningSaves) return;
   const ids = album.tracks.filter(t => t.playable).map(t => t.id);
   if (!ids.length){ showToast('Nothing downloaded from this album yet'); return; }
-  const saved = (listeningSaves.tracks || []).length && ids.every(id => listeningSaves.tracks.includes(id));
+  const savedIds = new Set(listeningSaves.tracks || []);
+  const savedCount = ids.filter(id => savedIds.has(id)).length;
+  const save = savedCount === 0;                  // nothing saved: this is an add (or an undo)
   try {
-    for (const id of ids) await api('/api/listening/saves', {kind: 'track', id, saved: !saved});
+    await Promise.all(ids.filter(id => save ? !savedIds.has(id) : savedIds.has(id))
+      .map(id => api('/api/listening/saves', {kind: 'track', id, saved: save})));
     await loadListeningSaves();
+    for (const id of ids) save ? libraryPeek.delete(id) : libraryPeek.add(id);
+    // An add shows the check for a beat before the minus takes over; a remove leaves the
+    // card marked and dashed so it is visibly still there and one click from returning.
+    if (save) albumConfirmed.add(key);
     renderLibrary();
-    showToast(saved ? 'Album removed from your library' : 'Album added to your library');
+    if (save) setTimeout(() => { albumConfirmed.delete(key); renderLibrary(); }, SAVE_CONFIRM_MS);
+    showToast(save ? 'Album added to your library'
+                   : 'Album removed from your library — the + puts it back');
   } catch (e) { showToast(e.message || 'Could not change that album'); }
 }
 function queueAlbumNext(index){
@@ -3453,9 +3731,8 @@ function queueAlbumNext(index){
 }
 
 function renderArtists(rows, q){
-  const albums = albumsOf(rows);
-  if (!albums.length) return emptyState(rows, q);
-  renderedArtists = artistsOf(sortAlbums(albums));
+  if (!rows.length) return emptyState(rows, q);
+  renderedArtists = artistsOf(rows);
   if (libSort === "title") renderedArtists.sort((a, b) => a.name.localeCompare(b.name));
   else if (libSort === "recent") renderedArtists.sort((a, b) => b.added - a.added);
   return `<div class="artistgrid">${renderedArtists.map((artist, i) => `
@@ -3467,7 +3744,7 @@ function renderArtists(rows, q){
         <span class="round">${artist.art ? `<img src="${esc(artist.art)}" alt="">` : esc(initials(artist.name))}</span>
       </button>
       <div class="aname" title="${esc(artist.name)}">${esc(artist.name)}</div>
-      <div class="asub">${artist.albums.length} album${artist.albums.length === 1 ? "" : "s"} · ${artist.albums.reduce((n, a) => n + a.tracks.length, 0)} songs</div>
+      <div class="asub">${artist.albums.length ? `${artist.albums.length} album${artist.albums.length === 1 ? "" : "s"} · ` : ""}${artist.tracks.length} song${artist.tracks.length === 1 ? "" : "s"}</div>
     </div>`).join("")}</div>`;
 }
 
@@ -3588,9 +3865,9 @@ function songHead(){
 </div>`;
 }
 
-function songTable(tracks, emptyHtml){
-  return `<div class="songtable">${songHead()}${
-    tracks.length ? tracks.map((t, i) => songRow(t, i)).join("")
+function songTable(tracks, emptyHtml, opts){
+  return `<div class="songtable ${(opts && opts.classes) || ""}">${songHead()}${
+    tracks.length ? tracks.map((t, i) => songRow(t, i, false, opts)).join("")
                   : `<div class="empty">${emptyHtml || "Nothing here yet."}</div>`}</div>`;
 }
 
@@ -3936,28 +4213,46 @@ function goneLabel(track){
   return "";
 }
 
-function songRow(track, index, card = false){
+function songRow(track, index, card = false, opts = {}){
   const on = playingId === track.id;
   const gone = goneLabel(track);
+  // Removed on this visit: the row stays put, dimmed, with its + ready to undo.
+  const removed = typeof libraryPeek !== "undefined" && libraryPeek.has(Number(track.id));
   // A SoundCloud set's name is stored as the album, so the right-hand cell on a card
   // would just repeat the playlist ("Shuffle") the songs came from. Real album names stay.
   const setAlbum = (track.playlists || []).some(p => p.title === track.album);
-  return `<div class="songrow ${card ? 'songcard' : ''} ${on ? "playing" : ""} ${gone ? "gone" : ""}" data-id="${track.id}" tabindex="0" aria-label="${esc(track.title)}${on ? " — playing" : ""} — song actions available with Shift+F10">
+  return `<div class="songrow ${card ? 'songcard' : ''} ${on ? "playing" : ""} ${gone ? "gone" : ""} ${removed ? "removed" : ""} ${track.playable ? "" : "absent"}" data-id="${track.id}" tabindex="0" aria-label="${esc(track.title)}${on ? " — playing" : ""} — song actions available with Shift+F10">
     <div class="idx${on ? " playing" : ""}">${on ? SVG.bars(11) : index + 1}</div>
     ${card ? "" : statusMarks("track", track.id)}
     <div class="thumb">${track.artwork ? artImg(track.artwork, "", true) : ""}${card ? `<button type="button" class="snext" title="Play next" aria-label="Play next" onclick="event.stopPropagation();queueSong(${track.id}, true)">${SVG.toNext(16)}</button>` : ""}${on && card ? `<span class="nowbars" aria-hidden="true">${SVG.bars(14)}</span>` : ""}</div>
-    <div class="st"><span class="sttext"><b>${esc(track.title)}</b>${gone ? `<span class="gone-badge" title="Checked ${track.source_checked ? new Date(track.source_checked * 1000).toLocaleString() : "recently"} — the downloaded file still plays">${esc(gone)}</span>` : ""}</span><div class="rowactions">${listeningSaveControl("track", track.id)}</div></div>
+    <div class="st"><span class="sttext"><b>${esc(track.title)}</b>${gone ? `<span class="gone-badge" title="Checked ${track.source_checked ? new Date(track.source_checked * 1000).toLocaleString() : "recently"} — the downloaded file still plays">${esc(gone)}</span>` : ""}${removed ? `<span class="removed-badge">Removed</span>` : ""}</span><div class="rowactions">${listeningSaveControl("track", track.id)}</div></div>
     <div class="sartist">${esc(track.artist_name || "—")}</div>
     <div class="listtags">${card ? "" : sourceTag(track)}</div>
-    <div class="salbum">${card && setAlbum ? "" : esc(track.album || "—")}</div>
+    <div class="salbum">${card && setAlbum ? "" : esc(track.album || "")}</div>
     ${voteRow("track", track.id)}
     <div class="sdur">${track.playable ? fmtClock(track.duration) : esc(track.status || "missing")}</div>
     <span class="send">
       ${track.playable ? `<a class="sdl" href="/api/track/${track.id}/download" download title="Download" onclick="event.stopPropagation()">↓</a>` : ""}
+      ${opts.grab && !track.playable ? `<button type="button" class="sdl-grab" title="Download this song"
+        aria-label="Download ${esc(track.title)}" onclick="event.stopPropagation();grabMissing([${track.id}])">${DOWNLOAD_ICON}</button>` : ""}
       <button type="button" class="splay${track.playable ? "" : " off"}" ${track.playable ? "" : "disabled"} title="${track.playable ? (on && !playerAudio.paused ? "Pause" : "Play") : "Not downloaded yet"}" aria-label="${track.playable ? (on && !playerAudio.paused ? "Pause" : "Play") : "Not downloaded yet"}" onclick="event.stopPropagation();${track.playable ? `toggleSongPlayback(${track.id})` : ""}">${on && !playerAudio.paused && track.playable ? SVG.pause(13) : SVG.play(13)}</button>
     </span>
     ${card ? "" : `<button type="button" class="rowmore" title="More options" aria-label="More options" onclick="event.stopPropagation();openRowMenu(this, ${track.id})">⋯</button>`}
   </div>`;
+}
+
+// A playlist's collage is a mosaic of the records inside it, as many distinct covers as
+// fill the rectangle whole: 12, 9, 8, 6, 4, 3, 2 or 1. A set with no artwork still gets
+// its initials, so the card reads as a playlist rather than a black hole.
+const COLLAGE_STEPS = [[12, "c12"], [9, "c9"], [8, "c8"], [6, "c6"], [4, "c4"], [3, "c3"], [2, "c2"], [1, "c1"]];
+function playlistCollage(arts, title){
+  // The same album twice would spend a tile on a cover already shown.
+  const unique = Array.from(new Set(arts));
+  const step = COLLAGE_STEPS.find(([n]) => unique.length >= n);
+  const shown = step ? unique.slice(0, step[0]) : [];
+  const cells = shown.map(a => `<i style="background-image:url('${esc(a)}')"></i>`).join("")
+    || `<i class="ph">${esc(initials(title))}</i>`;
+  return `<div class="collage ${step ? step[1] : "c1"}">${cells}</div>`;
 }
 
 function renderPlaylistsView(rows, q){
@@ -3967,17 +4262,15 @@ function renderPlaylistsView(rows, q){
   if (!cards.length) return emptyState(rows, q) || `<div class="empty">No playlists yet — queue a SoundCloud set or an Apple Music playlist.</div>`;
   return `<div class="plgrid">${cards.map(p => {
     const tracks = playlistTracks(p.id);
-    const arts = tracks.map(t => t.artwork).filter(Boolean).slice(0, 4);
+    const arts = tracks.map(t => t.artwork).filter(Boolean);
     const done = tracks.filter(t => playable.has(t.id)).length;
-    // Four covers make the classic 2x2; fewer would look like broken tiles.
-    const shown = arts.length >= 4 ? arts.slice(0, 4) : arts.slice(0, 1);
-    const collage = `<div class="collage ${shown.length === 1 ? "big" : ""}">${shown.map(a => `<i style="background-image:url('${esc(a)}')"></i>`).join("")}</div>`;
     return `<div class="plcard" onclick="openPlaylist(${p.id})">
-      ${collage}
-      <div class="pt" title="${esc(p.title)}">${esc(p.title)}</div>
-      <div class="ps">${done}/${tracks.length} downloaded</div>
-      <div class="pl-tools">${window.PreferenceUI && PreferenceUI.pinControl ? PreferenceUI.pinControl('playlist', p.id) : ''}</div>
-      <div class="pacts">${downloadControl(libraryScope === 'mine' ? '/api/library/download?ids=' + tracks.map(t => t.id).join(',') : `/api/playlist/${p.id}/download`, done > 0, "ZIP")}${listeningSaveControl("playlist", p.id)}</div>
+      ${playlistCollage(arts, p.title)}
+      <div class="pbody">
+        <div class="pt" title="${esc(p.title)}">${esc(p.title)}</div>
+        <div class="ps"><span class="plcount">${done}/${tracks.length}<span class="plword"> downloaded</span></span><span class="plby" title="${esc(p.added_by || "")}">${esc(p.added_by || "")}</span></div>
+        <div class="pacts">${downloadControl(libraryScope === 'mine' ? '/api/library/download?ids=' + tracks.map(t => t.id).join(',') : `/api/playlist/${p.id}/download`, done > 0, "ZIP")}${listeningSaveControl("playlist", p.id)}</div>
+      </div>
     </div>`;
   }).join("")}</div>`;
 }
@@ -4005,22 +4298,26 @@ function renderFolders(rows, q){
 // ------------------------------------------------------------------ detail views
 function renderDetail(rows){
   if (detail.kind === "album"){
-    const album = albumsOf(rows).find(a => a.key === detail.key);
+    // The release, not just the part we have: pending songs stay in the tracklist so the
+    // album reads whole and each missing one can be grabbed on its own.
+    const album = albumsOf(scopedTracks()).find(a => a.key === detail.key)
+               || albumsOf(rows).find(a => a.key === detail.key);
     if (!album){ detail = null; return renderAlbums(rows, ""); }
     return albumDetail(album);
   }
   if (detail.kind === "artist"){
-    const artist = artistsOf(albumsOf(rows)).find(a => a.name === detail.key);
+    const artist = artistsOf(rows).find(a => a.name === detail.key);
     if (!artist){ detail = null; return renderArtists(rows, ""); }
     renderedAlbums = sortAlbums(artist.albums).filter(a => a.tracks.length > 1);
-    const artistTracks = artist.albums.flatMap(a => a.tracks);
+    const artistTracks = artist.tracks;
+    renderedArtistSongs = artistTracks;
     const songs = artistTracks.length;
     const profile = artistProfiles.get(artist.name);
     return `<button class="backbtn" onclick="closeDetail()">‹ Back</button>
       <div class="hero">
         ${artBox(artist.art, artist.name, "hart round")}
         <div class="hmeta"><div class="kicker">Artist</div><h3>${esc(artist.name)}</h3>
-          <div class="hsub">${artist.albums.length} album${artist.albums.length === 1 ? "" : "s"} · ${songs} song${songs === 1 ? "" : "s"}${profile ? ` · ${profile.downloaded} downloaded` : ""}</div>
+          <div class="hsub">${artist.albums.length ? `${artist.albums.length} album${artist.albums.length === 1 ? "" : "s"} · ` : ""}${songs} song${songs === 1 ? "" : "s"}${profile ? ` · ${profile.downloaded} downloaded` : ""}</div>
           <div class="hacts"><button class="runplay" onclick="playArtist()">${SVG.play(14)} Play</button>
             ${profile ? subscriptionControl(profile, artist.name) : ""}
             <button class="ghost" onclick="createArtistPlaylist()">Create playlist</button>
@@ -4067,21 +4364,26 @@ function renderDetail(rows){
 function albumDetail(album){
   const duration = album.duration;
   const playable = album.tracks.filter(t => t.playable).length;
+  // The title holds the container's name (album or set); the artist sits under it and
+  // stays a link into the Repo, whichever kind of container this is.
+  const who = `<a role="link" tabindex="0" data-artist="${esc(album.artist)}"
+          title="Open ${esc(album.artist)} in the Repo"
+          onclick="openArtistByName(this.dataset.artist)"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistByName(this.dataset.artist)}">${esc(album.artist)}</a>`;
   return `<button class="backbtn" onclick="closeDetail()">‹ Back</button>
     <div class="hero">
       <div style="position:relative;flex:0 0 auto">${artBox(album.art, album.title, "hart")}
         <div class="bubbles" data-bkey="${album.key}"></div></div>
       <div class="hmeta">
-        <div class="kicker">${album.loose ? `From ${esc(album.artist)}` : "Album"}</div>
+        <div class="kicker">Album</div>
         <h3>${esc(album.title)}</h3>
-        <div class="hsub">${album.loose ? `Set: ${esc(album.source)} · ` : ""}<a role="link" tabindex="0" data-artist="${esc(album.artist)}"
-          title="Open ${esc(album.artist)} in the Repo"
-          onclick="openArtistByName(this.dataset.artist)"
-          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistByName(this.dataset.artist)}">${esc(album.artist)}</a> · ${album.tracks.length} song${album.tracks.length === 1 ? "" : "s"}${duration ? ` · ${fmtLong(duration)}` : ""}${album.tracks.length - playable ? ` · <span style="color:#ffd9a1">${album.tracks.length - playable} not downloaded</span>` : ""}</div>
+        <div class="hsub">${who} · ${album.tracks.length} song${album.tracks.length === 1 ? "" : "s"}${duration ? ` · ${fmtLong(duration)}` : ""}${album.tracks.length - playable ? ` · <span style="color:#ffd9a1">${album.tracks.length - playable} not downloaded</span>` : ""}</div>
         <div class="hacts">
           <button class="runplay" onclick="playDetailAlbum()">${SVG.play(14)} Play</button>
           <button class="ghost" onclick="shuffleDetailAlbum()">Shuffle</button>
-          ${album.tracks.length - playable ? `<button class="ghost" data-admin-only onclick="grabDetailAlbum()">Download missing (${album.tracks.length - playable})</button>` : ""}
+          ${album.tracks.length - playable ? `<button class="ghost grabmissing" data-admin-only
+             title="Queue every song this album has and your library does not"
+             onclick="askGrabAlbum()">${SVG.sync(14)} Grab ${album.tracks.length - playable} missing</button>` : ""}
           ${downloadControl(singleDownloadUrl(album.tracks, "/api/library/download?ids=" + album.tracks.map(t => t.id).join(",")), playable > 0, singleDownloadLabel(album.tracks, "Download ZIP"))}
           ${album.albumId && adminUI() ? `<button class="ghost danger" id="delalbum-${album.albumId}"
              onclick="deleteAlbum(${album.albumId}, ${album.tracks.length}, this)">Delete album</button>` : ""}
@@ -4090,8 +4392,27 @@ function albumDetail(album){
         ${voteRow("album", album.key)}
       </div>
     </div>
-    <div class="detaillist tracklist">${songTable(album.tracks)}</div>`;
+    <div class="detaillist tracklist">${songTable(album.tracks, undefined, {grab: true, classes: "grabable"})}</div>`;
 }
+
+// Grabbing a whole release is a queue operation the person should agree to; grabbing one
+// song from a row is not, so only the bulk button asks.
+function askGrabAlbum(){
+  const album = albumsOf(scopedTracks()).find(a => a.key === detail?.key);
+  const ids = album ? album.tracks.filter(t => !t.playable).map(t => t.id) : [];
+  if (!ids.length){ showToast("Nothing is missing from this album."); return; }
+  const dialog = document.getElementById("dlg-grab");
+  if (!dialog){ grabMissing(ids); return; }
+  grabPending = ids;
+  document.getElementById("dlg-grab-text").textContent =
+    `Queue ${ids.length} song${ids.length === 1 ? "" : "s"} from “${album.title}”? They download in the background, in album order.`;
+  dialog.showModal();
+}
+let grabPending = [];
+document.getElementById("dlg-grab")?.addEventListener("close", event => {
+  if (event.target.returnValue === "go" && grabPending.length) grabMissing(grabPending);
+  grabPending = [];
+});
 
 // Deleting audio is destructive and irreversible, so it takes two clicks: the
 // first arms the button, the second does it. Anything else is one stray tap.
@@ -4235,6 +4556,7 @@ function copyText(text){
 function setView(view){
   if (view === 'folders' && libraryScope !== 'mine') return;
   libView = view;
+  clearLibraryPeek();
   detail = null;
   localStorage.setItem("hl.libraryView", view);
   for (const button of $("#libviews").querySelectorAll("button"))
@@ -4245,6 +4567,18 @@ function setView(view){
 }
 
 function openAlbumAt(index){ const album = renderedAlbums[index]; if (album){ detail = {kind: "album", key: album.key}; renderLibrary(); scrollTo({top: 0, behavior: "instant"}); } }
+// A song's cover is the way into its release: the album page, with the song that was
+// tapped marked, the same highlight a mixer deep link uses. The album list is rebuilt
+// from every row so the cover works from Songs as well as from the album wall.
+function openTrackAlbum(track){
+  if (!track) return;
+  const key = track.album_id || `${track.artist_name || "Unknown artist"}\u0000${track.album || "Singles"}`;
+  renderedAlbums = sortAlbums(albumsOf(libAll));
+  const at = renderedAlbums.findIndex(a => a.key === key);
+  if (at < 0) return;
+  openAlbumAt(at);
+  setTimeout(() => focusSongRow(track.id), 60);
+}
 async function loadArtistProfile(name){
   // Reopening reads current stored discoveries; never triggers a provider check.
   try {
@@ -4363,12 +4697,27 @@ function mediaArtwork(row){
   if (!row || !row.artwork) return [];
   return [{src: new URL(artHQ(row.artwork), location.href).href}];
 }
+// `tracks.album` now holds only the release a song came out on — the importer no longer
+// stamps a playlist's name there — so the car can publish it as-is. A single with no
+// release leaves it blank rather than naming an album that does not exist.
+function realAlbum(row){
+  return String((row && row.album) || "").trim();
+}
+// The player's second line: the release when there is one, otherwise the set the song was
+// pulled from. It used to read "artist · set" for everything; when the album was cleared
+// the line collapsed to the artist alone, which is what needed restoring.
+function albumFor(row){
+  return realAlbum(row) || String(((row && row.playlists) || []).map(p => p && p.title).find(Boolean) || "");
+}
+function playerSub(row){
+  return [row && row.artist_name, albumFor(row)].filter(Boolean).join(" · ");
+}
 function publishMediaSession(row){
   if (!("mediaSession" in navigator) || !row) return;
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: row.title || "Untitled", artist: row.artist_name || "",
-      album: row.album || "", artwork: mediaArtwork(row)
+      album: realAlbum(row), artwork: mediaArtwork(row)
     });
   } catch (_) { /* older browser: the car just keeps the previous tag */ }
   // Assigning metadata is what activates the session. Claim the transport actions
@@ -4438,6 +4787,13 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") republishMediaSession();
 });
 playerAudio.addEventListener("play", republishMediaSession);
+// A skip reuses the one audio element, and a head unit that latches the now-playing block
+// for the life of the Bluetooth media session never sees the tag it was handed before
+// `play()` — which is why the first song lands and every manual skip does not. Publishing
+// again on the element's own milestones hands it a tag after the new resource is attached,
+// and costs one assignment. (Measured here; the head unit itself cannot be tested.)
+playerAudio.addEventListener("loadedmetadata", republishMediaSession);
+playerAudio.addEventListener("playing", republishMediaSession);
 
 // Playback of the next queued song should not wait for the network. The audio
 // route is no-store (a Range stream for seeking), so the only way to start
@@ -4534,7 +4890,7 @@ function grabDetailPlaylist(){
   grabMissing(tracks.filter(t => !t.playable).map(t => t.id));
 }
 
-function playArtist(){ playQueue(renderedAlbums.flatMap(a => a.tracks)); }
+function playArtist(){ playQueue(renderedArtistSongs?.length ? renderedArtistSongs : renderedAlbums.flatMap(a => a.tracks)); }
 function playPlaylist(){
   const tracks = playlistTracks(Number(detail.key));
   playQueue(tracks);
@@ -4575,6 +4931,9 @@ function touchSongRow(event){
   const row = event.target.closest('.songrow');
   if (!row || event.target.closest('button,a,details,input,textarea,select,label')) return;
   if (row.dataset.album) return;
+  // The artwork is the door to the album, not a play button; the click that follows the
+  // tap opens it (see the cover handler beside the card listeners).
+  if (event.target.closest('.thumb')) return;
   // One tap on a row plays it. Nothing is queued, nothing is held back for a second tap.
   const id = Number(row.dataset.id);
   if (!id) return;
@@ -4633,7 +4992,7 @@ function playFromLibrary(id){
   if (typeof applyPlayerArtwork === "function") applyPlayerArtwork();
   $("#plart").style.visibility = row.artwork ? "visible" : "hidden";
   paintPlTitle(row.title || "Untitled");
-  $("#plsub").textContent = [row.artist_name, row.album].filter(Boolean).join(" · ");
+  paintPlayerSub(row);
   $("#player").classList.add("on");
   document.body.classList.add("hasplayer");
   // Publish the new tag before playback starts: the car asks for it the moment it
@@ -4735,7 +5094,7 @@ function paintFullPlayer(){
   art.src = row.artwork ? artHQ(row.artwork) : "";
   art.style.visibility = row.artwork ? "visible" : "hidden";
   paintPfTitle(row.title || "Untitled");
-  $("#pfsub").textContent = [row.artist_name, row.album].filter(Boolean).join(" · ");
+  paintPlayerSub(row, true);
   $("#pfseek").value = playerAudio.duration ? (playerAudio.currentTime / playerAudio.duration) * 1000 : 0;
   paintSeekFill();
   $("#pftime").textContent = fmtClock(playerAudio.currentTime);
@@ -4781,6 +5140,91 @@ function paintPfTitle(text){
 
 // The compact bar's title scrolls in place when it does not fit: the title box is the clip,
 // two copies sit inside it, and it travels at the same reading speed as the fullscreen title.
+// Artist and release on the player's own second line, each opening its own page: the
+// cover button already went to the album, but the names themselves were dead text.
+// `albumFor` still names the set a song came from when it has no release; only a real
+// release becomes a link, because a set name has no album page to open.
+function openArtistFromPlayer(name){
+  const repo = repoArtistNamed(name);
+  if (!repo){ showToast(`Nothing downloaded from ${name} yet`); return; }
+  if (document.body.classList.contains("fullplayer")) closeFullPlayer();
+  showLibraryTab();
+  openArtistByName(repo);
+}
+function openAlbumFromPlayer(trackId){
+  if (document.body.classList.contains("fullplayer")) closeFullPlayer();
+  // The song may live in the other scope; the album page is built from the scope shown.
+  if (!lib.some(t => t.id === trackId) && libAll.some(t => t.id === trackId)) setLibraryScope("shared");
+  showLibraryTab();
+  openAlbumForTrack(trackId);
+}
+// A name that does not fit scrolls inside its own box: two copies, the second hidden from
+// assistive tech, travelling at reading speed.
+function fitMarquee(el, text, wrapClass, gap = 24){
+  if (!el || !text) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!el.clientWidth) return;                          // hidden: there is nothing to measure
+  if (el.scrollWidth <= el.clientWidth + 2) return;     // it fits: leave it alone
+  const wrap = document.createElement("span");
+  wrap.className = wrapClass;
+  const a = document.createElement("span");
+  a.textContent = text;
+  const b = document.createElement("span");
+  b.setAttribute("aria-hidden", "true");
+  b.style.marginLeft = gap + "px";
+  b.textContent = text;
+  wrap.append(a, b);
+  el.replaceChildren(wrap);
+  el.classList.add("rolling");
+  const distance = Math.max(a.scrollWidth, Math.round(a.getBoundingClientRect().width)) + gap;
+  const travel = Math.max(2600, Math.round((distance / 42) * 1000));
+  wrap.style.setProperty("--mq-dist", distance + "px");
+  wrap.style.setProperty("--mq-dur", travel + "ms");
+}
+function paintPlayerSub(row, full){
+  const host = $(full ? "#pfsub" : "#plsub");
+  if (!host) return;
+  const artist = String((row && row.artist_name) || "").trim();
+  const album = albumFor(row);
+  const release = !!realAlbum(row);
+  host.textContent = "";
+  host.dataset.mqKey = "";
+  if (artist){
+    const a = document.createElement("a");
+    a.className = "psub-a";
+    a.href = "#";
+    a.dataset.artist = artist;
+    a.title = `Open ${artist}`;
+    a.textContent = artist;
+    a.onclick = event => { event.preventDefault(); event.stopPropagation(); openArtistFromPlayer(artist); };
+    host.append(a);
+  }
+  if (album){
+    const sep = document.createElement("span");
+    sep.className = "psub-sep";
+    sep.textContent = artist ? " · " : "";
+    host.append(sep);
+    const el = document.createElement(release ? "a" : "span");
+    el.className = "psub-b";
+    el.textContent = album;
+    if (release){
+      el.href = "#";
+      el.title = `Open ${album}`;
+      el.onclick = event => { event.preventDefault(); event.stopPropagation(); openAlbumFromPlayer(row.id); };
+    }
+    host.append(el);
+    // The bar is still display:none on the first paint, so measure once more after the
+    // frame that shows it; one retry per distinct line, never a loop.
+    const key = (full ? "f|" : "c|") + album;
+    if (!el.clientWidth && host.dataset.mqKey !== key){
+      host.dataset.mqKey = key;
+      requestAnimationFrame(() => paintPlayerSub(row, full));
+      return;
+    }
+    fitMarquee(el, album, full ? "pfmqt" : "plmqt");
+  }
+}
+
 function paintPlTitle(text){
   const el = $("#pltitle");
   if (!el) return;
@@ -4818,6 +5262,14 @@ function paintPlTitle(text){
 
 function openFullPlayer(){
   if (!playingId) return;
+  // Already up: a second call would re-save the scroll as 0 (a fixed body has none) and
+  // closing would then strand the reader at the top of the page.
+  if (fullPlayerOpen()) return;
+  // Any dismiss still animating out belongs to the pane that was up before this one.
+  fullPullSeq++;
+  const pane = $("#player-full");
+  pane.classList.remove("pulling", "snap");
+  pane.style.removeProperty("--pf-pull");
   // body.fullplayer is position:fixed, which collapses the document; remember where the
   // page was so closing puts it back instead of dropping the reader at the top.
   pfScrollRestore = Math.round(window.scrollY || 0);
@@ -4835,8 +5287,9 @@ function openFullPlayer(){
 }
 function closeFullPlayer(){
   const full = $("#player-full");
+  fullPullSeq++;                                     // a pending dismiss is moot now
   if (full.classList.contains("queue-open")) showFullQueue(false);
-  full.classList.remove("on");
+  full.classList.remove("on", "artmode");   // the record is the default next time it opens
   document.body.classList.remove("fullplayer");
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
   pfScratchRelease();
@@ -4848,6 +5301,9 @@ function closeFullPlayer(){
   }
 }
 let pfScrollRestore = null;
+// Every open/close starts a new pull generation: a dismiss timer that fires after the
+// pane was reopened must do nothing, or it closes the player the reader just opened.
+let fullPullSeq = 0;
 function fullPlayerOpen(){ return $("#player-full").classList.contains("on"); }
 const pfDisc = $("#pf-disc");
 const PF_DISC_TURN_SECONDS = 12, PF_DISC_SECONDS_PER_ROTATION = 1.8;
@@ -5248,6 +5704,32 @@ pfDisc.addEventListener('keydown',event=>{
 playerAudio.addEventListener('loadstart',()=>{pfDiscPhase=0;pfDisc.classList.remove('spinning','dragging');pfDisc.style.animationDelay='0s';pfDisc.style.transform='rotate(0deg)';pfDiscDrag=null;
   // A new track invalidates the decoded scratch copy; re-decode only if the popup is open.
   pfScratchRelease(); if(fullPlayerOpen()) pfScratchPrepare();});
+// Double-tap the cover to swap the record for the sleeve, and the sleeve for the record.
+// The tap is measured on the disc itself — a drag has travelled, a hold has lasted, so
+// neither counts, and a tap anywhere else in the player is not this gesture.
+let pfCoverTaps = 0, pfCoverDown = null;
+pfDisc.addEventListener('pointerdown', event => {
+  if (event.button > 0) return;
+  pfCoverDown = {id: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp};
+});
+pfDisc.addEventListener('pointercancel', () => { pfCoverDown = null; });
+pfDisc.addEventListener('pointerup', event => {
+  const down = pfCoverDown;
+  pfCoverDown = null;
+  if (!down || down.id !== event.pointerId) return;
+  if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 10) return;   // a scrub
+  if (event.timeStamp - down.at > 500) return;                                   // a hold
+  if (event.timeStamp - pfCoverTaps > 380){ pfCoverTaps = event.timeStamp; return; }
+  pfCoverTaps = 0;
+  setCoverArt(!$("#player-full").classList.contains("artmode"));
+});
+function setCoverArt(on){
+  const full = $("#player-full");
+  full.classList.toggle("artmode", !!on);
+  pfDisc.setAttribute("aria-description",
+    on ? "Album art. Double-tap to show the record again." : "Record. Double-tap to show the album art.");
+  paintPfDisc();
+}
 for(const event of ['play','pause','timeupdate','loadedmetadata','durationchange'])playerAudio.addEventListener(event,paintPfDisc);
 // Gestures. Up on the bar opens, down in the popup closes, left/right changes track.
 // The bar is mostly buttons, so the artwork and the title are the places to press and hold;
@@ -5273,17 +5755,7 @@ $("#plmeta").onclick = openFullPlayer;
 $("#pfqueue").onclick = event => {
   event.stopPropagation();
   const full = document.getElementById("player-full");
-  const opening = !full.classList.contains("queue-open");
-  if (opening){
-    // One panel at a time: the queue and the visualizer knobs share this column.
-    const knobs = document.getElementById("pfwaveknobs");
-    const waveBtn = document.getElementById("pfwave");
-    if (knobs && !knobs.hidden){
-      knobs.hidden = true; knobs.style.display = "none";
-      waveBtn?.classList.remove("on"); waveBtn?.setAttribute("aria-expanded", "false");
-    }
-  }
-  showFullQueue(opening);
+  showFullQueue(!full.classList.contains("queue-open"));
 };
 // The queue is the same element, physically moved into the fullscreen column, so it can
 // never behave like an overlay: the page itself rearranges around it.
@@ -5297,6 +5769,8 @@ function showFullQueue(open){
   const box = el => el.getBoundingClientRect();
   const finish = () => {
     slot.style.bottom = "";
+    // Out of the layout again: a parked slot would extend the player's scroll area.
+    slot.style.display = "none";
     const items = document.getElementById("playback-items");
     if (items) items.style.maxHeight = "";
     panel.classList.remove("in-full");
@@ -5307,6 +5781,7 @@ function showFullQueue(open){
     if (!panel._home) panel._home = {parent: panel.parentElement, next: panel.nextElementSibling};
     panel.classList.add("in-full");
     slot.appendChild(panel);
+    slot.style.display = "flex";
     togglePlaybackPanel(true);
     if (typeof paintPlaybackQueue === "function") paintPlaybackQueue();
     // How far the stack travels = the record's height. It can measure 0 while artwork is
@@ -5437,6 +5912,11 @@ $("#pflike").onclick = toggleLike;
   if (!full) return;
   let startY = null, dy = 0, dragging = false, ignore = false;
   full.addEventListener("pointerdown", event => {
+    // Touch and pen only, the same rule the swipe bindings keep: a mouse drag across the
+    // pane is a slip, and it used to shrink and dismiss the player.
+    if (event.pointerType === "mouse" || !event.isPrimary || event.button > 0){
+      ignore = true; startY = null; return;
+    }
     if (typeof fullPlayerOpen === "function" && !fullPlayerOpen()) { ignore = true; return; }
     ignore = !!event.target.closest("input,button,#pf-disc,.pf-queue-slot,#playback-panel,details,summary,a");
     startY = ignore ? null : event.clientY;
@@ -5473,9 +5953,11 @@ function setFullPull(progress){
 function commitFullPull(){
   const full = document.getElementById("player-full");
   if (!full) return;
+  const seq = ++fullPullSeq;
   full.classList.add("snap");
   full.style.setProperty("--pf-pull", "1");
   setTimeout(() => {
+    if (seq !== fullPullSeq) return;              // reopened or closed meanwhile
     full.classList.remove("pulling", "snap");
     full.style.removeProperty("--pf-pull");
   }, 260);
@@ -5483,9 +5965,12 @@ function commitFullPull(){
 function retreatFullPull(){
   const full = document.getElementById("player-full");
   if (!full || !full.classList.contains("pulling")) return;
+  const seq = ++fullPullSeq;
   full.classList.add("snap");
   full.style.setProperty("--pf-pull", "0");
   setTimeout(() => {
+    // Opening or closing starts a new generation; this dismiss is then history.
+    if (seq !== fullPullSeq) return;
     full.classList.remove("pulling", "snap");
     full.style.removeProperty("--pf-pull");
     if (typeof closeFullPlayer === "function" && full.classList.contains("on")) closeFullPlayer();
@@ -5499,6 +5984,9 @@ function retreatFullPull(){
   if (!bar) return;
   let startY = null, delta = 0, pulling = false, pointer = null;
   bar.addEventListener("pointerdown", event => {
+    // Touch and pen only: a mouse drag along the bar is a slip, not a pull. The bar's own
+    // buttons are how a desktop opens the player.
+    if (event.pointerType === "mouse" || !event.isPrimary || event.button > 0) return;
     // A pull can start anywhere on the bar, including over a control: nothing is captured
     // on the press, so a tap still lands on its button. The pointer is only taken once the
     // finger has actually travelled, and from then on the release is ours, not the button's.
@@ -5565,6 +6053,36 @@ document.addEventListener("keydown", e => {
   // Escape peels one layer at a time: the queue sheet first, then fullscreen.
   if (document.querySelector("#playback-panel")?.classList.contains("open")) return;
   closeFullPlayer();
+});
+
+// A song card's cover opens the album it came from, on a click or a tap, on both the
+// song wall and the table. Controls printed over the artwork keep their own action, and
+// the rest of the card keeps its compact/play behaviour. Capture, so the card's own
+// click handlers never fire for a tap that landed on the cover.
+$("#liblist").addEventListener("click", event => {
+  const thumb = event.target.closest?.('.songrow .thumb');
+  if (!thumb || event.target.closest('button,a,details,input,textarea,select,label')) return;
+  const row = thumb.closest('.songrow');
+  if (row.classList.contains('acard') || !row.dataset.id) return;
+  const id = Number(row.dataset.id);
+  const track = (currentRows || []).find(t => t.id === id) || (libAll || []).find(t => t.id === id);
+  if (!track) return;
+  event.preventDefault(); event.stopPropagation();
+  openTrackAlbum(track);
+}, true);
+
+// A table row plays on one click, the way the phone has always behaved; the artwork
+// inside it opens the album instead (the handler just above). A double click keeps its
+// queue-next gesture, and a row's own buttons keep theirs.
+$("#liblist").addEventListener("click", event => {
+  if (event.detail > 1) return;
+  if (performance.now() - songTouchPlayedAt < 500) return;   // a tap already played it
+  const row = event.target.closest('.songrow');
+  if (!row || row.classList.contains('songcard') || row.dataset.album) return;
+  if (event.target.closest('button,a,details,input,textarea,select,label')) return;
+  const id = Number(row.dataset.id);
+  if (!id) return;
+  playTrackNow(id);
 });
 
 // Compact cards: a tap on the body opens that card. A tap on a control inside it belongs
@@ -5737,6 +6255,136 @@ for (const event of ["loadedmetadata", "durationchange", "seeked", "ratechange"]
 playerAudio.addEventListener("timeupdate", () => pushPositionState(false));
 playerAudio.addEventListener("play", () => { publishPlaybackState(); pushPositionState(true); if (typeof paintPlayerSave === "function") paintPlayerSave(); });
 playerAudio.addEventListener("pause", publishPlaybackState);
+
+// ------------------------------------------------------------------ offline audio
+// A song that has actually played is kept whole in the service worker's audio cache, so the
+// next play of that song comes from disk. Bounded by a budget the listener sets; the oldest
+// copy is dropped first. The browser may still evict on its own, so the dialog reports what is
+// held rather than promising anything, and "Remove copies" is the honest escape hatch.
+const OFFLINE_CACHE = "hardlylistening-audio-v1";   // named in sw.js as well
+const OFFLINE_KEY = "hl.offlineBudget";             // bytes; 0 = keep nothing
+const OFFLINE_INDEX = "hl.offlineIndex";            // track id -> {bytes, at}
+const OFFLINE_DEFAULT = 2 * 1024 ** 3;
+const offlineKey = id => `/api/track/${id}/audio`;
+function offlineBudget(){
+  const raw = localStorage.getItem(OFFLINE_KEY);
+  if (raw === null) return OFFLINE_DEFAULT;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+function offlineIndex(){
+  try { return JSON.parse(localStorage.getItem(OFFLINE_INDEX) || "{}") || {}; } catch (_) { return {}; }
+}
+function saveOfflineIndex(index){
+  try { localStorage.setItem(OFFLINE_INDEX, JSON.stringify(index)); } catch (_) {}
+}
+function offlineStats(){
+  let bytes = 0, count = 0;
+  for (const entry of Object.values(offlineIndex())){
+    bytes += Number(entry && entry.bytes) || 0;
+    count += 1;
+  }
+  return {bytes, count};
+}
+async function cachePlayedAudio(id){
+  if (!id || !offlineBudget() || !("caches" in self)) return;
+  const index = offlineIndex();
+  // Already kept: touch it, so it is the last candidate for eviction, and stop.
+  if (index[id]){ index[id].at = Date.now(); saveOfflineIndex(index); return; }
+  try {
+    // A prefetched song is already in memory, so keep those bytes instead of asking the
+    // server for the same file a second time. Only a song that streamed needs the fetch.
+    const memory = aheadAudio.get(id);
+    const response = memory ? await fetch(memory) : await fetch(offlineKey(id), {cache: "no-store"});
+    // Only a whole file is worth keeping: a 206 is one slice and would poison the copy.
+    if (response.status !== 200) return;
+    const blob = await response.blob();
+    if (!blob.size) return;
+    const cache = await caches.open(OFFLINE_CACHE);
+    // Our own Response, so no Vary header can make the worker's lookup miss.
+    await cache.put(offlineKey(id), new Response(blob, {headers: {
+      "Content-Type": response.headers.get("Content-Type") || "audio/mpeg",
+      "Content-Length": String(blob.size), "Accept-Ranges": "bytes"}}));
+    index[id] = {bytes: blob.size, at: Date.now()};
+    saveOfflineIndex(index);
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    await offlineEvict();
+  } catch (_) { /* no cache or no quota: streaming still works, so say nothing */ }
+}
+async function offlineEvict(){
+  const budget = offlineBudget();
+  const index = offlineIndex();
+  const entries = Object.entries(index).map(([id, entry]) => ({id, bytes: Number(entry && entry.bytes) || 0, at: Number(entry && entry.at) || 0}));
+  let total = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  if (total <= budget) return;
+  const cache = await caches.open(OFFLINE_CACHE);
+  entries.sort((a, b) => a.at - b.at);
+  for (const entry of entries){
+    if (total <= budget) break;
+    if (String(entry.id) === String(playingId)) continue;  // never drop what is playing
+    await cache.delete(offlineKey(entry.id));
+    delete index[entry.id];
+    total -= entry.bytes;
+  }
+  saveOfflineIndex(index);
+}
+// The browser can clear site storage without telling anyone; the index is only a claim, so
+// check it against the cache before showing a figure.
+async function offlineReconcile(){
+  if (!("caches" in self)) return offlineStats();
+  const cache = await caches.open(OFFLINE_CACHE);
+  const index = offlineIndex();
+  for (const id of Object.keys(index)){
+    if (!(await cache.match(offlineKey(id)))) delete index[id];
+  }
+  saveOfflineIndex(index);
+  return offlineStats();
+}
+async function clearOfflineAudio(){
+  try {
+    const cache = await caches.open(OFFLINE_CACHE);
+    for (const id of Object.keys(offlineIndex())) await cache.delete(offlineKey(id));
+    saveOfflineIndex({});
+  } catch (_) {}
+  paintOfflineDialog();
+  showToast("Offline copies removed");
+}
+function openOfflineDialog(){
+  const dialog = $("#dlg-offline");
+  paintOfflineDialog();
+  if (typeof dialog.showModal === "function") dialog.showModal();
+  else dialog.setAttribute("open", "");
+  offlineReconcile().then(paintOfflineDialog).catch(() => {});
+}
+function paintOfflineDialog(){
+  const select = $("#offline-budget"), status = $("#offline-status");
+  if (!select || !status) return;
+  const budget = offlineBudget();
+  select.value = String(budget);
+  const {bytes, count} = offlineStats();
+  status.textContent = budget
+    ? `${fmtBytes(bytes)} of ${fmtBytes(budget)} · ${count} song${count === 1 ? "" : "s"} kept on this device`
+    : "Off — nothing is kept; every play streams.";
+}
+async function setOfflineBudget(value){
+  const bytes = Math.max(0, Number(value) || 0);
+  localStorage.setItem(OFFLINE_KEY, String(bytes));
+  if (bytes){
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    if (Object.keys(offlineIndex()).length) await offlineEvict();
+  } else {
+    await clearOfflineAudio();     // "Off" means no copies, not "keep them but stop adding"
+  }
+  paintOfflineDialog();
+}
+// Keep a song only once it is actually playing: the copy must never compete with the first
+// seconds of the stream. One timer, so a skip cancels the song it was going to keep.
+let offlineTimer = 0;
+playerAudio.addEventListener("playing", () => {
+  const id = playingId;
+  clearTimeout(offlineTimer);
+  offlineTimer = setTimeout(() => { if (playingId === id) cachePlayedAudio(id); }, 5000);
+});
 // bindMediaSession() runs here, after playFromLibrary is defined; it closes over the
 // transport functions above, so the car's buttons always drive the live queue.
 $("#plseek").addEventListener("input", e => {
@@ -5772,6 +6420,23 @@ $("#plmute").onclick = () => {
   $("#plmute").setAttribute("aria-pressed", String(muted));
   paintVolume();
 };
+// The top bar's volume is a toggle: the speaker (left of shuffle) opens a fader into the
+// space to its left and stays open across sessions, because a level you chose to see
+// should not close itself between visits. The level itself is `hl.volume`, painted from
+// the audio element.
+const VOL_OPEN_KEY = "hl.compactVolume";
+function paintVolumeToggle(){
+  const open = localStorage.getItem(VOL_OPEN_KEY) === "1";
+  $("#plvolslot").classList.toggle("open", open);
+  const button = $("#plvolbtn");
+  if (!button) return;
+  button.classList.toggle("on", open);
+  button.setAttribute("aria-pressed", String(open));
+}
+$("#plvolbtn").onclick = () => {
+  localStorage.setItem(VOL_OPEN_KEY, localStorage.getItem(VOL_OPEN_KEY) === "1" ? "0" : "1");
+  paintVolumeToggle();
+};
 
 window.addEventListener("pagehide", () => {
   for (const controller of aheadJobs.values()) controller.abort();
@@ -5782,6 +6447,7 @@ window.addEventListener("pagehide", () => {
 
 // ------------------------------------------------------------------ init
 $("#plshuffle").innerHTML = SVG.shuffle(16);
+$("#plvolbtn").innerHTML = SVG.volume(16);
 $("#plprev").innerHTML = SVG.prev(20);
 $("#plplay").innerHTML = SVG.play(14);
 $("#plnext").innerHTML = SVG.next(20);
@@ -5801,6 +6467,7 @@ const VOLUME_SETTABLE = (() => {
   return ok;
 })();
 if (!VOLUME_SETTABLE) document.documentElement.classList.add("no-volume");
+paintVolumeToggle();
 $("#libsort").value = libSort;
 setView(libView);
 paintPlayerModes();
@@ -6215,14 +6882,19 @@ function toggleGroup(head){
 // ---- release rows: an album opens to its songs, each downloadable on its own ----
 // Nothing here repaints the feed: a tracklist is filled into its own container the
 // first time it is opened, then only shown and hidden.
-async function fillTracks(box, url){
-  if (box.dataset.loaded) return;
-  box.innerHTML = `<div class="feedtrkmsg">Reading the tracklist…</div>`;
+async function loadReleaseTracks(url){
   const response = await fetch(`/api/tracks?url=${encodeURIComponent(url)}`, {cache: "no-store"});
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Could not read that tracklist");
   const tracks = data.tracks || [];
   if (!tracks.length) throw new Error("That release has no separate songs");
+  return tracks;
+}
+
+async function fillTracks(box, url){
+  if (box.dataset.loaded) return;
+  box.innerHTML = `<div class="feedtrkmsg">Reading the tracklist…</div>`;
+  const tracks = await loadReleaseTracks(url);
   box.innerHTML = tracks.map(t => `<div class="feedtrk">
       <span class="feedtrkno">${t.n}</span>
       <span class="feedtrkname" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</span>
@@ -6330,7 +7002,9 @@ function artistSongTile(release){
 
 function artistSongsHtml(releases){
   if (!releases.length)
-    return `<div class="empty">No singles yet — everything this artist published is in the albums above.</div>`;
+    return `<div class="empty">${artistFilterQuery()
+      ? "Nothing here matches that filter."
+      : "No singles yet — everything this artist published is in the albums above."}</div>`;
   // Same containers the Library uses, so the same remembered column count applies
   // instead of a second grid that only looks similar.
   if (artistLayout === "cards")
@@ -6363,62 +7037,286 @@ function setArtistLayout(layout){
   artistLayout = layout;
   try { localStorage.setItem("hl.artistLayout", layout); } catch (_) {}
   paintArtistLayout();
-  const host = document.getElementById("fapSongs");
-  if (host) paintArtistSongs();
+  paintArtistPanes();
 }
 
 function paintArtistSongs(){
   const host = document.getElementById("fapSongs");
   if (!host || !artistPageData) return;
-  const songs = (artistPageData.releases || []).filter(r => !albumLike(r));
+  const all = artistPageData.tracks || [];
+  const q = artistFilterQuery();
+  const songs = q ? all.filter(t => artistMatches(t.title) || artistMatches(t.album)
+    || artistMatches(t.artist)) : all;
   host.innerHTML = artistSongsHtml(songs);
   host.querySelectorAll("[data-cat-open]").forEach(b => b.onclick = () =>
     window.open(b.dataset.catOpen, "_blank", "noopener"));
   bindReleaseRows(host);
+  const meter = document.getElementById("fap-song-meter");
+  if (meter) meter.textContent = `${songs.length} of ${artistPageData.track_total} songs`;
+  paintArtistFooter();
 }
 
-function artistAlbumGrid(albums){
-  if (!albums.length)
-    return `<div class="empty">No albums — every release is a single.</div>`;
-  return `<div class="covergrid fagrid">${albums.map((album, index) => `
-    <button type="button" class="covercell" data-faalbum="${index}"
-      title="${escapeHtml(album.title)} — show songs">
-      ${artBox(album.artwork, album.title, "coverart")}
-      <span class="covername"><b>${escapeHtml(album.title)}</b></span>
-    </button>`).join("")}</div>
-    <div id="fapalbumtracks" class="feedtracks" hidden></div>`;
+// The rest of the discography is one tap away, not a wall of cards on first paint.
+function paintArtistFooter(){
+  const foot = document.getElementById("fap-foot");
+  if (!foot || !artistPageData) return;
+  const shown = (artistPageData.tracks || []).length;
+  const total = Number(artistPageData.track_total || 0);
+  foot.innerHTML = `${shown < total
+    ? `<button type="button" class="ghost" id="fap-more">Load more songs (${shown} of ${total})</button>`
+    : ""}<span id="fap-more-status" role="status"></span>`;
+  const more = document.getElementById("fap-more");
+  if (more) more.onclick = loadMoreArtistSongs;
 }
 
-async function showArtistAlbum(index){
-  const album = (artistPageAlbums || [])[index];
-  const box = document.getElementById("fapalbumtracks");
-  if (!album || !box) return;
-  if (box.dataset.open === album.source_url && !box.hidden){
-    box.hidden = true; box.dataset.open = ""; return;
+async function loadMoreArtistSongs(){
+  if (!artistPageData || artistPageLoading || artistPageData.tracks.length >= artistPageData.track_total) return;
+  const watchId = artistPageWatch;
+  const offset = artistPageData.tracks.length;
+  artistPageLoading = true;
+  const button = document.getElementById("fap-more");
+  if (button) { button.disabled = true; button.textContent = "Loading…"; }
+  try {
+    const page = await loadCatalogue(watchId, offset);
+    if (watchId !== artistPageWatch || !artistPageData) return;
+    artistPageData.tracks.push(...(page.tracks || []));
+    artistPageData.track_total = page.track_total;
+    paintArtistSongs();
+  } catch (error) {
+    const status = document.getElementById("fap-more-status");
+    if (status) status.textContent = error.message;
+  } finally {
+    artistPageLoading = false;
+    const current = document.getElementById("fap-more");
+    if (current) current.disabled = false;
   }
-  box.dataset.open = album.source_url;
-  box.hidden = false;
-  box.innerHTML = `<div class="fapalbumhead">
-      <b>${escapeHtml(album.title)}</b>
-      <button type="button" class="ghost small" id="fapalbumclose">Close</button>
-    </div><div class="faptracks"></div>`;
-  document.getElementById("fapalbumclose").onclick = () => {
-    box.hidden = true; box.dataset.open = "";
-  };
-  const host = box.querySelector(".faptracks");
-  try { await fillTracks(host, album.source_url); }
-  catch (e){ host.innerHTML = `<div class="feedtrkmsg">${escapeHtml(e.message)}</div>`; }
+}
+
+// ---- the artist page's two sections ----------------------------------------
+// Albums and Songs are tabs — the same square icon switch the Library uses — and the
+// layout switch (cards / covers / rows) applies to both. The row above the pane carries
+// the tabs on the left and the layout at its right, so nothing is stacked twice.
+const ARTIST_TABS = ["albums", "songs"];
+let artistTab = (() => {
+  try { const saved = localStorage.getItem("hl.artistTab");
+    return ARTIST_TABS.includes(saved) ? saved : "albums"; } catch (_) { return "albums"; }
+})();
+let artistFilter = "";
+let renderedArtistAlbums = [];
+
+function artistFilterQuery(){ return artistFilter.trim().toLowerCase(); }
+function artistMatches(text){
+  const q = artistFilterQuery();
+  return !q || String(text || "").toLowerCase().includes(q);
+}
+function artistAlbumMeta(album){
+  const n = Number(album.track_count || 0);
+  return `${n ? `${n} song${n === 1 ? "" : "s"}` : "Album"}${
+    album.release_date ? ` · ${escapeHtml(album.release_date)}` : ""}`;
+}
+
+function artistAlbumCard(album, index){
+  return `<button type="button" class="facard" data-faalbum="${index}"
+    title="Open ${escapeHtml(album.title)}">
+    ${artBox(album.artwork, album.title, "facover")}
+    <span class="fatitle">${escapeHtml(album.title)}</span>
+    <span class="fametas">${artistAlbumMeta(album)}</span>
+  </button>`;
+}
+
+function artistAlbumTile(album, index){
+  return `<button type="button" class="covercell" data-faalbum="${index}"
+    title="${escapeHtml(album.title)} — open album">
+    ${artBox(album.artwork, album.title, "coverart")}
+    <span class="covername"><b>${escapeHtml(album.title)}</b></span>
+  </button>`;
+}
+
+function artistAlbumRow(album, index){
+  const letter = (album.title || "?").slice(0, 1).toUpperCase();
+  return `<div class="feedrel" data-faalbum="${index}" tabindex="0" role="button"
+    aria-label="Open ${escapeHtml(album.title)}">
+    <div class="feedcard">
+      <div class="feedart">${letter}${album.artwork
+        ? `<img src="${escapeHtml(album.artwork)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>
+      <div class="feedmain">
+        <div class="feedtitle">${escapeHtml(album.title)}</div>
+        <div class="feedmeta">${artistAlbumMeta(album)}</div>
+      </div>
+      <div class="feedacts"><span class="fapchev" aria-hidden="true">›</span></div>
+    </div>
+  </div>`;
+}
+
+function artistAlbumsHtml(albums){
+  if (!albums.length)
+    return `<div class="empty">${artistFilterQuery()
+      ? "Nothing here matches that filter."
+      : "No albums — every release is a single."}</div>`;
+  if (artistLayout === "cards") return `<div class="songgrid">${albums.map(artistAlbumCard).join("")}</div>`;
+  if (artistLayout === "grid") return `<div class="covergrid">${albums.map(artistAlbumTile).join("")}</div>`;
+  return `<div class="falist">${albums.map(artistAlbumRow).join("")}</div>`;
+}
+
+function artistTabsHtml(){
+  const icon = (name, title, inner) => `<button type="button" data-fatab="${name}"
+    title="${title}" aria-label="${title}" aria-pressed="${artistTab === name}"
+    class="${artistTab === name ? "on" : ""}">${inner}</button>`;
+  return `<nav class="seg" id="fapTabs" aria-label="Artist section">${
+    icon("albums", "Albums", `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.2"/></svg>`)
+  }${icon("songs", "Songs", `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6.5l9-2V16"/><circle cx="6.6" cy="18" r="2.4"/><circle cx="15.6" cy="16" r="2.4"/></svg>`)
+  }</nav>`;
+}
+
+function paintArtistTabs(){
+  const seg = document.getElementById("fapTabs");
+  if (!seg) return;
+  seg.querySelectorAll("[data-fatab]").forEach(b => {
+    const on = b.dataset.fatab === artistTab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => setArtistTab(b.dataset.fatab);
+  });
+}
+
+function setArtistTab(tab){
+  if (!ARTIST_TABS.includes(tab)) return;
+  artistTab = tab;
+  try { localStorage.setItem("hl.artistTab", tab); } catch (_) {}
+  paintArtistTabs();
+  paintArtistPanes();
+}
+
+// One pane at a time: the inactive one is emptied, so a big discography is not kept in
+// the DOM behind the albums (and vice versa).
+function paintArtistPanes(){
+  const albumsHost = document.getElementById("fapAlbums");
+  const songsHost = document.getElementById("fapSongs");
+  const foot = document.getElementById("fap-foot");
+  const meter = document.getElementById("fap-song-meter");
+  if (!albumsHost || !songsHost || !artistPageData) return;
+  const q = artistFilterQuery();
+  const onAlbums = artistTab === "albums";
+  albumsHost.hidden = !onAlbums;
+  songsHost.hidden = onAlbums;
+  if (foot) foot.hidden = onAlbums;
+  if (onAlbums){
+    songsHost.innerHTML = "";
+    if (foot) foot.innerHTML = "";
+    const albums = (artistPageAlbums || []).filter(a =>
+      artistMatches(a.title) || artistMatches(a.release_date));
+    renderedArtistAlbums = albums;
+    albumsHost.innerHTML = artistAlbumsHtml(albums);
+    albumsHost.querySelectorAll("[data-faalbum]").forEach(el => {
+      el.onclick = () => showArtistAlbum(Number(el.dataset.faalbum));
+      if (el.getAttribute("role") === "button")
+        el.onkeydown = e => {
+          if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.click(); }
+        };
+    });
+    if (meter) meter.textContent = `${albums.length} album${albums.length === 1 ? "" : "s"}${
+      q ? " shown" : ""}`;
+    return;
+  }
+  albumsHost.innerHTML = "";
+  paintArtistSongs();
+}
+
+// Opening an album is a page, not a fold-out under the grid: the artist head steps
+// aside and the same hero + tracklist shape the Repo's album page uses takes over.
+// Two quick taps must not paint the older album last.
+let artistAlbumSeq = 0;
+async function showArtistAlbum(index){
+  const seq = ++artistAlbumSeq;
+  const album = (renderedArtistAlbums || [])[index];
+  const page = document.getElementById("feedartistpage");
+  const body = document.getElementById("fapbody");
+  const view = document.getElementById("fapalbumview");
+  const head = page && page.querySelector(".fahead");
+  if (!album || !body || !view) return;
+  body.hidden = true;
+  if (head) head.hidden = true;
+  view.hidden = false;
+  view.innerHTML = `<div class="feedtrkmsg">Reading “${escapeHtml(album.title)}”…</div>`;
+  scrollTo({top: 0, behavior: "instant"});
+  try {
+    const tracks = await loadReleaseTracks(album.source_url);
+    // A newer album was opened, or the page was closed, while this one was reading.
+    if (seq !== artistAlbumSeq || !document.body.contains(view)) return;
+    view.innerHTML = artistAlbumPage(album, tracks);
+    bindReleaseRows(view);
+    view.querySelectorAll("[data-track-url]").forEach(b => b.onclick = () => queueOne(b));
+  } catch (e) {
+    if (seq !== artistAlbumSeq || !document.body.contains(view)) return;
+    view.innerHTML = `<div class="feedtrkmsg">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function closeArtistAlbum(){
+  artistAlbumSeq++;                                  // a pending read must not repaint
+  const page = document.getElementById("feedartistpage");
+  const body = document.getElementById("fapbody");
+  const view = document.getElementById("fapalbumview");
+  const head = page && page.querySelector(".fahead");
+  if (view){ view.hidden = true; view.innerHTML = ""; }
+  if (body) body.hidden = false;
+  if (head) head.hidden = false;
+  scrollTo({top: 0, behavior: "instant"});
+}
+
+// The one Back in the artist page is also the album page's Back: whichever level
+// is on screen is the one it leaves.
+function feedArtistBack(){
+  const view = document.getElementById("fapalbumview");
+  if (view && !view.hidden) closeArtistAlbum();
+  else closeArtistPage();
+}
+
+function artistAlbumPage(album, tracks){
+  const artist = (artistPageData && artistPageData.artist) || "";
+  const total = tracks.reduce((n, t) => n + Number(t.duration || 0), 0);
+  const when = album.release_date ? ` · ${escapeHtml(album.release_date)}` : "";
+  const rows = tracks.map(t => `
+    <div class="songrow">
+      <div class="thumb">${album.artwork ? artImg(album.artwork, "", true) : ""}</div>
+      <div class="st"><span class="sttext"><b>${escapeHtml(t.title)}</b></span></div>
+      <div class="sartist">${escapeHtml(t.artist || artist)}</div>
+      <div class="sdur">${t.duration ? fmtClock(t.duration) : ""}</div>
+      <span class="send">
+        <button type="button" class="sdl-grab" data-track-url="${escapeHtml(t.url)}"
+          data-track-title="${escapeHtml(t.title)}"
+          aria-label="Download ${escapeHtml(t.title)}"
+          title="Download ${escapeHtml(t.title)}">${DOWNLOAD_ICON}</button>
+      </span>
+    </div>`).join("");
+  return `<div class="hero">
+      ${artBox(album.artwork, album.title, "hart")}
+      <div class="hmeta">
+        <div class="kicker">Album</div>
+        <h3>${escapeHtml(album.title)}</h3>
+        <div class="hsub">${escapeHtml(artist)} · ${tracks.length} song${tracks.length === 1 ? "" : "s"}${
+          total ? ` · ${fmtLong(total)}` : ""}${when}</div>
+        <div class="hacts">
+          <button type="button" class="primary" data-cat-url="${escapeHtml(album.source_url)}"
+            data-cat-title="${escapeHtml(album.title)}">${SVG.download(16)} Download album</button>
+        </div>
+      </div>
+    </div>
+    <div class="songtable fapalbumtable">${rows}</div>`;
 }
 
 let artistPageData = null;
+let artistPageLoading = false;
 
-async function loadCatalogue(watchId){
-  const cached = catalogueCache.get(Number(watchId));
+async function loadCatalogue(watchId, offset){
+  const pageStart = Number(offset || 0);
+  const key = `${Number(watchId)}:${pageStart}`;
+  const cached = catalogueCache.get(key);
   if (cached) return cached;
-  const response = await fetch(`/api/catalogue?watch=${watchId}`, {cache: "no-store"});
+  const response = await fetch(`/api/catalogue?watch=${watchId}&offset=${pageStart}`, {cache: "no-store"});
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Could not read that catalogue");
-  catalogueCache.set(Number(watchId), data);
+  catalogueCache.set(key, data);
   return data;
 }
 
@@ -6443,7 +7341,7 @@ function forgetFeedArtistReturn(){ feedArtistReturn = null; }
 function repoArtistNamed(name){
   const key = String(name || "").trim().toLowerCase();
   if (!key) return null;
-  const found = artistsOf(albumsOf(scopedTracks())).find(a =>
+  const found = artistsOf(scopedTracks()).find(a =>
     String(a.name || "").trim().toLowerCase() === key);
   return found ? found.name : null;
 }
@@ -6490,11 +7388,16 @@ async function openArtistPage(watchId, name, art){
     <div class="fahead">
       <div class="faart">${(name || "?").slice(0, 1).toUpperCase()}${art
         ? `<img src="${escapeHtml(art)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>
-      <div><div class="faname">${escapeHtml(name)}</div>
+      <div class="faid"><div class="faname">${escapeHtml(name)}</div>
         <div class="fameta" id="fapmeta">Reading the catalogue…</div></div>
+      <label class="fasearch">
+        <input type="text" id="fapsearch" placeholder="Filter albums and songs"
+          aria-label="Filter this artist">
+      </label>
     </div>
-    <div id="fapbody"><div class="empty">Reading the catalogue…</div></div>`;
-  document.getElementById("fapback").onclick = closeArtistPage;
+    <div id="fapbody"><div class="empty">Reading the catalogue…</div></div>
+    <div id="fapalbumview" hidden></div>`;
+  document.getElementById("fapback").onclick = feedArtistBack;
   document.getElementById("faprepo").onclick = () => openArtistInRepo(name);
   const meta = document.getElementById("fapmeta");
   const body = document.getElementById("fapbody");
@@ -6503,19 +7406,32 @@ async function openArtistPage(watchId, name, art){
     if (artistPageWatch !== Number(watchId)) return;      // a different artist was opened
     artistPageData = data;
     const releases = data.releases || [];
-    artistPageAlbums = releases.filter(albumLike).slice(0, 4);
-    const songs = releases.filter(r => !albumLike(r));
-    meta.textContent = `${artistPageAlbums.length} album${artistPageAlbums.length === 1 ? "" : "s"} · ${songs.length} song${
-      songs.length === 1 ? "" : "s"} · ${watch ? (watch.enabled ? "subscribed" : "paused") : ""}`.trim();
+    // Every album the catalogue knows, not the four newest.
+    artistPageAlbums = releases.filter(albumLike);
+    // Songs come from the stored catalogue. A payload without `tracks` (an
+    // older server) still works: the single-track releases are the songs.
+    if (!Array.isArray(data.tracks)) data.tracks = releases.filter(r => !albumLike(r));
+    if (typeof data.track_total !== "number") data.track_total = data.tracks.length;
+    meta.textContent = `${artistPageAlbums.length} album${artistPageAlbums.length === 1 ? "" : "s"} · ${data.track_total} song${
+      data.track_total === 1 ? "" : "s"} · ${watch ? (watch.enabled ? "subscribed" : "paused") : ""}`.trim();
+    artistFilter = "";
     body.innerHTML = `
-      <div class="fasec"><span>Albums</span><span>${artistPageAlbums.length ? "newest first" : ""}</span></div>
-      ${artistAlbumGrid(artistPageAlbums)}
-      <div class="fasec"><span>Songs</span>${artistLayoutSeg()}</div>
-      <div id="fapSongs"></div>`;
+      <div class="fatop">
+        ${artistTabsHtml()}
+        ${artistLayoutSeg()}
+      </div>
+      <div class="fameta" id="fap-song-meter"></div>
+      <div id="fapAlbums"></div>
+      <div id="fapSongs" hidden></div>
+      <div class="fafoot" id="fap-foot" hidden></div>`;
+    paintArtistTabs();
     paintArtistLayout();
-    paintArtistSongs();
-    body.querySelectorAll("[data-faalbum]").forEach(b => b.onclick = () =>
-      showArtistAlbum(Number(b.dataset.faalbum)));
+    paintArtistPanes();
+    const filterInput = document.getElementById("fapsearch");
+    if (filterInput){
+      filterInput.value = "";
+      filterInput.oninput = () => { artistFilter = filterInput.value; paintArtistPanes(); };
+    }
   } catch (e) {
     meta.textContent = "Could not read the catalogue";
     body.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
@@ -6537,9 +7453,12 @@ function renderFeed(){
     const toggle = () => toggleGroup(b);
     b.onclick = event => {
       if (event.target.closest("[data-follow-url],[data-unsub]")) return;
-      if (event.target.closest(".feedgart")){
+      // The portrait and the name are both the door to the artist's page; the rest
+      // of the row still folds the group open and shut.
+      if (event.target.closest(".feedgart,.feedgname")){
         const group = groups.find(g => g.name === b.dataset.artist);
-        if (group && group.watch) openArtistPage(group.watch.id, group.name, group.art);
+        if (group && group.watch && group.watch.id)
+          openArtistPage(group.watch.id, group.name, group.art);
         return;
       }
       toggle();
@@ -7002,6 +7921,8 @@ $("#navpanel").addEventListener("click", (event) => { if (event.target.closest("
 document.querySelectorAll(".tab[data-view]").forEach(tab => {
   tab.onclick = () => {
     const view = tab.dataset.view;
+    // Leaving this page ends the undo window: a removed item is gone as soon as you go.
+    clearLibraryPeek();
     // Land on this page again after a reload.
     localStorage.setItem("hl.view", view);
     if (view === "library") localStorage.setItem("hl.scope", tab.dataset.scope || "shared");
@@ -7745,20 +8666,19 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
       const track = (currentRows || []).find(t => t.id === id) || (libAll || []).find(t => t.id === id) || {};
       const playable = !!track.playable;
       const saved = (listeningSaves?.tracks || []).includes(id);
+      // The queue actions lead; Discuss sits second to last, just above the save control,
+      // so the one entry that leaves the library is never the first thing under a tap.
       if (options.tile){
         entry("Play", () => playTrackNow(id), !playable);
         entry("Download", () => download(`/api/track/${id}/download`), !playable);
-        entry(saved ? "Remove from library" : "Add to library", () => toggleListeningSave("track", id), !listeningSaves);
       }
-      entry("Discuss", () => openDiscussion("track", id));
       entry("Play next", () => queueSong(id, true), !playable);
       entry("Add to queue", () => queueSong(id), !playable);
       entry("Boost to top of Feed (24h)", () => boostTrack(id));
       entry("Add to playlist…", () => openPlaylistEditor(id));
-      if (!options.tile){
-        entry("Download", () => download(`/api/track/${id}/download`), !playable);
-        entry(saved ? "Remove from library" : "Add to library", () => toggleListeningSave("track", id), !listeningSaves);
-      }
+      if (!options.tile) entry("Download", () => download(`/api/track/${id}/download`), !playable);
+      entry("Discuss", () => openDiscussion("track", id));
+      entry(saved ? "Remove from library" : "Add to library", () => toggleListeningSave("track", id), !listeningSaves);
     } else if (kind === "album"){
       const albums = typeof renderedAlbums !== "undefined" ? renderedAlbums : [];
       const index = albums.findIndex(a => a.key === id);
@@ -7986,15 +8906,16 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
 })();
 
 // ---- waveform visualizer ----------------------------------------------------
-// Client-side only — and deliberately outside the audio path. Routing the playing
-// <audio> element through a Web Audio graph to read an AnalyserNode has a cost that is
-// invisible on a desktop: the element's sound then only exists while that audio context
-// is running, so a locked phone (or a hidden tab, or a stalling mixer) cuts playback
-// dead instead of continuing. So the wave is built from the track's own samples: the
-// file is decoded inside the page and reduced to a peak envelope, which is what the eye
-// actually reads anyway. One envelope serves the compact scrub and the fullscreen ring /
-// pane line / aura; each surface is its own canvas and its own draw branch, so an option
-// is removed by deleting its markup line, its CSS block and its branch — nothing else.
+// Client-side only — and the compact wave stays outside the audio path. Routing the
+// playing <audio> element through a Web Audio graph to read an AnalyserNode has a cost
+// that is invisible on a desktop: the element's sound then only exists while that audio
+// context is running, so a locked phone (or a hidden tab, or a stalling mixer) cuts
+// playback dead instead of continuing. So the low wave is built from the track's own
+// samples: the file is decoded inside the page and reduced to a peak envelope. The header
+// is the one exception — it asks for bass / mids / treble, which no envelope can tell
+// apart, so it alone reads a real AnalyserNode, and only at >=900 px where its canvas
+// exists (see `spectrum()`). Each surface is its own canvas and its own draw branch, so an
+// option is removed by deleting its markup line, its CSS block and its branch.
 (() => {
   const audio = document.getElementById('player-audio');
   if (!audio) return;
@@ -8002,6 +8923,11 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   // Off until asked for: the player has to cost nothing extra out of the box.
   const cfg = {bars: 64, level: 30, smooth: 25, mirror: true, enabled: true};
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) {}
+  // Denser than the old knob's ceiling: one and a half times the bar count the config
+  // resolves to (96 from the 64 default), so the compact wave reads as a waveform rather
+  // than a handful of columns. The persisted value is legacy and never written back, so
+  // this never compounds from one page load to the next.
+  cfg.bars = Math.round(cfg.bars * 1.5);
   cfg.enabled = cfg.enabled !== false;   // on unless deliberately turned off
   let accent = '#58d3a8';
   try {
@@ -8016,35 +8942,6 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   };
   const reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-  // Bound here, not at the bottom of this module: everything below can return early
-  // (no canvas on this surface) and when it did, the click handler was never attached —
-  // the button then does nothing no matter how correct the markup and CSS are.
-  (function bindWaveToggle(){
-    const toggle = document.getElementById('pfwave');
-    const panel = document.getElementById('pfwaveknobs');
-    if (!toggle || !panel) return;
-    toggle.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopPropagation();
-      const opening = panel.hidden;
-      const slot = document.getElementById('pf-queue-slot');
-      // One panel at a time, and it lives where the queue lives: the same slot in the
-      // fullscreen column, so it scrolls there instead of squeezing the transport.
-      if (opening && typeof showFullQueue === 'function') showFullQueue(false);
-      if (!panel._home) panel._home = {parent: panel.parentElement, next: panel.nextElementSibling};
-      if (opening && slot){ slot.appendChild(panel); panel.classList.add('in-slot'); }
-      panel.hidden = !opening;
-      panel.style.display = opening ? '' : 'none';
-      if (!opening && panel._home && panel._home.parent){
-        panel.classList.remove('in-slot');
-        panel._home.parent.insertBefore(panel, panel._home.next || null);
-      }
-      toggle.classList.toggle('on', opening);
-      toggle.setAttribute('aria-expanded', String(opening));
-      if (opening){ try { paint(); } catch (_) { /* surfaces not built yet */ } }
-    });
-  })();
-
   const surfaces = [];
   const add = (sel, mode) => {
     const canvas = document.querySelector(sel);
@@ -8052,10 +8949,13 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     surfaces.push({canvas, mode, g: canvas.getContext('2d')});
   };
   add('#player .plwave-seek', 'seek');
+  add('#hdr-wave', 'header');
   if (!surfaces.length) return;
 
   // ---- the envelope: one decode per track, no analysis of the live stream ----------
-  const PEAK_N = 192, PEAK_MAX_TRACKS = 12;
+  // 512 points is more than the widest canvas has bars (469 at 1072 px of bar), so no
+  // bar ever repeats its neighbour's value; the old 192 produced visible plateaus.
+  const PEAK_N = 512, PEAK_MAX_TRACKS = 12;
   const peaks = new Map();       // track id -> Float32Array(PEAK_N), 0..1
   const loading = new Set();
   let decoderCtx = null;
@@ -8080,20 +8980,26 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     const data = [];
     for (let c = 0; c < Math.min(2, buffer.numberOfChannels); c++) data.push(buffer.getChannelData(c));
     for (let i = 0; i < PEAK_N; i++){
-      let peak = 0;
+      // RMS, not peak: a one-second peak is almost always the loudest transient of the
+      // whole track, so every segment read near 1.0 and the wave came out as a flat comb.
+      // Mean power follows the density of the music, which is what varies between a verse
+      // and a chorus.
+      let sum = 0, count = 0;
       const from = i * per, to = Math.min(len, from + per);
       for (let j = from; j < to; j++){
         for (let c = 0; c < data.length; c++){
-          const v = data[c][j] < 0 ? -data[c][j] : data[c][j];
-          if (v > peak) peak = v;
+          const v = data[c][j];
+          sum += v * v; count++;
         }
       }
-      out[i] = peak;
+      out[i] = count ? Math.sqrt(sum / count) : 0;
     }
-    // Scale to the loudest bar: a quiet master still has to read as a wave, not a line.
+    // Normalise to the loudest passage, then expand: the power above 1 keeps quiet
+    // sections visibly shorter instead of lifting them towards the ceiling (the old
+    // peak-plus-0.7 curve did the opposite, which flattened the wave further).
     let max = 0;
     for (let i = 0; i < PEAK_N; i++) if (out[i] > max) max = out[i];
-    if (max > 0.0001) for (let i = 0; i < PEAK_N; i++) out[i] = Math.pow(Math.min(1, out[i] / max), 0.7);
+    if (max > 0.0001) for (let i = 0; i < PEAK_N; i++) out[i] = Math.pow(Math.min(1, out[i] / max), 1.4);
     return out;
   }
   function ensureEnvelope(id, src){
@@ -8130,19 +9036,15 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
       out[i] = peak;
     }
 
-    // Map the track range onto 0..1 FIRST and unconditionally: with smoothing off the
-    // function returned straight from out, so the remap never ran and every bar stayed at
-    // the ceiling (measured 20-21 px of 24, sd 0.29).
-    const scale = (arr) => {
-      const order = Array.from(arr).sort((a, b) => a - b);
-      const lo = order[Math.floor(order.length * 0.08)] || 0;
-      const hi = order[Math.floor(order.length * 0.97)] || 1;
-      const span = Math.max(0.05, hi - lo);
-      for (let i = 0; i < arr.length; i++) arr[i] = Math.min(1, Math.max(0, (arr[i] - lo) / span));
+    // Only a clamp here. The old 8th–97th percentile stretch mapped each track's own
+    // band onto 0..1, so a flat master and a dynamic one drew the same shape; the
+    // envelope's RMS levels are what carry the variety now.
+    const clamp = (arr) => {
+      for (let i = 0; i < arr.length; i++) arr[i] = arr[i] < 0 ? 0 : arr[i] > 1 ? 1 : arr[i];
       return arr;
     };
     const k = Math.round(Math.max(0, Math.min(1, cfg.smooth / 100)) * 4);
-    if (!k) return scale(out);
+    if (!k) return clamp(out);
     const blurred = new Float32Array(n);
     for (let i = 0; i < n; i++){
       let peak = 0;
@@ -8153,7 +9055,7 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
       }
       blurred[i] = peak;
     }
-    return scale(blurred);
+    return clamp(blurred);
   }
   // Where the playhead is, 0..1, from the scrub both surfaces already share.
   function progress(){
@@ -8176,6 +9078,109 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     return count ? sum / count : 0;
   }
 
+  // ---- the header's live spectrum ------------------------------------------------
+  // This is the one place the <audio> element is routed through a Web Audio graph, and it
+  // is deliberately confined to a mouse-driven desktop. A phone in landscape is wider than
+  // 900 px, and routing its audio through a context is exactly what kills playback when the
+  // screen locks — Safari freezes the context, so the sound stops. Width alone is not
+  // enough: the graph also needs no touch points and a hovering pointer, which is the only
+  // combination whose background playback does not depend on the page being awake.
+  let specCtx = null, specAnalyser = null, specSource = null, specData = null;
+  let specRanges = null, specLevels = null;
+  const wideHeader = window.matchMedia ? matchMedia('(min-width:900px)') : null;
+  const finePointer = window.matchMedia ? matchMedia('(hover:hover) and (pointer:fine)') : null;
+  function headerOnScreen(){
+    return !!(wideHeader && wideHeader.matches && finePointer && finePointer.matches &&
+      !(navigator.maxTouchPoints > 0));
+  }
+  function spectrum(){
+    if (specAnalyser) return specAnalyser;
+    if (!headerOnScreen()) return null;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    try {
+      if (!specCtx) specCtx = new Ctx();
+      const an = specCtx.createAnalyser();
+      an.fftSize = 2048;
+      an.smoothingTimeConstant = 0.7;
+      an.minDecibels = -88;
+      an.maxDecibels = -22;
+      // The analyser reaches the speakers first: if taking the element over fails, the
+      // route is already whole and the sound is untouched.
+      an.connect(specCtx.destination);
+      specSource = specCtx.createMediaElementSource(audio);
+      specSource.connect(an);
+      specAnalyser = an;
+      specData = new Uint8Array(an.frequencyBinCount);
+      if (specCtx.state === 'suspended') specCtx.resume().catch(() => {});
+    } catch (_) { specAnalyser = null; return null; }
+    return specAnalyser;
+  }
+  // Once the element is routed through the graph, the graph has to be awake. Desktop
+  // browsers can suspend an idle context; resume it whenever the page is visible or a
+  // track starts, so the route can never outlive its own output.
+  function keepGraphAwake(){
+    if (!specCtx || specCtx.state === 'running') return;
+    specCtx.resume().catch(() => {});
+  }
+  // Log-spaced bands, forced to at least one bin each: below ~500 Hz the bins are wider
+  // than the band, and without the floor the whole bottom end would repeat one bar.
+  function bandRanges(n){
+    if (specRanges && specRanges.n === n) return specRanges.list;
+    const bins = specAnalyser.frequencyBinCount;
+    const nyq = (specCtx ? specCtx.sampleRate : 48000) / 2;
+    const lo = 35, hi = Math.min(16000, nyq * 0.95);
+    const list = [];
+    let last = 1;
+    for (let i = 0; i < n; i++){
+      const f = lo * Math.pow(hi / lo, (i + 1) / n);
+      const b = Math.min(bins, Math.max(last + 1, Math.round(f / nyq * bins)));
+      list.push([last, b]);
+      last = b;
+    }
+    specRanges = {n, list};
+    return list;
+  }
+  // One read per frame, with an attack/release on each band so the bars follow the beat
+  // instead of flickering on every FFT.
+  function spectrumAt(an, n){
+    if (!specData || specData.length !== an.frequencyBinCount)
+      specData = new Uint8Array(an.frequencyBinCount);
+    an.getByteFrequencyData(specData);
+    const ranges = bandRanges(n);
+    if (!specLevels || specLevels.length !== n) specLevels = new Float32Array(n);
+    for (let i = 0; i < n; i++){
+      const a = ranges[i][0], b = ranges[i][1];
+      let peak = 0;
+      for (let j = a; j < b; j++) if (specData[j] > peak) peak = specData[j];
+      // The spectrum rolls off about 1/f. Without the tilt the kick owns the left half and
+      // everything above 2 kHz sits on the floor.
+      const tilt = 1 + 0.9 * Math.pow(i / n, 1.15);
+      const v = Math.pow(Math.min(1, (peak / 255) * tilt * 1.35), 0.8);
+      const old = specLevels[i];
+      specLevels[i] = v > old ? old + (v - old) * 0.55 : old + (v - old) * 0.16;
+    }
+    return specLevels;
+  }
+  // Pausing stops the draw loop, so the bars would freeze at their last heights. Decay
+  // them out for a moment instead, the way a stopped meter falls.
+  let settleRaf = 0;
+  function settleSpectrum(){
+    if (settleRaf || !specLevels) return;
+    const step = () => {
+      settleRaf = 0;
+      let top = 0;
+      for (let i = 0; i < specLevels.length; i++){
+        specLevels[i] *= 0.82;
+        if (specLevels[i] > top) top = specLevels[i];
+      }
+      drawAll();
+      if (top > 0.01) settleRaf = requestAnimationFrame(step);
+      else specLevels.fill(0);
+    };
+    settleRaf = requestAnimationFrame(step);
+  }
+
   // ---- drawing --------------------------------------------------------------------
   function fit(s){
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -8196,37 +9201,77 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     const n0 = Math.max(12, Math.round(cfg.bars));
     const p = progress();
 
-    // The compact scrub IS the wave: played bars lit in the accent, the rest a dim grey
-    // ramp, so progress reads from the light itself. No thumb is drawn (the native track
-    // and thumb are transparent while waving); the input still owns the whole touch area.
+    // The header's waveform is a live spectrum, not the track's loudness curve: the
+    // envelope above has no frequency, so it can only say "louder here". These bars are
+    // log-spaced bands read from the playing stream, mirrored around the bar's centre, so
+    // the kick, the bass line and the hats sit in different bars and move on their own.
+    if (s.mode === 'header'){
+      const cy = h / 2;
+      // A touch device draws nothing at all: its header has no graph to read (see
+      // `headerOnScreen`), and a lone grey line there would just be a stray rule.
+      const an = spectrum();
+      if (!an) return;
+      // The resting line stays under the bars, so a quiet passage reads as a pulse rather
+      // than as a broken canvas.
+      g.globalAlpha = 0.28; g.fillStyle = '#4a4e58';
+      g.fillRect(0, cy - 1, w, 2);
+      g.globalAlpha = 1;
+      const n = Math.max(16, Math.min(64, Math.round(w / 7)));
+      const amp = spectrumAt(an, n);
+      // Silence (paused, or before the first buffer) keeps the resting line above and no
+      // bars: one-pixel accent bars would read as a dashed progress bar instead.
+      let top = 0;
+      for (let i = 0; i < n; i++) if (amp[i] > top) top = amp[i];
+      if (top < 0.02) return;
+      const step = w / n, bw = Math.max(1.5, step * 0.58), half = h / 2 - 1;
+      g.fillStyle = accent;
+      for (let i = 0; i < n; i++){
+        const bh = Math.max(0.5, (amp[i] || 0) * half);
+        g.fillRect(i * step + (step - bw) / 2, cy - bh, bw, bh * 2);
+      }
+      return;
+    }
+
+    // The compact scrub's wave: played bars lit in the accent, the rest a dim grey ramp.
+    // The bars stand on the bar's bottom edge and rise through the native slider, which
+    // keeps its own track and thumb, so the drawing never has to double as the control.
     if (s.mode === 'seek'){
-    const n = Math.min(96, n0);
+    // Bars keep the phone's pitch instead of fattening on a wide bar: the count is the
+    // configured 96 across the compact wave's 182 px on a phone, and proportionally more as
+    // the canvas widens (890 px at the bar's widest gives 469), so a desktop wave stays as
+    // fine as the phone's. 512 is a guard, not a design ceiling.
+    const PHONE_W = 182;
+    const n = Math.max(12, Math.min(512, Math.round(n0 * w / PHONE_W)));
     const amp = barsFor(n);
     if (window.__wavedbg) console.log('AMP', JSON.stringify(Array.from(amp).slice(0,10).map(v=>+v.toFixed(3))), 'n', n);
     const step = w / n;
     const bw = Math.max(1.5, step * 0.62);
-    const half = h * 0.40, cy = h / 2;
+    // The bars stand on the bar's bottom edge (the canvas is flush with it) and grow up
+    // through the scrub's line, which sits 27 px up, so a full bar crosses the slider. The
+    // 27 is the CSS geometry: `#plseek` bottom 19 + half of its 16 px height.
+    const TRACK_Y = h - 27;
     let lit = false;
     for (let i = 0; i < n; i++) if ((amp[i] || 0) > 0.02) { lit = true; break; }
     if (!lit){
-      const y = cy - 2;
+      // No envelope yet: a flat progress line on the scrub's own axis, behind the native
+      // track, so the position is still read from the slider rather than a stray bar.
+      const y = TRACK_Y - 2;
       g.fillStyle = '#2a2d35'; g.fillRect(0, y, w, 4);
       g.fillStyle = accent;    g.fillRect(0, y, Math.max(3, w * p), 4);
       g.globalAlpha = 1;
       return;
     }
+    const barH = (i) => 1 + (amp[i] || 0) * (h - 2);
     g.globalAlpha = 0.55; g.fillStyle = '#4a4e58';   // dim bars behind the playhead
     for (let i = 0; i < n; i++){
-      const x = i * step + (step - bw) / 2;
-      const bh = 1 + (amp[i] || 0) * half * 2;
-      g.fillRect(x, cy + half - bh, bw, bh);
+      const bh = barH(i);
+      g.fillRect(i * step + (step - bw) / 2, h - bh, bw, bh);
     }
     g.globalAlpha = 1; g.fillStyle = accent;         // played: the same bars, lit
     for (let i = 0; i < n; i++){
       if ((i + 0.5) / n > p) break;
-      const x = i * step + (step - bw) / 2;
-      const bh = 1 + (amp[i] || 0) * half * 2;
-      g.fillRect(x, cy + half - bh, bw, bh);
+      const bh = barH(i);
+      g.fillRect(i * step + (step - bw) / 2, h - bh, bw, bh);
     }
     return;
   }
@@ -8255,19 +9300,15 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     for (const s of surfaces) draw(s);
   }
   function paint(){ drawAll(); }
-  // The compact scrub's native track is only hidden while the wave is painting the line.
-  function applyWaving(){
-    const bar = document.getElementById('player');
-    if (bar) bar.classList.toggle('waving', !!cfg.enabled);
-  }
 
-  // ~11 fps while something is playing, nothing at all while paused or hidden: the
-  // envelope does not change between frames, only the playhead does.
+  // ~11 fps for the envelope (it does not change between frames, only the playhead does),
+  // and ~18 fps when the header's spectrum is on screen, where the bars are the point.
+  // Nothing runs while paused or hidden.
   let raf = 0, lastAt = 0;
   function tick(){
     raf = 0;
     const now = performance.now();
-    if (now - lastAt > 90){ lastAt = now; drawAll(); }
+    if (now - lastAt > (headerOnScreen() ? 55 : 90)){ lastAt = now; keepGraphAwake(); drawAll(); }
     if (!audio.paused && !document.hidden) raf = requestAnimationFrame(tick);
   }
   function run(){
@@ -8286,11 +9327,11 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     if (!id) return;
     envTimer = setTimeout(() => ensureEnvelope(id, audio.currentSrc || audio.src), 250);
   }
-  audio.addEventListener('play', run);
+  audio.addEventListener('play', () => { keepGraphAwake(); run(); });
   audio.addEventListener('playing', () => { run(); scheduleEnvelope(); });
   audio.addEventListener('loadedmetadata', () => { run(); paint(); scheduleEnvelope(); });
-  audio.addEventListener('pause', () => { if (raf){ cancelAnimationFrame(raf); raf = 0; } paint(); });
-  audio.addEventListener('ended', () => { if (raf){ cancelAnimationFrame(raf); raf = 0; } paint(); });
+  audio.addEventListener('pause', () => { if (raf){ cancelAnimationFrame(raf); raf = 0; } paint(); settleSpectrum(); });
+  audio.addEventListener('ended', () => { if (raf){ cancelAnimationFrame(raf); raf = 0; } paint(); settleSpectrum(); });
   audio.addEventListener('seeked', paint);
   audio.addEventListener('emptied', () => { clearTimeout(envTimer); paint(); });
   const seekBar = document.getElementById('plseek');
@@ -8301,7 +9342,7 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
   }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden){ if (raf){ cancelAnimationFrame(raf); raf = 0; } }
-    else { paint(); if (!audio.paused) run(); }
+    else { keepGraphAwake(); paint(); if (!audio.paused) run(); }
   });
   // The fullscreen surfaces do not exist in the layout until the player opens.
   const full = document.getElementById('player-full');
@@ -8314,50 +9355,8 @@ bindOrderDrag(document.querySelector('#playlist-members'),(ids,save)=>{if(save)s
     }).observe(full, {attributes: true, attributeFilter: ['class']});
   }
 
-  // Style knobs: live, and remembered across reloads.
-  const inputs = {
-    enabled: document.getElementById('pfwkenabled'),
-    bars: document.getElementById('pfwkbars'),
-    level: document.getElementById('pfwklevel'),
-    smooth: document.getElementById('pfwksmooth'),
-    mirror: document.getElementById('pfwkmirror')
-  };
-  const outs = {
-    bars: document.getElementById('pfwkbarsv'),
-    level: document.getElementById('pfwklevelv'),
-    smooth: document.getElementById('pfwksmoothv')
-  };
-  function paintKnobs(){
-    applyWaving();
-    if (inputs.enabled) inputs.enabled.checked = cfg.enabled !== false;
-    if (inputs.bars){ inputs.bars.value = cfg.bars; outs.bars.textContent = String(cfg.bars); }
-    if (inputs.level){ inputs.level.value = cfg.level; outs.level.textContent = cfg.level + '%'; }
-    if (inputs.smooth){ inputs.smooth.value = cfg.smooth; outs.smooth.textContent = String(cfg.smooth); }
-    if (inputs.mirror) inputs.mirror.checked = !!cfg.mirror;
-  }
-  for (const k of Object.keys(inputs)){
-    const el = inputs[k];
-    if (!el) continue;
-    el.addEventListener('input', () => {
-      if (k === 'mirror' || k === 'enabled') cfg[k] = el.checked;
-      else cfg[k] = Number(el.value);
-      paintKnobs();
-      try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (_) {}
-      // Turning it off stops the loop, wipes the canvases and drops the pending decode,
-      // so an off visualizer costs exactly nothing while a song plays.
-      if (!cfg.enabled){
-        if (raf){ cancelAnimationFrame(raf); raf = 0; }
-        clearTimeout(envTimer);
-        wipe();
-        return;
-      }
-      paint();
-      if (!audio.paused){ run(); scheduleEnvelope(); }
-    });
-  }
-  paintKnobs();
-
-
+  // The visualizer's own controls are gone (its only surface is the compact bar's seek
+  // wave), so the persisted config is read once, without a knobs panel.
   paint();
 })();
 </script>

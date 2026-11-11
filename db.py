@@ -220,6 +220,45 @@ CREATE TABLE IF NOT EXISTS watch_items (
   PRIMARY KEY (watch_id, release_id)
 );
 
+-- An artist's whole catalogue, not just what is new. The Feed lists unhandled
+-- releases; this is the discography behind the artist page, so opening it can
+-- show everything the provider will give us without a fresh request each time.
+CREATE TABLE IF NOT EXISTS artist_releases (
+  watch_id INTEGER NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  release_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  release_type TEXT DEFAULT '',
+  track_count INTEGER DEFAULT 0,
+  release_date TEXT DEFAULT '',
+  artwork TEXT DEFAULT '',
+  source_url TEXT DEFAULT '',
+  fetched REAL NOT NULL,
+  PRIMARY KEY (watch_id, provider, release_id)
+);
+CREATE INDEX IF NOT EXISTS artist_releases_order
+  ON artist_releases(watch_id, release_date DESC);
+
+-- Every song the catalogue lists. One row per song per follow: a song that is on
+-- two compilations is one row, and `album` keeps the name it was released under.
+CREATE TABLE IF NOT EXISTS artist_tracks (
+  watch_id INTEGER NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  track_id TEXT NOT NULL,
+  release_id TEXT DEFAULT '',
+  title TEXT NOT NULL,
+  artist TEXT DEFAULT '',
+  album TEXT DEFAULT '',
+  track_no INTEGER DEFAULT 0,
+  duration REAL DEFAULT 0,
+  artwork TEXT DEFAULT '',
+  source_url TEXT DEFAULT '',
+  fetched REAL NOT NULL,
+  PRIMARY KEY (watch_id, provider, track_id)
+);
+CREATE INDEX IF NOT EXISTS artist_tracks_order
+  ON artist_tracks(watch_id, album, track_no);
+
 CREATE TABLE IF NOT EXISTS logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -596,6 +635,24 @@ class Store:
                     (key, name or "", artwork, provider or "", time.time()))
             self.conn.commit()
 
+    def fill_release_artwork(self, track_id: int) -> str:
+        """Put the release's cover on a track whose artwork is still empty.
+
+        Only kinds that are a real release: a playlist is a set, and its cover is
+        the set's own art, never the album of the songs inside it. An artwork
+        already on the row is left alone.
+        """
+        with self.lock:
+            self.conn.execute(
+                "UPDATE tracks SET artwork=COALESCE(NULLIF(artwork,''),"
+                " (SELECT r.artwork FROM releases r WHERE r.id=tracks.release_id"
+                "  AND r.release_type IN ('album','single','ep','track')))"
+                " WHERE id=?", (track_id,))
+            self.conn.commit()
+            row = self.conn.execute("SELECT artwork FROM tracks WHERE id=?",
+                                    (track_id,)).fetchone()
+        return (row["artwork"] if row else "") or ""
+
     def release(self, provider: str, release_id: str, title: str, *,
                 artist_id: int | None = None, release_type: str = "",
                 track_count: int = 0, release_date: str = "", artwork: str = "",
@@ -860,6 +917,68 @@ class Store:
             self.conn.execute("DELETE FROM watches WHERE id=?", (watch_id,))
             self.conn.commit()
 
+    # ---- an artist's stored catalogue -------------------------------------
+    # Written as a whole on each refresh: the provider's list is the truth, so a
+    # release that disappeared upstream disappears here too.
+    def artist_catalogue_replace(self, watch_id: int, releases: list[dict],
+                                 tracks: list[dict]) -> None:
+        now = time.time()
+        with self.lock:
+            self.conn.execute("DELETE FROM artist_releases WHERE watch_id=?", (watch_id,))
+            self.conn.execute("DELETE FROM artist_tracks WHERE watch_id=?", (watch_id,))
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO artist_releases (watch_id,provider,release_id,title,"
+                "release_type,track_count,release_date,artwork,source_url,fetched)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                [(watch_id, r.get("provider", ""), r.get("release_id", ""), r.get("title", ""),
+                  r.get("release_type", ""), int(r.get("track_count") or 0),
+                  r.get("release_date", ""), r.get("artwork", ""), r.get("source_url", ""), now)
+                 for r in releases])
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO artist_tracks (watch_id,provider,track_id,release_id,"
+                "title,artist,album,track_no,duration,artwork,source_url,fetched)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                [(watch_id, t.get("provider", ""), t.get("track_id", ""), t.get("release_id", ""),
+                  t.get("title", ""), t.get("artist", ""), t.get("album", ""),
+                  int(t.get("track_no") or 0), float(t.get("duration") or 0),
+                  t.get("artwork", ""), t.get("source_url", ""),
+                  float(t.get("fetched") or now))
+                 for t in tracks])
+            self.conn.commit()
+
+    def artist_catalogue_stamp(self, watch_id: int) -> float:
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT MAX(fetched) FROM artist_releases WHERE watch_id=?",
+                (watch_id,)).fetchone()
+        return float(row[0] or 0) if row else 0.0
+
+    def artist_releases(self, watch_id: int) -> list[dict]:
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT * FROM artist_releases WHERE watch_id=?"
+                " ORDER BY release_date DESC, title COLLATE NOCASE", (watch_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def artist_tracks(self, watch_id: int, offset: int = 0,
+                      limit: int = 60) -> tuple[list[dict], int]:
+        """One page of the catalogue's songs, A→Z by album then track number."""
+        with self.lock:
+            total = self.conn.execute(
+                "SELECT COUNT(*) FROM artist_tracks WHERE watch_id=?", (watch_id,)).fetchone()[0]
+            rows = self.conn.execute(
+                "SELECT * FROM artist_tracks WHERE watch_id=?"
+                " ORDER BY album COLLATE NOCASE, track_no, title COLLATE NOCASE"
+                " LIMIT ? OFFSET ?", (watch_id, limit, offset)).fetchall()
+        return [dict(r) for r in rows], int(total)
+
+    def artist_tracks_all(self, watch_id: int) -> list[dict]:
+        """Every stored song, for deciding which album tracklists can be reused."""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT * FROM artist_tracks WHERE watch_id=?", (watch_id,)).fetchall()
+        return [dict(r) for r in rows]
+
     def watch_seen(self, watch_id: int) -> set[str]:
         with self.lock:
             rows = self.conn.execute(
@@ -929,7 +1048,7 @@ class Store:
         """
         with self.lock:
             rows = [dict(r) for r in self.conn.execute(
-                "SELECT t.*, j.status, j.resolved_url FROM tracks t LEFT JOIN (SELECT track_id, MAX(id) AS latest FROM download_jobs GROUP BY track_id) latest ON latest.track_id=t.id LEFT JOIN download_jobs j ON j.id=latest.latest "
+                "SELECT t.*, r.release_type AS release_type, r.artwork AS release_artwork, j.status, j.resolved_url FROM tracks t LEFT JOIN releases r ON r.id=t.release_id LEFT JOIN (SELECT track_id, MAX(id) AS latest FROM download_jobs GROUP BY track_id) latest ON latest.track_id=t.id LEFT JOIN download_jobs j ON j.id=latest.latest "
                 + ("" if include_pending else "WHERE t.file<>'' ") +
                 "ORDER BY t.artist_name, t.album, t.track_number").fetchall()]
             links = self.conn.execute(
@@ -947,10 +1066,18 @@ class Store:
             row["source_status"] = row.get("source_status") or ""
             row["source_checked"] = row.get("source_checked") or 0
             row['playable'] = bool(row['file'] and Path(row['file']).is_file())
+            # One cover per release. A song imported from the Feed used to keep only its
+            # own embedded frame, so tracks off the same album showed different pictures
+            # (and a grabbed album had none at all). A real release's artwork is the
+            # album's cover; a playlist is a set, not an album, so its cover is never
+            # stamped onto the songs inside it.
+            release_art = (row.get('release_artwork') or '').strip()
+            if release_art and (row.get('release_type') or '') in ('album', 'single', 'ep', 'track'):
+                row['artwork'] = release_art
             # SoundCloud imports carry no artwork URL, but the mp3 has the cover
             # embedded — the local extractor has it. point at it so the grid and
             # the rows are not full of empty tiles.
-            if not row.get('artwork') and row['playable']:
+            elif not row.get('artwork') and row['playable']:
                 row['artwork'] = f"/api/track/{row['id']}/artwork"
             row['status'] = row['status'] or ('completed' if row['playable'] else 'missing')
             if not row['playable'] and (row['file'] or row['status'] == 'completed'):
@@ -970,13 +1097,22 @@ class Store:
             out = []
             for playlist in playlists:
                 rows = self.conn.execute(
-                    "SELECT t.*, pt.position AS list_position, pt.reused AS list_reused"
+                    "SELECT t.*, pt.position AS list_position, pt.reused AS list_reused,"
+                    " r.release_type AS release_type, r.artwork AS release_artwork"
                     " FROM playlist_tracks pt"
-                    " JOIN tracks t ON t.id = pt.track_id WHERE pt.playlist_id=?"
+                    " JOIN tracks t ON t.id = pt.track_id"
+                    " LEFT JOIN releases r ON r.id = t.release_id WHERE pt.playlist_id=?"
                     " ORDER BY pt.position, t.id", (playlist["id"],)).fetchall()
                 tracks = []
                 for row in rows:
                     track = dict(row)
+                    # Same rule as the library: a real release's artwork is the album's
+                    # cover, and a playlist's cover never stamps the songs inside it.
+                    # Without this the Download queue showed one cover per track.
+                    release_art = (track.get("release_artwork") or "").strip()
+                    if release_art and (track.get("release_type") or "") in (
+                            "album", "single", "ep", "track"):
+                        track["artwork"] = release_art
                     job = jobs.get(track["id"]) or {}
                     candidates = job.get("candidates") or ""
                     # Stored review candidates may predate the current ranking, so

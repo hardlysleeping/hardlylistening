@@ -31,15 +31,9 @@
    vote chips, same box as a chip, and allowed to wrap instead of sticking out. */
 .acard .ameta .preference[data-pref-action=pin]{flex:0 0 auto;width:26px;height:26px;min-height:26px;padding:0;margin-left:auto}
 
-/* Dynamic playlists: Favorites and Everyone's Favorites. Same .plcard shell as a real
-   playlist so they read as playlists, marked with a heart and a tinted frame. */
-.plcard.dyn{position:relative;border-color:#2f6b57;background:linear-gradient(180deg,#17251f,#12141a)}
-.plcard.dyn::after{content:"♥";position:absolute;top:7px;right:10px;font-size:13px;color:var(--accent)}
-.plcard.dyn.public::after{content:"♥♥";letter-spacing:-2px}
-.collage.dynempty{display:grid;place-items:center;background:#1b2a24}
-.collage.dynempty i{display:grid;place-items:center;font-size:28px;color:var(--accent);background:none}
-.dynwho{display:flex;gap:3px;margin-top:5px}
-.miniwho{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--c);color:#0b0c11}
+/* Dynamic playlists: Favorites and Everyone's Favorites. Same row as an imported
+   playlist; a small heart is the only mark that they are computed on each read. */
+.plcard.dyn .dynheart{color:var(--accent);opacity:.7;font-size:11px;margin-right:5px;vertical-align:1px}
 
 /* Everyone's Favorites: one row per song, with who liked it. */
 .dynsub{margin:0 0 14px;font-size:13px;opacity:.75}

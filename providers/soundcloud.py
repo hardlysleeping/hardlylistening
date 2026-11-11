@@ -38,8 +38,11 @@ class SoundcloudProvider(Provider):
         # of permalinks — which yt-dlp cannot extract at all. Every untitled
         # entry is resolved by its numeric id up front, in batched API calls,
         # rather than one yt-dlp run per track.
-        api_meta = _api_tracks([str(e.get("id") or "") for e in entries
-                                if e and not str(e.get("title") or "").strip()])
+        api_meta = _api_tracks([str(e.get("id") or "") for e in entries if e])
+        # A set can be an album ("is_album" on the playlist object). Only then is
+        # the set's own name the album; a mixtape or a shared playlist is not one.
+        set_meta = _api_get(f"playlists/{info.get('id')}") if info.get("entries") else {}
+        set_is_album = bool(set_meta.get("is_album"))
         tracks: list[TrackRef] = []
         for entry in entries:
             if not entry:
@@ -96,7 +99,9 @@ class SoundcloudProvider(Provider):
                 # who owns the set ends up starring at in the library.
                 artist=(entry.get("artist") or entry.get("uploader")
                         or entry.get("channel") or _artist_from_url(source)).strip(),
-                album=(info.get("title") or "").strip() if info.get("entries") else "",
+                # The album a song was released on, when SoundCloud knows one.
+                album=(((meta or {}).get("publisher_metadata") or {}).get("album_title") or "").strip()
+                       or ((info.get("title") or "").strip() if set_is_album else ""),
                 track_number=len(tracks) + 1,
                 duration=entry.get("duration") or 0,
                 artwork=(((entry.get("thumbnails") or [{}])[-1].get("url") or "")
@@ -219,6 +224,32 @@ class SoundcloudProvider(Provider):
         fresh.sort(key=lambda r: r.release_date or "", reverse=True)
         return fresh
 
+    def catalogue_tracks(self, artist_url: str, limit: int = 2000,
+                         releases=None) -> list[TrackRef]:
+        """The artist's uploads as songs.
+
+        A SoundCloud upload is one song, so the release list already is the
+        song list — reusing it avoids a second yt-dlp pass over the same page.
+        """
+        rel = releases
+        if rel is None:
+            rel = self.new_releases(artist_url, 0, limit=limit)
+        out: list[TrackRef] = []
+        for release in rel:
+            track_id = str(release.release_id).split(":", 1)[-1]
+            if not track_id:
+                continue
+            out.append(TrackRef(
+                provider=self.name,
+                provider_track_id=track_id,
+                title=release.title,
+                artist=release.artist,
+                track_number=1,
+                artwork=release.artwork,
+                source_url=release.source_url,
+                release_id=release.release_id))
+        return out
+
 
 def _client_id() -> str:
     """SoundCloud's public client id, as yt-dlp already cached it.
@@ -235,6 +266,28 @@ def _client_id() -> str:
         return str(data.get("data") or "")
     except Exception:
         return ""
+
+
+def _api_get(path: str) -> dict:
+    """One api-v2 read with the cached client id; {} when it is unavailable."""
+    import json
+    import urllib.request
+
+    client_id = _client_id()
+    if not client_id:
+        return {}
+    sep = "&" if "?" in path else "?"
+    req = urllib.request.Request(
+        f"https://api-v2.soundcloud.com/{path}{sep}client_id={client_id}",
+        headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+                 "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8", "replace"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _api_tracks(ids: list[str]) -> dict[str, dict]:

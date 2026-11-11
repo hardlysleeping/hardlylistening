@@ -9,6 +9,20 @@ from security import Denied
 import social
 
 FAVORITES_ID = 'favorites'
+# Two playlists have no row in `playlists`: they are computed from listening_favorites.
+# They can still be pinned and added to a member's library by their string id.
+VIRTUAL_PLAYLISTS = (FAVORITES_ID, 'public-favorites')
+
+
+def virtual_tracks(store, uid, target):
+    """The songs a computed playlist holds right now, as track ids."""
+    if target == FAVORITES_ID:
+        return [r[0] for r in store.conn.execute(
+            'SELECT track_id FROM listening_favorites WHERE member_id=? ORDER BY track_id', (uid,))]
+    if target == 'public-favorites':
+        return [r[0] for r in store.conn.execute(
+            'SELECT DISTINCT track_id FROM listening_favorites ORDER BY track_id')]
+    return []
 
 
 def schema(store):
@@ -114,6 +128,7 @@ def snapshot(store, uid):
     # Hide stale polymorphic references after catalog deletion/retagging.
     tracks = {str(r[0]) for r in store.conn.execute('SELECT id FROM tracks')}
     playlists = {str(r[0]) for r in store.conn.execute('SELECT id FROM playlists')}
+    playlists.update(VIRTUAL_PLAYLISTS)
     albums = {social.album_id(dict(r)) for r in store.conn.execute('SELECT artist_name,album FROM tracks')}
     valid = {'track': tracks, 'playlist': playlists, 'album': albums}
     return {'favorites_id': FAVORITES_ID,
@@ -165,6 +180,11 @@ def set_theme(store, uid, body):
 
 
 def save(store, uid, kind, target):
+    if kind == 'playlist' and target in VIRTUAL_PLAYLISTS:
+        # No playlist row to reference: the songs themselves are the save.
+        store.conn.executemany('INSERT OR IGNORE INTO listening_tracks VALUES(?,?)',
+                               [(uid, track_id) for track_id in virtual_tracks(store, uid, target)])
+        return
     if kind == 'playlist':
         store.conn.execute('INSERT OR IGNORE INTO listening_playlists VALUES(?,?)', (uid, int(target)))
         store.conn.execute('INSERT OR IGNORE INTO listening_playlist_tracks SELECT ?,playlist_id,track_id,position FROM playlist_tracks WHERE playlist_id=?', (uid, int(target)))
@@ -254,16 +274,24 @@ def browser(handler, store, security):
         if action == 'favorite' and kind != 'track':
             raise Denied(400, 'Only songs can be favorites')
         if kind in ('track', 'playlist'):
-            if type(target) is not int:
+            # A computed playlist is addressed by its string id, not a row id.
+            virtual = kind == 'playlist' and target in VIRTUAL_PLAYLISTS
+            if virtual:
+                pass
+            elif type(target) is not int:
                 raise Denied(400, 'Integer id required')
-            target = str(target)
+            else:
+                target = str(target)
         elif not isinstance(target, str):
             raise Denied(400, 'Invalid target')
     with store.lock:
         listening.schema(store, security)
         schema(store)
         if handler.command == 'POST':
-            social.validate_target(store, kind, target)
+            # A computed playlist has no row for the social validator to find; it is a
+            # real target for pins and saves all the same.
+            if not (kind == 'playlist' and target in VIRTUAL_PLAYLISTS):
+                social.validate_target(store, kind, target)
             if action == 'pin' and enabled:
                 # The pinned carousel shows six at a time, three pages deep.
                 held = store.conn.execute(
