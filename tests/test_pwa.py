@@ -75,5 +75,20 @@ class PWA(unittest.TestCase):
             sw = fh.read()
         precached = set(re.findall(r"'(/styles/[^']+)'", sw))
         self.assertEqual(precached, set(tree), 'sw.js must precache exactly the stylesheet tree')
-        self.assertIn("hardlylistening-static-v4", sw)
+        self.assertRegex(sw, r"hardlylistening-static-v\d+")
         self.assertNotIn('/polish.css', sw)
+
+    def test_feature_scripts_are_precached(self):
+        """The page's scripts have moved out of index.html a component at a time. A script the
+        page loads from /js/ but the worker does not precache is an app that cannot boot from
+        the cache — the same failure the stylesheet test guards, one file type over."""
+        with open(os.path.join(WEB, 'index.html'), encoding='utf-8') as fh:
+            index = fh.read()
+        loaded = set(re.findall(r'<script src="(/js/[^"]+)"', index))
+        self.assertTrue(loaded, 'index.html loads no /js/ scripts at all')
+        with open(os.path.join(WEB, 'sw.js'), encoding='utf-8') as fh:
+            sw = fh.read()
+        static = set(re.findall(r"'(/js/[^']+)'", sw))
+        self.assertEqual(static, loaded, 'sw.js must precache exactly the scripts index.html loads')
+        for url in loaded:
+            self.assertTrue(os.path.isfile(os.path.join(WEB, url.lstrip('/'))), 'missing script ' + url)

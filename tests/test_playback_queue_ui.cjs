@@ -1,8 +1,10 @@
 // Isolated real queue/editor script, mocked media and playlist contract.
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
 const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
-const markup=html.slice(html.indexOf('<aside id="playback-panel"'),html.indexOf('// Playback queue and owner playlist editor')).split('<script>')[0];
-const script=html.split('// Playback queue and owner playlist editor (no media or network on initialization).')[1].split('</script>')[0];
+const markup=html.slice(html.indexOf('<aside id="playback-panel"'),html.indexOf('<script src="/js/playback-queue.js">')).split('<script>')[0];
+// The queue and the playlist editor are their own file now. Its header comment is dropped so the
+// fixture evaluates the same statements it used to slice out of index.html.
+const script=fs.readFileSync('web/js/playback-queue.js','utf8').replace(/^\/\*[\s\S]*?\*\/\n/,'');
 const queueSong=html.slice(html.indexOf('function queueSong('),html.indexOf('function playTrackNow('));
 (async()=>{const browser=await chromium.launch({headless:true});try{for(const width of [1280,390]){
  const page=await browser.newPage({viewport:{width,height:1100}});let network=0;await page.route('**/*',r=>{network++;r.abort()});
