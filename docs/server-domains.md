@@ -34,7 +34,7 @@ Forbidden: `Repo → Social`, `Repo → personal Library state`, `Library → So
 | domain | answers | contract it must honour |
 | --- | --- | --- |
 | **Core** | who is asking, and may they | knows nothing about music, discovery, Activity or Subsonic |
-| **Repo** | what music this server has, or could acquire | serves the shared pool; never reads a member's personal state |
+| **Repo** | what music this server has, or could acquire | serves the shared pool; never reads a member's personal state. The acquisition queue (`engine/queue.py`: job states, retries, backoff, the download workers) is Repo's too — it exists to acquire shared music, and no other domain may depend on it (REPO-013, declaration only; no UI moves with it) |
 | **Library** | what *this member* chose to keep | per-member only; no acquisition; no social signal |
 | **Playback** | give me the bytes, remember where I am | member scope + Range; never needs Social or Party |
 | **Social** | what people are doing | may read Repo/Library; nothing depends on it |
@@ -61,7 +61,7 @@ Top-level modules (26):
 | `decisions.py` | Repo | metadata decision audit (`match_decisions`) |
 | `replacements.py` | Repo | staged source replacements (`source_replacements`) |
 | `podcasts.py` | Repo | podcast feeds and episode acquisition (`listening_podcast_*`) |
-| `listening.py` | Library | devices, saves, folders, personal preferences routes — **and today the Subsonic entry point (`rest`, `envelope`)**, which is Adapter code living in the wrong file until SUB-010 |
+| `listening.py` | Library | devices, saves, folders, personal preferences routes — **and today the Subsonic entry point (`rest`, `envelope`, `song`, `key`)**, which is Adapter code still living in a Library file. SUB-010/011 removed its query layer (member state now comes from `library/service.py`); moving the dispatch itself into `subsonic.py` is the part still open |
 | `nowplaying.py` | Library | resume state (`listening_now`) |
 | `preferences.py` | Library | favourites, pins, album likes, theme, UI snapshot |
 | `zip_export.py` | Library | a member's own library as a ZIP |
@@ -74,7 +74,7 @@ Top-level modules (26):
 | `social/` | Social | `service.py` is the entry point (ARCH-005); `discussion.py` holds comments, votes, likes and summaries, `api.py` is the HTTP adapter (`social_*`, `song_boosts`); Activity and profiles stay their own modules for now |
 | `profiles.py` | Social | the member profile page (reads Library and Repo) |
 | `party.py` | Party | rooms, guests, sessions, presence, votes, skips, chat |
-| `subsonic.py` | Adapter | OpenSubsonic surface; creates `listening_plays`, `listening_ratings` |
+| `subsonic.py` | Adapter | OpenSubsonic surface; translates and encodes, and owns no member state — stars, ratings, plays and bookmarks are `library/service.py`'s, and `schema()` only delegates there (SUB-011). It does own the protocol facts (`PROTOCOL_VERSION`, `EXTENSIONS`, transcode targets) that `/api/v1/capabilities` reports |
 
 Packages:
 
@@ -179,6 +179,14 @@ old names re-exported, so `import social` still works.
 The facades are pinned to the functions underneath by tests rather than trusted, because the
 delegation was meant to change who calls whom and nothing else.
 
+**Isolation is measured (ARCH-007).** `tests/test_isolation.py` refuses the import of a whole
+package with a `sys.meta_path` finder and then asks the rest of the server to work: with `social`
+unimportable, `/api/track/<id>/audio` still answers 206 with the right `Content-Range`; with
+`discovery` unimportable, the Library routes still answer and `/api/health` stays up. The failing
+route is the only thing that fails. One honest gap is pinned there too: `do_GET` has no catch-all,
+so a route that raises drops its connection instead of answering 5xx — the process survives, but
+the client sees a reset.
+
 **Still open, and not a route problem:** `security.py` still calls `activity.record` on join, rename
 and session events (the Core → Social row below). Delegating routes does not touch it; the fix is
 an event the composition root subscribes to, which is its own change.
@@ -192,7 +200,7 @@ an event the composition root subscribes to, which is its own change.
 | Core → Social | `security.py` calls `activity.record` on session, join and member events | Core must not know Social exists; a Social bug would break sign-in | Core emits a domain event; the composition root subscribes Activity to it. **Still open after ARCH-005/006** — it is not a route, so delegating routes could not close it |
 | Library → Social | `preferences.py` uses `social.album_id` and `social.validate_target` | album identity is metadata, not a social concept | move both to a Core/Library metadata helper (ARCH-003) |
 | Library → Adapter | `shares.py` imports `subsonic.BLANK_PNG` | a domain reaching into the protocol adapter for a constant | move the constant to a shared asset module (SUB-010) |
-| Library → Adapter | `listening.py` contains `rest()`/`envelope()` and imports `subsonic` | the adapter lives in a Library file | move Subsonic dispatch into `subsonic.py` (SUB-010/011) |
+| Library → Adapter | `listening.py` contains `rest()`/`envelope()` and imports `subsonic` | the adapter lives in a Library file | SUB-010/011 took the queries out of it; the remaining step is moving the dispatch itself into `subsonic.py` |
 | Core+Repo in one file | `db.py` creates schema for every domain and holds repository accessors | ownership is unclear at the point of change | schema stays (it is the migration point); accessors move behind `repo/service.py` (ARCH-002) |
 
 Everything else in the import graph already points the allowed way. `server.py` importing every
