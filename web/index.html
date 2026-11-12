@@ -66,8 +66,9 @@
        More on every tab, so the row itself carries nothing else. -->
   <div class="navmain">
     <button class="tab on" data-view="queue">Queue</button>
-    <button class="tab" data-view="feed">Feed <span id="feedcount"></span></button>
-    <button class="tab" data-view="library" data-scope="shared" title="Repository">Repo</button>
+    <button class="tab" data-view="feed">Feed</button>
+    <button class="tab" data-view="library" data-scope="shared"
+      title="Repository">Repo <span id="feedcount"></span></button>
     <button class="tab" data-view="library" data-scope="mine">Library</button>
     <button class="tab" id="btn-more" aria-expanded="false" aria-controls="navpanel"
       aria-haspopup="menu" aria-label="More" title="More">...</button>
@@ -134,44 +135,11 @@
   </section>
 
   <section id="view-feed" hidden>
-    <div class="seg feedtabs" role="tablist" aria-label="Feed">
-      <button class="segbtn on" id="ftab-activity" role="tab" aria-selected="true"
-        onclick="setFeedTab('activity')">Activity</button>
-      <button class="segbtn" id="ftab-artists" role="tab" aria-selected="false"
-        onclick="setFeedTab('artists')">Artists</button>
-      <button class="segbtn" id="ftab-following" role="tab" aria-selected="false"
-        onclick="setFeedTab('following')">Subscribed</button>
-    </div>
+    <!-- Feed is Activity only: what people did. Releases and the follows are catalogue,
+         so they live in the Repository, next to Browse (UI-020…023). -->
     <div id="feedpane-activity">
       <div class="hint" id="acterr" style="margin:-2px 0 10px"></div>
       <div id="activitylist"></div>
-    </div>
-    <div id="feedpane-artists" hidden>
-      <div class="libtools feedtools">
-        <button id="feedrefresh" data-admin-only title="Check every subscription now"
-          aria-label="Check every subscription now"></button>
-        <div class="feedswitch" role="group" aria-label="Which subscriptions to show">
-          <button type="button" class="feedsw" data-feedprov="apple" aria-pressed="true"
-            title="Apple Music subscriptions"></button>
-          <button type="button" class="feedsw" data-feedprov="soundcloud" aria-pressed="false"
-            title="SoundCloud subscriptions"></button>
-        </div>
-        <button type="button" id="feedmine" aria-pressed="false"
-          aria-label="Only artists you subscribe to"
-          title="Only artists you subscribe to"></button>
-      </div>
-      <div class="hint" id="feederr" style="margin:-6px 0 10px"></div>
-      <div id="feedlist"></div>
-      <div id="feedartistpage" hidden></div>
-    </div>
-    <div id="feedpane-following" hidden>
-      <div class="followbox" data-admin-only>
-        <input id="followurl" placeholder="Paste an artist page — soundcloud.com/name or music.apple.com/…/artist/…" autocomplete="off">
-        <button class="primary" id="followbtn">Subscribe</button>
-      </div>
-      <div class="hint" id="followhint" style="margin:-4px 0 12px">Subscribing lists an artist's latest
-        releases. Nothing downloads until you press Download on one.</div>
-      <div id="followlist"></div>
     </div>
   </section>
 
@@ -216,8 +184,20 @@
       <button data-scope="mine" aria-pressed="false" onclick="setLibraryScope('mine')">Library</button>
     </nav>
     <p id="libscopehelp">Repository is the shared community music pool. Add songs or playlists to your personal Library.</p>
+    <!-- The shared Repository has three sections: the pool (Browse), what the follows have
+         released (Releases), and the follows themselves (Subscribed). The personal Library
+         keeps one list, so this row is hidden there. -->
+    <nav class="seg repotabs" id="repotabs" role="tablist" aria-label="Repository section" hidden>
+      <button class="on" id="rtab-browse" role="tab" aria-selected="true"
+        onclick="setRepoTab('browse')">Browse</button>
+      <button id="rtab-releases" role="tab" aria-selected="false"
+        onclick="setRepoTab('releases')">Releases</button>
+      <button id="rtab-subscribed" role="tab" aria-selected="false"
+        onclick="setRepoTab('subscribed')">Subscribed</button>
+    </nav>
     <div class="dropzone compact" id="dropzone" data-admin-only>Drop one audio file here to import it — 20 MB max, copied into the shared Repository</div>
     <input id="impfile" type="file" accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.opus,.wav,.aiff,.aif,.wma,.alac,.webm" hidden>
+    <div id="repopane-browse">
     <div class="libbar">
       <nav class="seg" id="libviews" aria-label="Library section">
         <button data-view="playlists" title="Playlists" aria-label="Playlists">
@@ -333,6 +313,34 @@
       <select id="libplaylist" title="Filter by playlist"><option value="">All library</option></select>
     </div>
     <div id="liblist"></div>
+    </div>
+    <div id="repopane-releases" hidden>
+      <div class="libtools feedtools">
+        <button id="feedrefresh" data-admin-only title="Check every subscription now"
+          aria-label="Check every subscription now"></button>
+        <div class="feedswitch" role="group" aria-label="Which subscriptions to show">
+          <button type="button" class="feedsw" data-feedprov="apple" aria-pressed="true"
+            title="Apple Music subscriptions"></button>
+          <button type="button" class="feedsw" data-feedprov="soundcloud" aria-pressed="false"
+            title="SoundCloud subscriptions"></button>
+        </div>
+        <button type="button" id="feedmine" aria-pressed="false"
+          aria-label="Only artists you subscribe to"
+          title="Only artists you subscribe to"></button>
+      </div>
+      <div class="hint" id="feederr" style="margin:-6px 0 10px"></div>
+      <div id="feedlist"></div>
+      <div id="feedartistpage" hidden></div>
+    </div>
+    <div id="repopane-subscribed" hidden>
+      <div class="followbox" data-admin-only>
+        <input id="followurl" placeholder="Paste an artist page — soundcloud.com/name or music.apple.com/…/artist/…" autocomplete="off">
+        <button class="primary" id="followbtn">Subscribe</button>
+      </div>
+      <div class="hint" id="followhint" style="margin:-4px 0 12px">Subscribing lists an artist's latest
+        releases. Nothing downloads until you press Download on one.</div>
+      <div id="followlist"></div>
+    </div>
   </section>
 </main>
 
@@ -1385,14 +1393,15 @@ async function refreshSnapshot(){
     cRev.innerHTML = `review <b>${s.review}</b>`;
   }
   $("#btn-pause").textContent = s.paused ? "Resume" : "Pause";
-  paintFeedCount(st);
+  paintFeedCount(s);
   // Every poll carries the list again, and it is the authoritative copy: it comes
   // with the ownership flags, so adopting it never wipes who subscribed to what.
   if (st.subscriptions) {
     subscriptions = st.subscriptions;
-    // Subscriptions live inside the Feed view now; repaint only while it shows.
-    const pane = $("#feedpane-following");
-    if (pane && !pane.hidden && !$("#view-feed").hidden) renderSubscriptions();
+    // The follow list lives in the Repository's Subscribed section now; repaint only
+    // while it is the section on screen.
+    const pane = $("#repopane-subscribed");
+    if (pane && !pane.hidden && !$("#view-library").hidden) renderSubscriptions();
   }
   renderNow(st);
   if (s.cooldown_until > 0 || s.paused || s.disk_blocked) renderBanners(st);
@@ -1964,6 +1973,11 @@ async function saveProfile(event){
 
 let listeningSaves = null;
 let libraryScope = 'shared';
+// The Repository's three sections. Feed has no tabs any more: it is Activity only,
+// because releases are catalogue and the follows are what the catalogue is watching.
+let repoTab = "browse";
+const REPO_TABS = ["browse", "releases", "subscribed"];
+function activeRepoTab(){ return libraryScope === "shared" ? repoTab : "browse"; }
 // Removed on this visit, kept on the page: a mistaken remove is one click from coming back.
 // The set is dropped as soon as the person leaves this view, which is when a removed album
 // or song really has to be gone from the Library.
@@ -1999,6 +2013,7 @@ function setLibraryScope(scope){
   for (const tab of document.querySelectorAll('.tab[data-view="library"]')) tab.classList.toggle('on', tab.dataset.scope === libraryScope);
   $('#libplaylist').value = '';
   $('#libsearch').value = '';
+  paintRepoTab();
   renderLibrary();
 }
 let listeningBusy = new Set();
@@ -2941,7 +2956,7 @@ function renderLibrary(){
   const setsOf = t => (t.playlists || []).map(p => p.title).join(" ");
   const selected = $("#libplaylist").value;
   const playlists = scopedPlaylists();
-  $('#libtitle').textContent = libraryScope === 'mine' ? 'Library' : 'Repository';
+  paintRepoTab();
   // Titles are HTML-escaped; option values are database integer IDs.
   $('#libplaylist').innerHTML = '<option value="">All playlists</option>' + playlists.map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join('');
   $('#libplaylist').value = playlists.some(p => String(p.id) === selected) ? selected : '';
@@ -2963,7 +2978,6 @@ function renderLibrary(){
   if (libraryScope === 'shared') $('#libscopehelp').textContent = 'Repository is the shared community music pool.';
   // Importing a file copies it into the shared Repository, not into your Library: the
   // drop target only belongs on the Repository scope, where the file actually lands.
-  $('#dropzone').hidden = libraryScope !== 'shared';
   // Browsing shows only what you can actually play. A queued row used to sit here
   // with a play button that could only fail; a track appears once it is on disk, and
   // what is still coming is said once above the list instead of as dead rows.
@@ -2987,6 +3001,7 @@ function renderLibrary(){
   $("#libcount").textContent = libraryScope === 'mine'
     ? `${total.filter(t => t.playable).length} songs`
     : `${lib.length} songs`;
+  $("#libcount").hidden = activeRepoTab() !== 'browse';
 
   if (detail && detail.kind !== "playlist" && !rows.length && q) detail = null;
 
@@ -6895,7 +6910,7 @@ async function loadCatalogue(watchId, offset){
 function closeArtistPage(){
   const page = document.getElementById("feedartistpage");
   const list = document.getElementById("feedlist");
-  const tools = document.querySelector("#feedpane-artists .feedtools");
+  const tools = document.querySelector("#repopane-releases .feedtools");
   if (page) page.hidden = true;
   if (list) list.hidden = false;
   if (tools) tools.hidden = false;
@@ -6929,22 +6944,20 @@ function openArtistInRepo(name){
   openArtistByName(repoName);
 }
 
+// "In Repo" opens the downloaded-artist page; Back there (and on any page below it)
+// returns to this release page — which is where he was before, in the Repository.
 function returnToFeedArtist(state){
+  setLibraryScope("shared");
+  showLibraryTab();
+  setRepoTab("releases");
   if (!state || !state.watchId){ renderLibrary(); return; }
-  document.getElementById("view-queue").hidden = true;
-  document.getElementById("view-library").hidden = true;
-  document.getElementById("view-feed").hidden = false;
-  document.querySelectorAll(".tab[data-view]").forEach(t =>
-    t.classList.toggle("on", t.dataset.view === "feed"));
-  try { localStorage.setItem("hl.view", "feed"); } catch (_) {}
-  setFeedTab("artists");
   openArtistPage(state.watchId, state.name, state.art);
 }
 
 async function openArtistPage(watchId, name, art){
   const page = document.getElementById("feedartistpage");
   const list = document.getElementById("feedlist");
-  const tools = document.querySelector("#feedpane-artists .feedtools");
+  const tools = document.querySelector("#repopane-releases .feedtools");
   if (!page || !list || !watchId) return;
   artistPageWatch = Number(watchId);
   artistPageArt = art || "";
@@ -7120,21 +7133,41 @@ async function feedAct(kind, id){
 }
 
 let feedSeq = 0;
-let feedTab = "activity";
 let activityExpiryTimer = null;
 const openDays = new Set();   // collapsed day cards stay as you left them across polls
 
-const FEED_TABS = ["activity", "artists", "following"];
-function setFeedTab(name){
-  feedTab = FEED_TABS.includes(name) ? name : "activity";
-  for (const key of FEED_TABS) {
-    const tab = $("#ftab-" + key), pane = $("#feedpane-" + key);
-    if (tab) { tab.classList.toggle("on", key === feedTab); tab.setAttribute("aria-selected", String(key === feedTab)); }
-    if (pane) pane.hidden = key !== feedTab;
+function setRepoTab(name){
+  repoTab = REPO_TABS.includes(name) ? name : "browse";
+  try { localStorage.setItem("hl.repoTab", repoTab); } catch (_) {}
+  paintRepoTab();
+  if (activeRepoTab() !== "browse") loadSubscriptions();
+  if (activeRepoTab() === "releases") loadFeed();
+}
+
+// One place that says which section is on screen. The personal Library is a single
+// list, so the tab row and the extra panes only exist in the shared Repository.
+function paintRepoTab(){
+  const shared = libraryScope === "shared";
+  const tab = activeRepoTab();
+  const row = $("#repotabs");
+  if (row) row.hidden = !shared;
+  for (const key of REPO_TABS) {
+    const button = $("#rtab-" + key);
+    if (button) {
+      button.classList.toggle("on", key === tab);
+      button.setAttribute("aria-selected", String(key === tab));
+    }
+    const pane = $("#repopane-" + key);
+    if (pane) pane.hidden = key !== tab;
   }
-  if (feedTab === "artists"){ loadSubscriptions(); loadFeed(); }
-  else if (feedTab === "following") loadSubscriptions();
-  else loadActivity();
+  const title = $("#libtitle");
+  if (title) title.textContent = !shared ? "Library"
+    : tab === "releases" ? "Releases" : tab === "subscribed" ? "Subscribed" : "Repository";
+  const count = $("#libcount");
+  if (count) count.hidden = tab !== "browse";
+  // The import target is the pool, so it belongs to Browse, not to the other sections.
+  const zone = $("#dropzone");
+  if (zone) zone.hidden = tab !== "browse";
 }
 
 function ago(ts){
@@ -7423,8 +7456,8 @@ async function loadSubscriptions(){
   const r = await fetch("/api/subscriptions", {cache: "no-store"});
   subscriptions = (await r.json()).subscriptions || [];
   renderSubscriptions();
-  // The feed reads `subscriptions` for the My filter and for the seat.
-  if (feedTab === "artists") renderFeed();
+  // The releases list reads `subscriptions` for the My filter and for the seat.
+  if (activeRepoTab() === "releases") renderFeed();
 }
 
 $("#followbtn").onclick = async () => {
@@ -7521,7 +7554,7 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => {
     $("#view-feed").hidden = view !== "feed";
     $("#view-library").hidden = view !== "library";
     if (view === "library") { setLibraryScope(tab.dataset.scope || 'shared'); loadLibrary(); }
-    if (view === "feed") setFeedTab(feedTab);
+    if (view === "feed") loadActivity();
   };
 });
 
@@ -7541,6 +7574,13 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => {
   if (tab) tab.click();
 })();
 
+try {
+  const saved = localStorage.getItem('hl.repoTab');
+  if (REPO_TABS.includes(saved)) repoTab = saved;
+} catch (_) {}
+// A reload that lands on Releases or Subscribed has to fetch that section, not just
+// paint the tab: the nav replay above only switched the view.
+if (!$("#view-library").hidden && activeRepoTab() !== "browse") setRepoTab(repoTab);
 try { if (sessionStorage.getItem('hl.filtersOpen') === '1') toggleFilters(true); } catch (_) {}
 
 // The admin "view as user" switch is session-scoped, so it has to be painted before the

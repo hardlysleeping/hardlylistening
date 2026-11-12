@@ -79,8 +79,9 @@ function check(name, ok, detail) {
         const wait = ms => new Promise(r => setTimeout(r, ms));
         listeningSaves = { tracks: [], playlist_tracks: [], folder_tracks: [], playlists: [], folders: [] };
         refresh = () => Promise.resolve();
-        document.querySelector('.tab[data-view="feed"]').click();
-        setFeedTab("artists");
+        // Releases are the Repository's section now, not a Feed tab (UI-021).
+        document.querySelector('.tab[data-view="library"][data-scope="shared"]').click();
+        setRepoTab("releases");
         await loadSubscriptions();
         await wait(500);
         const pageEl = document.getElementById("feedartistpage");

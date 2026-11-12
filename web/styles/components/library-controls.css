@@ -395,6 +395,12 @@
   display:none
 }
 
+/* Browse / Releases / Subscribed. The shared Repository is the only scope with three
+   sections, so the row itself is hidden in the personal Library (paintRepoTab). */
+#repotabs{
+  margin:0 0 12px
+}
+
 #dlg-listening .libtools{
   gap:8px;
   padding:7px 0;

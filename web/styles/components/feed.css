@@ -146,8 +146,9 @@
 
 .feedghead .feedgart:active{transform:scale(.94)}
 
-/* .libtools is display:flex, which out-specifies [hidden] on its own. */
-#feedpane-artists .feedtools[hidden]{display:none!important}
+/* .libtools is display:flex, which out-specifies [hidden] on its own.
+   The release list lives in the Repository now, beside Browse (UI-021). */
+#repopane-releases .feedtools[hidden]{display:none!important}
 
 /* The page's own top row: Back on the left, the way into the Repo copy on the right. */
 .fanav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
@@ -283,11 +284,6 @@
 .feedacts button{flex:1}
 }
 
-/* ---------- Feed tabs, member activity, member profiles ---------- */
-.feedtabs{display:inline-flex;gap:4px;margin:0 0 14px;border:1px solid var(--line);border-radius:999px;background:#191a21}
-
-.feedtabs .segbtn{min-height:36px;padding:0 18px;border:0;border-radius:999px;background:transparent;color:var(--dim);font:inherit;font-size:14px;cursor:pointer}
-
-.feedtabs .segbtn.on{background:var(--accent);color:#0b0b10;font-weight:600}
-
-@media(max-width:720px){.feedtabs{width:100%}.feedtabs .segbtn{flex:1}}
+/* ---------- member activity, member profiles ----------
+   Feed has no tabs any more: it is Activity only. The Repository's Browse / Releases /
+   Subscribed row is a plain `.seg`, styled with the other library controls. */
