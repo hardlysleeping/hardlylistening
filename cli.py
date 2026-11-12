@@ -1,4 +1,4 @@
-"""The packaged entry point: `run`, `check`, `version`.
+"""The packaged entry point: `run`, `check`, `backup`, `version`.
 
 `bin/hardlylistening-server` is a two-line shell wrapper around this file, so the logic lives
 where it can be tested. Nothing here daemonises, forks or writes a PID file: systemd, Docker or
@@ -10,6 +10,7 @@ to nothing: a missing directory is reported as missing, not created, and the dat
 a transaction that is rolled back.
 """
 import argparse
+import contextlib
 import os
 import shutil
 import socket
@@ -21,12 +22,15 @@ import config
 import paths
 
 APP_DIR = Path(__file__).resolve().parent
-USAGE = """usage: hardlylistening-server [command] [--host HOST] [--port PORT]
+USAGE = """usage: hardlylistening-server [command] [options]
 
 commands:
   run       serve (the default when no command is given)
   check     config, directories, database, disk, yt-dlp, ffmpeg, listen port
+  backup    consistent copy of the database: backup <directory> [--force]
   version   print the installed version
+
+run takes --host HOST and --port PORT, overriding the environment.
 """
 
 
@@ -176,6 +180,68 @@ def check() -> int:
     return _report(rows, failures)
 
 
+def _discard(path: Path) -> None:
+    """Remove a half-written copy without letting the cleanup become a second failure.
+
+    The path itself can be unlinkable (its parent turned out to be a regular file), and that
+    error would replace the real one in the operator's terminal.
+    """
+    with contextlib.suppress(OSError):
+        path.unlink(missing_ok=True)
+
+
+def backup(destination: Path, force: bool = False) -> int:
+    """Copy the live database with SQLite's online-backup API.
+
+    Copying the file by hand is wrong twice over: with WAL on, `hardlylistening.db` alone is not a
+    database, and a copy taken mid-write is not a consistent one. The backup API reads through a
+    normal connection, so the server can keep serving while this runs, and the copy is a
+    transactionally consistent snapshot of every committed write.
+
+    Scope is the database only. Media is a large tree that wants rsync or a filesystem snapshot, and
+    identity will be a directory this command does not yet know about; both are named in the output
+    so a backup taken here is not mistaken for a complete one.
+    """
+    source = paths.DB_PATH
+    if not source.is_file():
+        print(f"backup: no database at {source}", file=sys.stderr)
+        return 1
+    target = destination.expanduser() / source.name
+    if target.exists() and not force:
+        # Replacing a good backup with a fresh one is a decision, not a default: a typo in the
+        # path must not silently destroy yesterday's copy.
+        print(f"backup: {target} already exists (use --force to replace it)", file=sys.stderr)
+        return 1
+    tmp = target.with_name(target.name + ".part")
+    try:
+        destination.expanduser().mkdir(parents=True, exist_ok=True)
+        if tmp.exists():
+            tmp.unlink()
+        with contextlib.closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=30)) as src, \
+                contextlib.closing(sqlite3.connect(tmp)) as dst:
+            src.backup(dst)                         # one call, one consistent snapshot
+            # The page-1 header carries the source's journal mode, so the copy comes out in WAL
+            # too. Put it back to a single file: a backup that is a database *three* files is one
+            # a careless rsync can copy inconsistently, which defeats the point of the snapshot.
+            dst.execute("PRAGMA journal_mode=DELETE")
+            integrity = dst.execute("PRAGMA integrity_check").fetchone()[0]
+    except (OSError, sqlite3.Error) as exc:
+        _discard(tmp)
+        print(f"backup: {exc}", file=sys.stderr)
+        return 1
+    if integrity != "ok":
+        _discard(tmp)
+        print(f"backup: integrity check failed on the copy: {integrity}", file=sys.stderr)
+        return 1
+    tmp.replace(target)                             # only a verified copy replaces the last one
+    size = target.stat().st_size
+    print(f"hardlylistening {version()}")
+    print(f"  database   {target}  ({size / 1024 / 1024:.1f} MiB, integrity ok)")
+    print(f"  source     {source}")
+    print("  not copied  media (rsync or snapshot the library root) and identity/ if present")
+    return 0
+
+
 def _report(rows, failures: int) -> int:
     print(f"hardlylistening {version()}")
     width = max(len(name) for name, _, _ in rows)
@@ -196,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
     command = "run"
     if argv and not argv[0].startswith("-"):
         command = argv.pop(0)
+    elif argv and argv[0] in ("-h", "--help"):
+        command = argv.pop(0)
     if command in ("-h", "--help", "help"):
         print(USAGE, end="")
         return 0
@@ -204,6 +272,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if command == "check":
         return check()
+    if command == "backup":
+        parser = argparse.ArgumentParser(prog="hardlylistening-server backup",
+                                         description="copy the database with SQLite's online-backup API")
+        parser.add_argument("directory", help="where to write the copy")
+        parser.add_argument("--force", action="store_true", help="replace an existing copy")
+        try:
+            args = parser.parse_args(argv)
+        except SystemExit as exc:                 # argparse already printed the reason
+            return 2 if exc.code else 0
+        return backup(Path(args.directory), args.force)
     if command != "run":
         print(f"hardlylistening-server: unknown command {command!r}\n", file=sys.stderr)
         print(USAGE, end="", file=sys.stderr)

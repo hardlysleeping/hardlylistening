@@ -10,7 +10,8 @@ boundary*; this document is the operational detail for the `SERVER-PKG-###` card
 | ✓ | 004 graceful shutdown on `SIGTERM`/`SIGINT` |
 | ✓ | 001 runtime config: `HOST`, `PORT`, `MUSIC_DIR` |
 | ✓ | 003 `bin/hardlylistening-server` with `run`, `check`, `version` |
-| — | 005 systemd unit, 006 image, 007/008 restart state, 009 identity, 010 `backup`, 011 migration test |
+| ✓ | 010 `backup <directory>` — SQLite online-backup API, verified copy |
+| — | 005 systemd unit, 006 image, 007/008 restart state, 009 identity, 011 migration test |
 
 The rule everything else follows from:
 
@@ -191,10 +192,32 @@ database is reported as "will be created" and is not created, and the database i
 `mode=rw` inside `BEGIN IMMEDIATE` … `ROLLBACK` to prove the write lock without writing. A busy
 port is a warning, because a manual `check` against a running instance is normal.
 
+**Done (SERVER-PKG-010).** `backup <directory>` copies the database with SQLite's online-backup
+API, so the server keeps serving and the copy is a consistent snapshot of every committed write.
+Copying the file by hand is wrong twice: with WAL on, `hardlylistening.db` alone is not a database,
+and a byte copy taken mid-write can be torn.
+
+Three deliberate properties:
+
+* the source is opened `mode=ro`, so a backup can never write to the database it is protecting;
+* the copy is written to `<name>.part`, set back to `journal_mode=DELETE`, integrity-checked, and
+  only then renamed — a failed or torn copy never replaces the last good one, and `--force` is
+  needed to replace an existing file at all;
+* the journal mode matters for the artifact, not the process: the page-1 header carries the
+  source's mode, so without that step the "backup" is a database in three files that a careless
+  rsync can copy inconsistently.
+
+Scope is the database only — the output says so. Media wants rsync or a filesystem snapshot, and
+`identity/` will need its own line here once SERVER-PKG-009 exists. `tests/test_backup.py` keeps a
+real writer open while the backup runs, then reads the copy back: settings and rows match, the copy
+opens standalone, no `-wal` survives, the source file is byte-identical afterwards, a missing
+database is a refusal rather than an empty backup, and an existing copy is not replaced without
+`--force`.
+
 Still required before the system service ships:
 
-* **`backup` and `migrate` subcommands** (see §5), and the migrations stay automatic and idempotent
-  at startup as they are now.
+* **`migrate`** (see §5), and the migrations stay automatic and idempotent at startup as they are
+  now.
 
 ---
 
@@ -230,8 +253,12 @@ hardlylistening-server run                 # default; --host/--port override the
 hardlylistening-server check               # config, app, data, DB read/write, music, disk, yt-dlp, ffmpeg, port   ✓ built
 hardlylistening-server version             # prints VERSION                                    ✓ built
 hardlylistening-server migrate             # explicit upgrade path                             — not built
-hardlylistening-server backup <path>       # SQLite online-backup API, consistent snapshot      — not built
+hardlylistening-server backup <dir> [--force]  # online-backup API, verified, single file       ✓ built
 ```
+
+`backup` takes a directory, not a file: it writes `<dir>/hardlylistening.db`, creates the directory
+if it is missing, refuses to replace an existing copy without `--force`, and prints what it did not
+copy.
 
 Exit codes: `0` success (warnings included), `1` a failed check, `2` a usage error — an unknown
 command, or a malformed `HARDLYLISTENING_PORT`. No command means `run`, so the unit file needs no
