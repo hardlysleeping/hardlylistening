@@ -435,15 +435,13 @@ def handle(endpoint, params, multi, ctx):
     def ids_of(key):
         return multi.get(key) or ([params[key]] if params.get(key) else [])
 
-    with store.lock:
-        starred = {r[0] for r in store.conn.execute(
-            'SELECT track_id FROM listening_favorites WHERE member_id=?', (uid,))}
-        ratings = {r[0]: r[1] for r in store.conn.execute(
-            'SELECT track_id, rating FROM listening_ratings WHERE member_id=?', (uid,))}
-        plays = {r[0]: (r[1], r[2]) for r in store.conn.execute(
-            'SELECT track_id, plays, last_played FROM listening_plays WHERE member_id=?', (uid,))}
-        album_added = {(r[0] or '', r[1] or ''): r[2] for r in store.conn.execute(
-            'SELECT artist_name, album, MAX(added) FROM tracks GROUP BY artist_name, album')}
+    # The catalogue questions belong to the library service, so this surface and the web
+    # API cannot drift apart about what a member has starred or how often they played it.
+    from library import service
+    starred = service.starred(store, uid)
+    ratings = service.ratings(store, uid)
+    plays = service.plays(store, uid)
+    album_added = service.album_added(store)
 
     # ---- core -------------------------------------------------------------
     if endpoint == 'ping':

@@ -48,6 +48,25 @@ def ratings(store, uid) -> dict:
             'SELECT track_id, rating FROM listening_ratings WHERE member_id=?', (uid,))}
 
 
+def plays(store, uid) -> dict:
+    """{track id: (play count, last played)} — the scrobble ledger, per member."""
+    with store.lock:
+        return {r[0]: (r[1], r[2]) for r in store.conn.execute(
+            'SELECT track_id, plays, last_played FROM listening_plays WHERE member_id=?', (uid,))}
+
+
+def album_added(store) -> dict:
+    """{(artist, album): newest added time} — the album wall's sort key.
+
+    Deleted songs do not age an album: a tombstone is not a reason for its shelf to
+    jump to the top.
+    """
+    with store.lock:
+        return {(r[0] or '', r[1] or ''): r[2] for r in store.conn.execute(
+            'SELECT artist_name, album, MAX(added) FROM tracks WHERE deleted=0'
+            ' GROUP BY artist_name, album')}
+
+
 def bookmarks(store, uid) -> dict:
     with store.lock:
         return {r[0]: r[1] for r in store.conn.execute(
