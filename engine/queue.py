@@ -378,27 +378,51 @@ class Queue:
                 self.store.conn.execute("UPDATE tracks SET file='', size=0 WHERE id=?",
                                         (track["id"],))
                 self.store.conn.commit()
+        # The same recording may already be on disk under another row (the song sits
+        # in a playlist followed for two providers, or the link was added twice).
+        # Link that file instead of fetching a second identical copy.
+        twin = self.store.downloaded_twin(track)
+        if twin:
+            shared = Path(twin["file"])
+            ok, _ = ytdlp.verify_audio(shared, expected_seconds=track.get("duration") or 0)
+            if ok:
+                with self.store.lock:
+                    self.store.conn.execute(
+                        "UPDATE tracks SET file=?, size=? WHERE id=?",
+                        (str(shared), shared.stat().st_size, track["id"]))
+                    self.store.conn.commit()
+                self.store.fill_release_artwork(track["id"])
+                self._finish(job, "completed", "", "", size=shared.stat().st_size)
+                self.store.log(
+                    f"“{track['title']}” is already in the library — linked, not downloaded",
+                    "ok", f"job:{job['id']}")
+                return
         url = self._resolve_source(job, track)
         if not url:
             return
 
         root = Path(self.store.setting("root")).expanduser()
-        fmt = self.store.setting("audio_format", "mp3")
+        fmt = self.store.setting("audio_format", "best")
         collection = self._collection(track)
+        # "best" keeps whatever container the origin serves (mp3, opus, webm), so
+        # the planned suffix is a placeholder — the file is renamed by yt-dlp.
+        extension = "mp3" if fmt == "best" else fmt
         target = library_store.path_for(
             root, artist=track["artist_name"], album=track["album"],
             playlist_title=collection, number=track["track_number"] or 0,
-            title=track["title"], extension=fmt)
+            title=track["title"], extension=extension)
         taken = {str(Path(r["file"])) for r in self.store.conn.execute(
             "SELECT file FROM tracks WHERE file<>''").fetchall()}
-        target = library_store.unique(target, taken)
+        target = (library_store.unique_any_suffix(target, taken) if fmt == "best"
+                  else library_store.unique(target, taken))
         target.parent.mkdir(parents=True, exist_ok=True)
 
         settings = ytdlp.YtDlpSettings(
             audio_format=fmt,
             embed_thumb=self.store.setting("embed_thumb", "1") == "1",
             archive=None)  # file verification + SQLite replace stale archive skips
-        cmd = ytdlp.build_command(url, str(target).replace(f".{fmt}", ".%(ext)s"), settings)
+        outtmpl = str(target.with_suffix(".%(ext)s"))
+        cmd = ytdlp.build_command(url, outtmpl, settings)
 
         self.store.update_job(job["id"], status="downloading", started=time.time(),
                               progress=0, bytes=0, speed=0, eta=0)
@@ -432,7 +456,6 @@ class Queue:
         self._active_job = 0
         self._cancel.clear()
         self.current = None
-        outtmpl = str(target).replace(f".{fmt}", ".%(ext)s")
 
         if cancelled:
             removed = ytdlp.discard_output(outtmpl, stop=root)   # .part, .ytdl, art
@@ -474,6 +497,13 @@ class Queue:
             # so an empty artwork column is filled from the release now that the
             # track is on disk. A cover already on the row is never overwritten.
             self.store.fill_release_artwork(track["id"])
+            # One copy of the cover in the store, a 640 px copy in the file. A
+            # failure here must never fail the download; the sweep retries it.
+            try:
+                from library import art_store
+                art_store.normalise(self.store, track["id"])
+            except Exception:
+                pass
             self._finish(job, "completed", "", "",
                          size=written.stat().st_size if written else 0)
             self.store.set_provider(job["provider"], last_success=time.time())

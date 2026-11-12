@@ -35,7 +35,7 @@ OPEN_STATES = ("queued", "resolving", "downloading", "retry_wait")
 
 DEFAULTS = {
     "root": str(Path.home() / "Music" / "HardlyListening"),
-    "audio_format": "mp3",
+    "audio_format": "best",
     "ai_apple_enabled": "1",
     "ai_model": "google/gemini-2.5-flash-lite",
     "ai_base_url": "https://openrouter.ai/api/v1",
@@ -761,6 +761,28 @@ class Store:
                 "  WHERE pt.track_id=t.id) AS playlists"
                 " FROM tracks t WHERE t.deleted>0 ORDER BY t.deleted DESC").fetchall()
         return [dict(row) for row in rows]
+
+    def downloaded_twin(self, track: dict):
+        """Another row for the same recording that already has a file on disk.
+
+        One song arrives twice when a playlist is followed for two providers, or
+        when the same link is added again. Downloading it twice leaves two copies
+        of identical audio, so the second row points at the first one's file.
+        """
+        isrc = (track.get("isrc") or "").strip()
+        with self.lock:
+            if isrc:
+                row = self.conn.execute(
+                    "SELECT id, file, title FROM tracks WHERE id<>? AND file<>'' "
+                    "AND deleted=0 AND lower(trim(isrc))=lower(?) ORDER BY id LIMIT 1",
+                    (track["id"], isrc)).fetchone()
+                if row:
+                    return row
+            return self.conn.execute(
+                "SELECT id, file, title FROM tracks WHERE id<>? AND file<>'' "
+                "AND deleted=0 AND lower(trim(title))=lower(trim(?)) "
+                "AND lower(trim(artist_name))=lower(trim(?)) ORDER BY id LIMIT 1",
+                (track["id"], track["title"] or "", track["artist_name"] or "")).fetchone()
 
     # -- playlists --
     def playlist(self, title: str, provider: str, source_url: str, *,

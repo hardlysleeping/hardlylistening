@@ -49,5 +49,29 @@ def unique(path: Path, taken: set[str]) -> Path:
         index += 1
 
 
+def _any_file_with_stem(folder: Path, stem: str) -> bool:
+    """Folder listing rather than a glob: titles contain brackets and stars."""
+    try:
+        return any(child.stem == stem for child in folder.iterdir())
+    except OSError:
+        return False
+
+
+def unique_any_suffix(path: Path, taken: set[str]) -> Path:
+    """For a source-native download, whose suffix is only known after it lands.
+
+    `unique` compares the full name, so a second recording called "Song" would not
+    see an existing "Song.webm" while it plans for "Song.opus" — and one would
+    overwrite the other. Here any file with the same stem counts as taken.
+    """
+    stems = {Path(item).with_suffix("") for item in taken if item}
+    candidate, index = path, 2
+    while (candidate.with_suffix("") in stems
+           or (candidate.parent.exists() and _any_file_with_stem(candidate.parent, candidate.stem))):
+        candidate = path.with_name(f"{path.stem} ({index}){path.suffix}")
+        index += 1
+    return candidate
+
+
 def sidecar_ok(path: Path) -> bool:
     return path.exists() and path.stat().st_size > 0

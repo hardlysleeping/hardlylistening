@@ -71,10 +71,17 @@ YTDLP = bin_path()
 
 @dataclass
 class YtDlpSettings:
-    audio_format: str = "mp3"
+    # "best" = keep the source's own audio stream: no decode, no re-encode. A
+    # SoundCloud MP3 stays MP3 160 and a YouTube Opus stays Opus, because a lossy
+    # format change is only free when there is no format change.
+    audio_format: str = "best"
     embed_thumb: bool = True
     archive: Path | None = None
     retries: int = 2
+    # HLS origins (SoundCloud) serve a track as many small fragments. Fetching
+    # them one at a time is what made a 5 MB track take ~11 s; eight in flight
+    # measured 4.9 s. yt-dlp still assembles and verifies one file.
+    fragments: int = 8
 
 
 def norm(text: str) -> str:
@@ -335,6 +342,8 @@ def build_command(url: str, outtmpl: str, settings: YtDlpSettings) -> list[str]:
            "--retries", str(settings.retries), "--fragment-retries", "2",
            "--progress-template", PROGRESS_TEMPLATE,
            "-o", outtmpl]
+    if settings.fragments > 1:
+        cmd += ["--concurrent-fragments", str(settings.fragments)]
     if settings.embed_thumb:
         cmd.append("--embed-thumbnail")
     if settings.archive:
@@ -431,7 +440,7 @@ def discard_output(outtmpl: str, stop: Path | None = None) -> int:
     stem = Path(outtmpl).name.split(".%(ext)s")[0]
     removed = 0
     if folder.exists():
-        for leftover in folder.glob(stem + ".*"):
+        for leftover in _written(folder, stem):
             try:
                 leftover.unlink()
                 removed += 1
@@ -485,14 +494,27 @@ def verify_audio(path: Path | None, min_seconds: float = 1.0,
     return True, ""
 
 
+def _written(folder: Path, stem: str):
+    """Files this track's download could have produced.
+
+    Deliberately not `folder.glob(stem + ".*")`: a title like "[Full Vocal Mix]"
+    is a glob character class, so the glob matched nothing, the finished file was
+    reported as "yt-dlp wrote no file", and every retry wrote another copy of the
+    same song under a new name.
+    """
+    if not folder.exists():
+        return []
+    prefix = stem + "."
+    return [child for child in folder.iterdir()
+            if child.is_file() and child.name.startswith(prefix)]
+
+
 def find_output(outtmpl: str, audio_format: str) -> Path | None:
     """The file yt-dlp just wrote, whatever extension it settled on."""
     folder = Path(outtmpl).parent
     stem = Path(outtmpl).name.split(".%(ext)s")[0]
-    if not folder.exists():
-        return None
     wanted = {".mp3", ".m4a", ".opus", ".flac", ".wav", ".ogg", ".webm", f".{audio_format}"}
-    for candidate in sorted(folder.glob(stem + ".*"), key=lambda p: -p.stat().st_mtime):
+    for candidate in sorted(_written(folder, stem), key=lambda p: -p.stat().st_mtime):
         if candidate.suffix.lower() in wanted:
             return candidate
     return None
