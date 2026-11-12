@@ -13,6 +13,7 @@ import re
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
 from security import SECURITY, Denied
+from library import playback, service
 from library.browser_downloads import local_path
 
 
@@ -305,14 +306,8 @@ def browser(handler, store, security):
 
 
 def catalog(store, uid):
-    import preferences
-    preferences.schema(store)
-    rows = store.conn.execute('''SELECT DISTINCT t.* FROM tracks t WHERE t.id IN
-      (SELECT track_id FROM listening_tracks WHERE member_id=? UNION
-       SELECT track_id FROM listening_playlist_tracks WHERE member_id=? UNION
-       SELECT track_id FROM listening_folder_tracks WHERE member_id=? UNION
-       SELECT track_id FROM listening_favorites WHERE member_id=?) ORDER BY t.artist_name,t.album,t.track_number,t.id''', (uid, uid, uid, uid))
-    return [dict(r) for r in rows]
+    """Kept as a name for callers; the query itself belongs to the library service."""
+    return service.catalog(store, uid)
 
 
 def key(prefix, *values):
@@ -442,13 +437,9 @@ def rest(handler, store, security):
                 pass
             import subsonic as _subsonic
             _subsonic.schema(store)
-            with store.lock:
-                starred = {r[0] for r in store.conn.execute(
-                    'SELECT track_id FROM listening_favorites WHERE member_id=?', (uid,))}
-                ratings = {r[0]: r[1] for r in store.conn.execute(
-                    'SELECT track_id, rating FROM listening_ratings WHERE member_id=?', (uid,))}
-                bookmarks = {r[0]: r[1] for r in store.conn.execute(
-                    'SELECT track_id, position_ms FROM listening_bookmarks WHERE member_id=?', (uid,))}
+            starred = service.starred(store, uid)
+            ratings = service.ratings(store, uid)
+            bookmarks = service.bookmarks(store, uid)
             songs, albums, artists, artwork = [], {}, {}, {}
             for t in tracks:
                 t['albumId'] = key('al_', t.get('artist_name') or '', t.get('album') or '')
@@ -467,11 +458,11 @@ def rest(handler, store, security):
                                                    'albumCount': 0, 'coverArt': s['artistId']})
             for a in albums.values():
                 artists[a['artistId']]['albumCount'] += 1
-            playlists = [dict(r) for r in store.conn.execute('SELECT p.id,p.title FROM playlists p JOIN listening_playlists s ON p.id=s.playlist_id WHERE s.member_id=? ORDER BY p.id', (uid,))]
-            links = list(store.conn.execute('SELECT playlist_id,track_id,position FROM listening_playlist_tracks WHERE member_id=? ORDER BY position,track_id', (uid,)))
             import preferences
             preferences.schema(store)
-            favorites = [dict(r) for r in store.conn.execute('SELECT t.* FROM tracks t JOIN listening_favorites f ON t.id=f.track_id WHERE f.member_id=? ORDER BY t.id', (uid,))]
+            playlists = service.playlists(store, uid)
+            links = service.playlist_tracks(store, uid)
+            favorites = service.favorites(store, uid)
             playlists.append({'id': preferences.FAVORITES_ID, 'title': 'Favorites'})
         def find(rows):
             result = next((r for r in rows if str(r['id']) == params.get('id', '')), None)
@@ -493,7 +484,7 @@ def rest(handler, store, security):
                      'songCount': len(chosen), 'duration': sum(s['duration'] for s in chosen)}, chosen)
         if endpoint in ('stream', 'download'):
             selected = find(tracks)
-            if local_path(store, selected) is None:
+            if not playback.available(store, selected['id']):
                 raise Denied(404, 'Media unavailable')
             # Only the scoped id above can reach a file; no transcoding or acquisition.
             handler.stream_audio(selected['id'])
@@ -514,7 +505,7 @@ def rest(handler, store, security):
             if track_id is None or str(track_id) != params.get('mediaId', ''):
                 raise Denied(400, 'transcodeParams is unknown, expired, or for another track')
             selected = next((dict(t) for t in tracks if t['id'] == track_id), None)
-            if selected is None or local_path(store, selected) is None:
+            if selected is None or not playback.available(store, track_id):
                 raise Denied(404, 'Media unavailable')
             handler.stream_audio(track_id)
             return

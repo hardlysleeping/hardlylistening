@@ -844,56 +844,30 @@ class Handler(BaseHTTPRequestHandler):
 
     def stream_audio(self, track_id: int) -> None:
         """Serve a library file with Range support — an <audio> deck needs it to
-        seek, and seeking is most of what a DJ board does."""
+        seek, and seeking is most of what a DJ board does.
+
+        The decision (file, slice, status) is `library.playback`'s; this method only writes it,
+        so the mixer, the public share page and Subsonic stream the same way.
+        """
+        from library import playback
         store, _ = boot()
-        track = store.track_by_id(track_id)
-        from library.browser_downloads import local_path
-        path = local_path(store, track)
-        if path is None:
+        stream = playback.plan(store, track_id, self.headers.get("Range"))
+        if stream is None:
             self._send(404, b"file is missing", "text/plain")
             return
-        size = path.stat().st_size
-        ctype = mimetypes.guess_type(path.name)[0] or "audio/mpeg"
-        start, end = 0, size - 1
-        status = 200
-        header = self.headers.get("Range")
-        if header:
-            match = re.match(r"bytes=(\d*)-(\d*)", header.strip())
-            if match:
-                if match.group(1):
-                    start = int(match.group(1))
-                    if match.group(2):
-                        end = min(int(match.group(2)), size - 1)
-                elif match.group(2):
-                    start = max(0, size - int(match.group(2)))
-                if start >= size or start > end:
-                    self.send_response(416)
-                    self.send_header("Content-Range", f"bytes */{size}")
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
-                    return
-                status = 206
-        length = end - start + 1
-        self.send_response(status)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(length))
+        self.send_response(stream.status)
+        self.send_header("Content-Type", stream.content_type)
+        self.send_header("Content-Length", str(stream.length))
         self.send_header("Accept-Ranges", "bytes")
-        if status == 206:
-            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        if stream.status in (206, 416):
+            self.send_header("Content-Range", stream.content_range)
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        remaining = length
-        with path.open("rb") as handle:
-            handle.seek(start)
-            while remaining > 0:
-                chunk = handle.read(min(65536, remaining))
-                if not chunk:
-                    break
-                try:
-                    self.wfile.write(chunk)
-                except (BrokenPipeError, ConnectionResetError):
-                    return
-                remaining -= len(chunk)
+        for chunk in stream.chunks():
+            try:
+                self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
     def redirect(self, location: str) -> None:
         self.send_response(303)
