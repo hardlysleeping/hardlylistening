@@ -892,6 +892,20 @@ class Handler(BaseHTTPRequestHandler):
         if stream is None:
             self._send(404, b"file is missing", "text/plain")
             return
+        self.send_stream(stream)
+
+    def stream_path(self, path, content_type: str | None = None) -> None:
+        """Serve a file the server produced itself (a transcode) with the same Range rules."""
+        from library import playback
+        try:
+            stream = playback.plan_path(path, self.headers.get("Range"), content_type)
+        except OSError:
+            self._send(404, b"file is missing", "text/plain")
+            return
+        self.send_stream(stream)
+
+    def send_stream(self, stream) -> None:
+        """Write one resolved stream: headers first, then the slice the client asked for."""
         self.send_response(stream.status)
         self.send_header("Content-Type", stream.content_type)
         self.send_header("Content-Length", str(stream.length))

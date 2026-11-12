@@ -4,7 +4,8 @@ HTTP lives in the handler; this module decides *what* to serve. That split is wh
 player, the mixer, the public share page and the Subsonic surface all stream identically without
 any of them owning Range arithmetic or the "file is missing" rule.
 
-No transcode, no offset: seeking is a byte range on the stored file.
+No transcode here: this module never encodes. Seeking is a byte range on whatever file it is
+given — the stored track, or a transcode the Subsonic surface produced first.
 """
 import mimetypes
 import re
@@ -71,8 +72,17 @@ def plan(store, track_id, range_header=None):
     path = resolve(store, track_id)
     if path is None:
         return None
+    return plan_path(path, range_header)
+
+
+def plan_path(path, range_header=None, content_type=None):
+    """The same decision for a file already resolved — a transcode the server produced, say.
+
+    Range arithmetic lives here so every caller writes headers identically; the caller owns
+    deciding *which* file and what it is called.
+    """
     size = path.stat().st_size
-    content_type = mimetypes.guess_type(path.name)[0] or 'audio/mpeg'
+    ctype = content_type or mimetypes.guess_type(path.name)[0] or 'audio/mpeg'
     start, end, status = 0, size - 1, 200
     match = RANGE.match((range_header or '').strip())
     if range_header and match:
@@ -83,6 +93,6 @@ def plan(store, track_id, range_header=None):
         elif match.group(2):
             start = max(0, size - int(match.group(2)))
         if start >= size or start > end:
-            return Stream(path, start, end, size, 416, content_type)
+            return Stream(path, start, end, size, 416, ctype)
         status = 206
-    return Stream(path, start, end, size, status, content_type)
+    return Stream(path, start, end, size, status, ctype)

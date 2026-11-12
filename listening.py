@@ -486,13 +486,28 @@ def rest(handler, store, security):
             selected = find(tracks)
             if not playback.available(store, selected['id']):
                 raise Denied(404, 'Media unavailable')
-            # Only the scoped id above can reach a file; no transcoding or acquisition.
+            # A `format` on a plain stream is the client asking for a re-encode: classic
+            # Subsonic clients never call the decision endpoint. `download` always hands over
+            # the stored file — a download is the file, not a rendition of it.
+            wanted = params.get('format', '') if endpoint == 'stream' else ''
+            if wanted.lower() in ('raw', 'original'):
+                wanted = ''
+            ceiling = params.get('maxBitRate', '0')
+            target = subsonic.transcode_target(None, wanted, ceiling) if wanted else None
+            if wanted and target is None:
+                raise Denied(430, 'This server cannot encode %s' % wanted)
+            if target and subsonic.should_encode(selected, target, ceiling):
+                encoded = subsonic.encode(store, selected['id'], target)
+                if encoded is None:
+                    raise Denied(404, 'Media unavailable')
+                handler.stream_path(encoded, subsonic.MUSIC_TYPES.get(target['suffix'], 'audio/mpeg'))
+                return
             handler.stream_audio(selected['id'])
             return
         if endpoint == 'getTranscodeStream':
-            # The extension's stream is the stored file, byte for byte: this server has no
-            # encoder, and getTranscodeDecision only issues params when the client can play
-            # that file as it is. Range seeking is the player's job, not an offset transcode.
+            # Two kinds of decision lead here: direct play, which serves the stored file byte
+            # for byte, and a re-encode, which is produced on demand and then served with the
+            # same Range rules. Range seeking is the player's job either way.
             if params.get('mediaType') != 'song':
                 raise Denied(430, 'Only song media is served by this server')
             try:
@@ -500,14 +515,21 @@ def rest(handler, store, security):
             except ValueError:
                 raise Denied(400, 'Invalid offset')
             if offset > 0:
-                raise Denied(430, 'This server does not transcode; seek with HTTP Range instead')
-            track_id = subsonic.resolve_transcode_params(params.get('transcodeParams'), uid)
-            if track_id is None or str(track_id) != params.get('mediaId', ''):
+                raise Denied(430, 'Seek with HTTP Range on the stream, not with an offset')
+            resolved = subsonic.resolve_transcode_params(params.get('transcodeParams'), uid)
+            if resolved is None or str(resolved[0]) != params.get('mediaId', ''):
                 raise Denied(400, 'transcodeParams is unknown, expired, or for another track')
+            track_id, target = resolved
             selected = next((dict(t) for t in tracks if t['id'] == track_id), None)
             if selected is None or not playback.available(store, track_id):
                 raise Denied(404, 'Media unavailable')
-            handler.stream_audio(track_id)
+            if target is None:
+                handler.stream_audio(track_id)
+                return
+            encoded = subsonic.encode(store, track_id, target)
+            if encoded is None:
+                raise Denied(404, 'Media unavailable')
+            handler.stream_path(encoded, subsonic.MUSIC_TYPES.get(target['suffix'], 'audio/mpeg'))
             return
         payload = subsonic.handle(endpoint, params, multi, {
             'store': store, 'uid': uid, 'username': params.get('u', ''), 'role': device['role'],

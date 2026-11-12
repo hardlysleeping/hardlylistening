@@ -7,6 +7,7 @@ modules that create it once a data directory is declared.
     HARDLYLISTENING_DATA_DIR=/var/lib/hardlylistening
         database            /var/lib/hardlylistening/hardlylistening.db
         artwork             /var/lib/hardlylistening/cache/artwork
+        transcode cache     /var/lib/hardlylistening/cache/transcode
         browser downloads   /var/lib/hardlylistening/cache/browser-downloads
         artist art          /var/lib/hardlylistening/cache/artist-art
         metadata cache      /var/lib/hardlylistening/cache/metadata

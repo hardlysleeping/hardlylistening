@@ -5,22 +5,28 @@ endpoint here. Everything that maps onto real app data is implemented; the subsy
 app has no equivalent for (chat, jukebox, sonic analysis, podcast downloads, user
 administration) answer Subsonic error 30 with a plain message, never a silent lie.
 
-Transcoding is answered as the OpenSubsonic extension #1 requires, but honestly: this app
-keeps one canonical file per track and has no encoder, so `getTranscodeDecision` can only
-say "play the stored file as it is". A client whose direct-play profile accepts the stored
-container and codec gets `canDirectPlay` plus an opaque `transcodeParams`, and
-`getTranscodeStream` serves those exact bytes with Range support. A client that would need
-a re-encode gets `canTranscode: false` and a stated reason instead of audio in the wrong
-format. `hls` stays unimplemented, because there is nothing to segment.
+Transcoding is answered as the OpenSubsonic extension #1 requires, and it is real: the
+library keeps one canonical file per track, and a client that cannot play it as it is gets
+the file encoded through ffmpeg to a format its own `transcodingProfiles` named (MP3 when the
+client names none, which is the Subsonic baseline). `getTranscodeStream` serves those bytes
+with Range support, from an encode cached by the source file's size and mtime. `hls` stays
+unimplemented, because there is nothing to segment.
 """
 from __future__ import annotations
 
 import base64
+import os
 import random
 import secrets
+import subprocess
 import time
 
+from paths import CACHE_DIR
 from security import Denied
+
+#: Encodes produced for clients that cannot play the stored file. Bounded and pruned by
+#: `_trim`; tests point this at a temporary directory.
+CACHE = CACHE_DIR / 'transcode'
 
 BLANK_PNG = base64.b64decode(
     b'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==')
@@ -121,6 +127,21 @@ CONTAINER_ALIASES = {
     'aiff': {'aiff', 'aif'},
 }
 
+#: What this server can actually encode, keyed by the codec a client names. MP3 is the
+#: Subsonic baseline every client plays; Opus and AAC are here because modern clients ask for
+#: them. `container` is what a ClientInfo profile calls it, `suffix` what the cache file gets.
+TRANSCODE_TARGETS = {
+    'mp3': {'suffix': 'mp3', 'container': 'mp3', 'codec': 'mp3', 'encoder': 'libmp3lame', 'bitrate': 192},
+    'opus': {'suffix': 'ogg', 'container': 'ogg', 'codec': 'opus', 'encoder': 'libopus', 'bitrate': 160},
+    'aac': {'suffix': 'm4a', 'container': 'mp4', 'codec': 'aac', 'encoder': 'aac', 'bitrate': 192},
+}
+DEFAULT_TRANSCODE = 'mp3'
+#: A client's `format` on a plain stream is the file suffix; map the ones that differ.
+_FORMAT_CODECS = {'mp3': 'mp3', 'ogg': 'opus', 'opus': 'opus', 'm4a': 'aac', 'mp4': 'aac', 'aac': 'aac'}
+TRANSCODE_TIMEOUT = 90
+TRANSCODE_CACHE_FILES = 400
+TRANSCODE_CACHE_AGE = 7 * 24 * 3600
+
 TRANSCODE_TTL = 30 * 60
 _TRANSCODE_PARAMS = {}
 
@@ -130,6 +151,182 @@ def _int(value):
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _capped(target, limit):
+    """A target with its bitrate lowered to what the client allows, never raised."""
+    result = dict(target)
+    if limit and 0 < int(limit) < result['bitrate']:
+        result['bitrate'] = int(limit)
+    return result
+
+
+def transcode_target(client, requested='', max_bitrate=0):
+    """What this server would encode for a client, or None when it cannot honour it.
+
+    `requested` is a `format` on a plain stream call; `max_bitrate` is its kbps. Otherwise the
+    client's own `transcodingProfiles` are consulted in order. No list at all means an older
+    client that expects the Subsonic default, MP3. A list that names only formats this server
+    cannot encode is an honest refusal: handing back audio the client said it cannot play is
+    worse than a stated reason.
+    """
+    client = client if isinstance(client, dict) else {}
+    limit = _int(max_bitrate) or (_int(client.get('maxAudioBitrate')) // 1000)
+    wanted = str(requested or '').strip().lower()
+    if wanted and wanted not in ('raw', 'original'):
+        codec = _FORMAT_CODECS.get(wanted, wanted)
+        target = TRANSCODE_TARGETS.get(codec)
+        return _capped(target, limit) if target else None
+    profiles = [p for p in (client.get('transcodingProfiles') or []) if isinstance(p, dict)]
+    if not profiles:
+        return _capped(TRANSCODE_TARGETS[DEFAULT_TRANSCODE], limit)
+    for profile in profiles:
+        if str(profile.get('protocol') or 'http').lower() not in ('', 'http'):
+            continue
+        codec = str(profile.get('audioCodec') or '').lower()
+        container = str(profile.get('container') or '').lower()
+        target = TRANSCODE_TARGETS.get(codec)
+        if target is None and container in ('mp4', 'm4a'):
+            target = TRANSCODE_TARGETS['aac']           # a profile names the container only
+        if target is not None:
+            own = _int(profile.get('maxAudioBitrate')) // 1000
+            return _capped(target, own or limit)
+    return None
+
+
+def should_encode(track, target, max_bitrate=0):
+    """Whether the stored file has to be re-encoded to satisfy this target.
+
+    Same suffix and no bitrate ceiling is the stored file verbatim; a client asking for a
+    lower bitrate than the file carries still wants a re-encode.
+    """
+    path = track.get('file') or ''
+    suffix = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
+    if suffix != target['suffix']:
+        return True
+    stored = stored_format(track)[3] // 1000
+    return bool(_int(max_bitrate)) and stored > _int(max_bitrate)
+
+
+def issue_transcode_params(uid, track_id, target=None):
+    """An opaque token tying a decision to one member, one track and one target format.
+
+    Kept in memory for half an hour, which the extension explicitly allows. A restart
+    invalidates outstanding decisions; the client simply asks again. `target` is None for a
+    direct-play decision, meaning the stream is the stored bytes.
+    """
+    now = time.time()
+    if len(_TRANSCODE_PARAMS) > 1000:
+        for token in [t for t, entry in _TRANSCODE_PARAMS.items() if entry[3] < now]:
+            _TRANSCODE_PARAMS.pop(token, None)
+    token = secrets.token_urlsafe(24)
+    _TRANSCODE_PARAMS[token] = (uid, int(track_id), target, now + TRANSCODE_TTL)
+    return token
+
+
+def resolve_transcode_params(token, uid):
+    """(track id, target) a token was issued for, or None when it is unknown, expired or
+    another member's."""
+    entry = _TRANSCODE_PARAMS.get(str(token or ''))
+    if not entry:
+        return None
+    owner, track_id, target, expiry = entry
+    if expiry < time.time() or owner != uid:
+        return None
+    return track_id, target
+
+
+def _cache_folder():
+    folder = CACHE
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _trim(folder):
+    """Keep the cache bounded: stale encodes go first, then the oldest past the ceiling."""
+    try:
+        files = sorted(folder.glob('*'), key=lambda path: path.stat().st_mtime)
+    except OSError:
+        return
+    cutoff = time.time() - TRANSCODE_CACHE_AGE
+    for index, path in enumerate(files):
+        try:
+            stale = path.stat().st_mtime < cutoff
+        except OSError:
+            continue
+        if stale or len(files) - index > TRANSCODE_CACHE_FILES:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
+def encode(store, track_id, target):
+    """The transcoded file for one track and one target, or None when ffmpeg could not.
+
+    Cached by the source file's size and mtime, so seeking through an album does not
+    re-encode the same song on every Range request, and a replaced file is not served from
+    the old encode.
+    """
+    from library import playback
+    source = playback.resolve(store, int(track_id))
+    if source is None:
+        return None
+    try:
+        stat = source.stat()
+    except OSError:
+        return None
+    folder = _cache_folder()
+    key = (f"{int(track_id)}-{int(stat.st_mtime)}-{stat.st_size}"
+           f"-{target['codec']}-{target['bitrate']}k")
+    output = folder / f"{key}.{target['suffix']}"
+    if output.is_file() and output.stat().st_size > 0:
+        return output
+    temp = output.with_name(f"{output.stem}.part.{target['suffix']}")
+    command = ['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-map', '0:a:0', '-vn',
+               '-c:a', target['encoder'], '-b:a', f"{target['bitrate']}k"]
+    if target['codec'] == 'opus':
+        command += ['-vbr', 'on']
+    if target['suffix'] == 'm4a':
+        command += ['-movflags', '+faststart']
+    command.append(str(temp))
+    try:
+        done = subprocess.run(command, capture_output=True, timeout=TRANSCODE_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        temp.unlink(missing_ok=True)
+        return None
+    if done.returncode != 0:
+        temp.unlink(missing_ok=True)
+        return None
+    try:
+        if temp.stat().st_size == 0:
+            temp.unlink(missing_ok=True)
+            return None
+        os.replace(temp, output)
+    except OSError:
+        temp.unlink(missing_ok=True)
+        return None
+    _trim(folder)
+    return output
+
+
+def transcode_decision(track, client, uid):
+    playable, reasons = can_direct_play(track, client)
+    decision = {'canDirectPlay': playable, 'canTranscode': False,
+                'sourceStream': stream_details(track)}
+    if reasons:
+        decision['transcodeReason'] = reasons
+    if playable:
+        decision['transcodeParams'] = issue_transcode_params(uid, track['id'])
+        return {'transcodeDecision': decision}
+    target = transcode_target(client)
+    if target is None:
+        decision['errorReason'] = ('This server cannot encode a profile the client offers, '
+                                   'and none of its direct-play profiles accept the stored file.')
+        return {'transcodeDecision': decision}
+    decision['canTranscode'] = True
+    decision['transcodeParams'] = issue_transcode_params(uid, track['id'], target)
+    return {'transcodeDecision': decision}
 
 
 def stored_format(track):
@@ -221,47 +418,6 @@ def can_direct_play(track, client):
         else:
             return True, []
     return False, reasons
-
-
-def issue_transcode_params(uid, track_id):
-    """An opaque token tying a decision to one member and one track.
-
-    Kept in memory for half an hour, which the extension explicitly allows. A restart
-    invalidates outstanding decisions; the client simply asks again.
-    """
-    now = time.time()
-    if len(_TRANSCODE_PARAMS) > 1000:
-        for token in [t for t, (_, _, expiry) in _TRANSCODE_PARAMS.items() if expiry < now]:
-            _TRANSCODE_PARAMS.pop(token, None)
-    token = secrets.token_urlsafe(24)
-    _TRANSCODE_PARAMS[token] = (uid, int(track_id), now + TRANSCODE_TTL)
-    return token
-
-
-def resolve_transcode_params(token, uid):
-    """The track id a token was issued for, or None when it is unknown, expired or another
-    member's."""
-    entry = _TRANSCODE_PARAMS.get(str(token or ''))
-    if not entry:
-        return None
-    owner, track_id, expiry = entry
-    if expiry < time.time() or owner != uid:
-        return None
-    return track_id
-
-
-def transcode_decision(track, client, uid):
-    playable, reasons = can_direct_play(track, client)
-    decision = {'canDirectPlay': playable, 'canTranscode': False,
-                'sourceStream': stream_details(track)}
-    if reasons:
-        decision['transcodeReason'] = reasons
-    if playable:
-        decision['transcodeParams'] = issue_transcode_params(uid, track['id'])
-    else:
-        decision['errorReason'] = ('This server does not transcode, and the client offered no '
-                                   'direct-play profile for the stored file.')
-    return {'transcodeDecision': decision}
 
 
 def handle(endpoint, params, multi, ctx):
