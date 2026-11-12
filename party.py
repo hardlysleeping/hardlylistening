@@ -382,12 +382,12 @@ def dispatch(handler, store, security):
         raise Denied(405, 'Method not allowed')
     if handler.command == 'POST':
         security.csrf(handler)
-    security.limit(handler.client_address[0], 'party-ip', 180)
+    security.limit(security.client_ip(handler), 'party-ip', 180)
     payload = handler.body() if handler.command == 'POST' else {}
     if not isinstance(payload, dict):
         raise Denied(400, 'JSON object required')
     if path == '/api/party/exchange' and handler.command == 'POST':
-        security.limit(handler.client_address[0], 'party-exchange', 15)
+        security.limit(security.client_ip(handler), 'party-exchange', 15)
         result = exchange(store, payload.get('invite'), payload.get('display_name'), payload.get('profile_icon'))
         sid = result.pop('session')
         handler.send_response(200)

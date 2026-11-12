@@ -405,7 +405,7 @@ def rest(handler, store, security):
         if endpoint == 'getTranscodeDecision' and handler.command != 'POST':
             raise Denied(400, 'getTranscodeDecision requires POST with a JSON client profile')
         schema(store, security)
-        security.limit(handler.client_address[0], 'device-auth', 300)
+        security.limit(security.client_ip(handler), 'device-auth', 300)
         with store.lock:
             device = store.conn.execute('''SELECT d.*,m.role FROM listening_devices d JOIN members m ON m.id=d.member_id
               WHERE d.id=?''', (params.get('u', ''),)).fetchone()

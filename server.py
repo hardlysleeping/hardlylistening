@@ -282,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                 return True     # health is a liveness ping, not data
             if self.command == 'POST' and path == '/api/auth/session':
                 SECURITY.csrf(self)
-                SECURITY.limit(self.client_address[0], 'enrollment', 15)
+                SECURITY.limit(SECURITY.client_ip(self), 'enrollment', 15)
                 payload = self.body()
                 sid = SECURITY.exchange(boot()[0], payload.get('invite'), payload.get('display_name'), payload.get('profile_icon'))
                 self.signed_in(sid)
@@ -299,7 +299,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.command != 'POST':
                     raise Denied(405, 'Method not allowed')
                 SECURITY.csrf(self)
-                SECURITY.limit(self.client_address[0], 'signup', 20)
+                SECURITY.limit(SECURITY.client_ip(self), 'signup', 20)
                 if path == '/api/auth/signup/begin':
                     self.signup_flow(SECURITY.open_signup(store, self.body().get('token')))
                     return False
@@ -313,7 +313,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.command == 'POST' and path == '/api/auth/login/password':
                 store, _ = boot()
                 SECURITY.csrf(self)
-                SECURITY.limit(self.client_address[0], 'login', 20)
+                SECURITY.limit(SECURITY.client_ip(self), 'login', 20)
                 payload = self.body()
                 member = SECURITY.authenticate_password(store, payload.get('email'), payload.get('password'))
                 self.signed_in(SECURITY.create_session(store, member['id'], 'password'))

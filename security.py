@@ -16,6 +16,7 @@ import sqlite3
 import time
 import hashlib
 import hmac
+import ipaddress
 import secrets
 import threading
 from collections import OrderedDict
@@ -48,6 +49,29 @@ class Security:
     def __init__(self):
         self.lock = threading.RLock()
         self.rates = OrderedDict()
+
+    # Behind the Cloudflare tunnel every connection arrives from loopback, so the socket
+    # peer is 127.0.0.1 for the entire internet. Keying rate limits on that gave every
+    # stranger one shared bucket: 20 logins a minute total, and anybody could spend them
+    # and lock the real people out. Cloudflare writes CF-Connecting-IP at its edge and a
+    # client cannot override it there, so it is used — but only while the peer really is
+    # loopback, which is also the only way a request can reach this process now that it
+    # binds 127.0.0.1. A non-loopback peer keeps its own address and its own bucket.
+    LOOPBACK = ('127.0.0.1', '::1', '::ffff:127.0.0.1')
+
+    @classmethod
+    def client_ip(cls, handler):
+        peer = ''
+        address = getattr(handler, 'client_address', None)
+        if address:
+            peer = (address[0] or '')
+        if peer not in cls.LOOPBACK:
+            return peer or 'unknown'
+        forwarded = (handler.headers.get('CF-Connecting-IP', '') or '').strip()
+        try:
+            return str(ipaddress.ip_address(forwarded))
+        except ValueError:      # absent, duplicated, or nonsense: fall back to the peer
+            return peer or 'unknown'
 
     @property
     def required(self):
@@ -574,7 +598,7 @@ class Security:
 
     def authenticate(self, handler, store, requests_limit=240):
         self.config()
-        self.limit(handler.client_address[0], 'verification', 300)
+        self.limit(self.client_ip(handler), 'verification', 300)
         self.schema(store)
         sid = self.cookie(handler, '__Host-hl_session')
         digest = self.digest(sid)
