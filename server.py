@@ -709,7 +709,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/feed":
             query = parse_qs(urlparse(self.path).query)
             decision = (query.get("decision") or [""])[0]
-            self.json({"items": store.feed_list(200, decision)})
+            # Releases are catalogue, not activity: Repo owns the read (REPO-012).
+            from repo import discovery as repo_discovery
+            self.json({"items": repo_discovery.releases(store, 200, decision)})
             return
         if path == "/api/activity":
             query = parse_qs(urlparse(self.path).query)
@@ -1417,7 +1419,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_feed_queue(self, item_id: int) -> None:
         """The only place a feed item becomes work — a click, never a timer."""
         store, queue = boot()
-        item = store.feed_item(item_id)
+        from repo import discovery as repo_discovery
+        item = repo_discovery.release(store, item_id)
         if not item:
             raise ValueError("no such feed item")
         if item["decision"] == "queued":
@@ -1473,7 +1476,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_feed_seen(self, item_id: int) -> None:
         store, _ = boot()
-        item = store.feed_item(item_id)
+        from repo import discovery as repo_discovery
+        item = repo_discovery.release(store, item_id)
         if item and item["decision"] == "new":
             store.feed_mark(item_id, decision="seen")
         self.json({"ok": True})
