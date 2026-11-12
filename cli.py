@@ -61,6 +61,24 @@ def _tool(name: str) -> str:
     return ""
 
 
+def _creatable(path: Path) -> tuple[bool, str]:
+    """Would this path be creatable, judged by its nearest existing ancestor? Never creates it.
+
+    A packaged install's data directory does not exist before the first start — `paths.ensure()` is
+    what creates it — so `check` has to answer "could this be made", not "is it there". Judging by
+    the nearest existing ancestor is the only honest test: `/var/lib/hardlylistening` can be
+    creatable while `/var/lib` is not writable, and the difference is one loop.
+    """
+    ancestor = path
+    while not ancestor.exists() and ancestor != ancestor.parent:
+        ancestor = ancestor.parent
+    if not ancestor.is_dir():
+        return False, f"{path} is missing and {ancestor} is not a directory"
+    if not os.access(ancestor, os.W_OK):
+        return False, f"{path} is missing and {ancestor} is not writable"
+    return True, f"{path} (will be created)"
+
+
 def _database_probe(path: Path) -> tuple[bool, str]:
     """Can this database be written, without writing to it?
 
@@ -68,12 +86,7 @@ def _database_probe(path: Path) -> tuple[bool, str]:
     that puts a database somewhere. Its parent being writable is the right answer there.
     """
     if not path.exists():
-        parent = path.parent
-        if not parent.is_dir():
-            return False, f"{path} is missing and {parent} does not exist"
-        if not os.access(parent, os.W_OK):
-            return False, f"{path} is missing and {parent} is not writable"
-        return True, f"{path} (will be created)"
+        return _creatable(path)
     if not os.access(path, os.W_OK):
         return False, f"{path} is not writable"
     try:
@@ -127,13 +140,10 @@ def check() -> int:
     add("app", (APP_DIR / "server.py").is_file(), str(APP_DIR))
 
     # -- writable data ------------------------------------------------------------
-    data_ok = paths.DATA_DIR.is_dir() and os.access(paths.DATA_DIR, os.W_OK)
-    if not data_ok and not paths.DATA_DIR.exists():
-        parent = paths.DATA_DIR.parent
-        data_ok = parent.is_dir() and os.access(parent, os.W_OK)
-        add("data dir", data_ok, f"{paths.DATA_DIR} (will be created)")
+    if paths.DATA_DIR.is_dir():
+        add("data dir", os.access(paths.DATA_DIR, os.W_OK), str(paths.DATA_DIR))
     else:
-        add("data dir", data_ok, str(paths.DATA_DIR))
+        add("data dir", *_creatable(paths.DATA_DIR))
 
     db_ok, db_detail = _database_probe(paths.DB_PATH)
     add("database", db_ok, db_detail)

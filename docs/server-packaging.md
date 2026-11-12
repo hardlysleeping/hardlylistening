@@ -16,7 +16,8 @@ separation → *Runtime boundary*; this document is the operational detail for t
 | ✓ | 007 Dockerfile — same runtime, non-root 10001, config from the environment |
 | ✓ | 008 compose example — `/data` beside the file, media outside the project, loopback port |
 | ~ | 005 systemd unit — `deploy/hardlylistening.{service,env.example}` committed, never installed |
-| — | 006 install script, 009 identity + health |
+| ✓ | 006 `deploy/install.sh` — user, directories, code copy, env file, `check`, unit, enable |
+| — | 009 identity + Docker health wiring |
 
 The rule everything else follows from:
 
@@ -218,6 +219,28 @@ real writer open while the backup runs, then reads the copy back: settings and r
 opens standalone, no `-wal` survives, the source file is byte-identical afterwards, a missing
 database is a refusal rather than an empty backup, and an existing copy is not replaced without
 `--force`.
+
+**Done (SERVER-PKG-006).** `deploy/install.sh` creates the account, the directories, the code copy,
+the environment file, probes with `check`, installs the unit and enables it. Two promises it keeps
+literally:
+
+* **It never deletes the database or the media.** `uninstall` removes `/opt` and the unit, and then
+  prints what it kept. Removing a library is an operator's `rm`, never a side effect of uninstalling
+  a service.
+* **`--dry-run` prints every command and changes nothing**, because the honest way to review an
+  installer is to read what it would do. The copy step is the same tar command either way.
+
+The copy is where this can go quietly wrong, so `tests/test_install.py` reproduces it with the same
+exclusions and asserts both directions: `web/`, `bin/`, `cli.py`, `VERSION` are present, while
+`hardlylistening.db`, its `-wal`/`-shm`, `.cache`, `artist-art`, `backups`, `tests` and `docs` are
+not — an exclusion one level too wide ships a live database into `/opt`, where the next upgrade
+overwrites it. The copied tree then runs its own `check` and has to pass, and creates no database
+beside itself.
+
+That test also found a real inconsistency in `check`: with a data directory that does not exist yet
+— the normal state before the first start — the database row said `fail` while the row above said
+"will be created". Both now judge by the nearest existing ancestor (`_creatable`), which is the only
+honest answer to "could this be made" without making it.
 
 **Done (SERVER-PKG-011).** The move is small enough to look like nothing — copy the database and
 the caches, set `HARDLYLISTENING_DATA_DIR` — and that is the risk: `paths.py` resolves four paths
