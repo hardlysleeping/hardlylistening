@@ -13,6 +13,7 @@ import argparse
 import json
 import mimetypes
 import re
+import secrets
 import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -161,7 +162,7 @@ class Handler(BaseHTTPRequestHandler):
                 return False
             # Temporary party credentials NEVER enable the legacy local bypass.
             # A real independent browser membership may still use its own scope.
-            if SECURITY.cookie(self, '__Host-hl_party') and path not in ('/login', '/auth/link', '/signup', '/api/health', '/api/auth/session', '/api/auth/logout', '/api/auth/signup', '/api/auth/signup/begin', '/api/auth/signup/password', '/api/auth/login/password'):
+            if SECURITY.cookie(self, '__Host-hl_party') and path not in ('/login', '/auth/link', '/auth/google', '/auth/google/callback', '/signup', '/api/health', '/api/auth/session', '/api/auth/logout', '/api/auth/signup', '/api/auth/signup/begin', '/api/auth/signup/password', '/api/auth/login/password', '/api/auth/providers'):
                 SECURITY.authenticate(self, boot()[0])
             # Device auth is independent of browser/email login, never the local bypass.
             if path.startswith('/rest/'):
@@ -183,6 +184,55 @@ class Handler(BaseHTTPRequestHandler):
                     raise Denied(400, 'name is required')
                 from library import artist_art
                 self.json(artist_art.candidates(store, name))
+                return False
+            candidates_route = re.fullmatch(r'/api/track/(\d+)/candidates', path)
+            if candidates_route:
+                # "Wrong song?" — the options a person needs for a track that already
+                # downloaded: what else the sources have, and whether the previous file is
+                # still held. Read-only; the change itself stays on /api/track/<id>/source.
+                import search, replacements
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                SECURITY.admin(self.member)
+                if self.command != 'GET':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.limit(self.member['id'], 'songsearch', 30)
+                track_id = int(candidates_route.group(1))
+                track = store.track_by_id(track_id) or {}
+                if not track:
+                    raise Denied(404, 'No such track')
+                job = store.job_for_track(track_id) or {}
+                if not job:
+                    raise Denied(400, 'that track has no download job')
+                asked = (parse_qs(urlparse(self.path).query).get('q') or [''])[0].strip()
+                query = asked or ' '.join(
+                    p for p in (track.get('artist_name'), track.get('title')) if p).strip()
+                try:
+                    results = search.find(query, limit=25) if query else []
+                except ValueError as exc:
+                    raise Denied(400, str(exc))
+                latest = replacements.latest(store, track_id)
+                self.json({
+                    'track': {
+                        'id': track_id, 'title': track.get('title') or '',
+                        'artist': track.get('artist_name') or '',
+                        'album': track.get('album') or '',
+                        'duration': track.get('duration') or 0,
+                        'provider': track.get('provider') or '',
+                        'file': bool(track.get('file')),
+                        'source_url': track.get('source_url') or '',
+                        'resolved_url': job.get('resolved_url') or '',
+                        'pinned': bool(job.get('pinned')),
+                        'status': job.get('status') or '',
+                    },
+                    'query': query,
+                    'results': results,
+                    'replacement': None if not latest else {
+                        'id': latest['id'], 'status': latest['status'],
+                        'created': latest['created'], 'prior_url': latest['old_url'],
+                        'new_url': latest['new_url'], 'error': latest.get('error') or '',
+                    },
+                })
                 return False
             if path.startswith('/api/listening/'):
                 import listening
@@ -278,7 +328,10 @@ class Handler(BaseHTTPRequestHandler):
                 if self.command == 'GET':
                     # The account row rides with the profile: the dialog shows one panel, and the
                     # email is safe metadata (no hashes, salts or tokens ever leave here).
+                    import oauth_google
                     self.json({**SECURITY.account(store, self.member),
+                               # Whether the button belongs on the panel at all.
+                               'google_available': oauth_google.available(),
                                **{k: self.member[k] for k in ('display_name', 'profile_icon')}})
                 elif self.command == 'POST':
                     self.json(SECURITY.profile(store, self.member, self.body()))
@@ -301,6 +354,15 @@ class Handler(BaseHTTPRequestHandler):
                         self.redirect('/')
                         return False
                 return True     # health is a liveness ping, not data
+            if path == '/api/auth/providers':
+                # What this deployment can offer. A boolean is not a secret, and the
+                # login page has to render before anybody holds a session.
+                import oauth_google
+                self.json({'google': oauth_google.available()})
+                return False
+            if path in ('/auth/google', '/auth/google/callback'):
+                self.google_auth(path)
+                return False
             if self.command == 'POST' and path == '/api/auth/session':
                 SECURITY.csrf(self)
                 SECURITY.limit(SECURITY.client_ip(self), 'enrollment', 15)
@@ -334,10 +396,20 @@ class Handler(BaseHTTPRequestHandler):
             if self.command == 'POST' and path == '/api/auth/login/password':
                 store, _ = boot()
                 SECURITY.csrf(self)
-                SECURITY.limit(SECURITY.client_ip(self), 'login', 20)
+                SECURITY.limit(SECURITY.client_ip(self), 'login', 60)
                 payload = self.body()
                 member = SECURITY.authenticate_password(store, payload.get('email'), payload.get('password'))
                 self.signed_in(SECURITY.create_session(store, member['id'], 'password'))
+                return False
+            if path == '/api/account/google/unlink':
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if self.command != 'POST':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.csrf(self)
+                SECURITY.limit(self.member['id'], 'unlink', 10)
+                import oauth_google
+                self.json({'ok': oauth_google.unlink(store, self.member['id'])})
                 return False
             if path in ('/api/account', '/api/account/password'):
                 store, _ = boot()
@@ -404,7 +476,7 @@ class Handler(BaseHTTPRequestHandler):
                 return False
             if path == '/api/mixer' or path.startswith('/api/mixer/'):
                 # Shared mixer room. Slider drags are chatty, so this route gets its
-                # own generous bucket instead of the ordinary 240/min.
+                # own generous bucket instead of the ordinary 600/min.
                 store, _ = boot()
                 if SECURITY.required:
                     self.member = SECURITY.authenticate(self, store, requests_limit=1200)
@@ -472,22 +544,33 @@ class Handler(BaseHTTPRequestHandler):
             return True
         except Denied as exc:
             self.close_connection = True
-            self.json({'error': exc.message}, exc.code)
+            self.denied(exc)
             return False
 
     # -- plumbing --
-    def _send(self, code: int, body: bytes, ctype: str) -> None:
+    def denied(self, exc: 'Denied') -> None:
+        """One place that turns a refusal into a response, Retry-After included."""
+        data = {'error': exc.message}
+        headers = None
+        if exc.retry_after is not None:
+            data['retry_after'] = exc.retry_after
+            headers = {'Retry-After': str(exc.retry_after)}
+        self.json(data, exc.code, extra_headers=headers)
+
+    def _send(self, code: int, body: bytes, ctype: str, extra_headers=None) -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, str(value))
         self.end_headers()
         try:
             self.wfile.write(body)
         except BrokenPipeError:
             pass
 
-    def json(self, data, code: int = 200) -> None:
+    def json(self, data, code: int = 200, extra_headers=None) -> None:
         if getattr(self, 'member', None) and self.member['role'] != 'admin' and code < 400:
             def public(value):
                 if isinstance(value, list):
@@ -502,7 +585,8 @@ class Handler(BaseHTTPRequestHandler):
                     return result
                 return value
             data = public(data)
-        self._send(code, json.dumps(data, default=str).encode(), "application/json")
+        self._send(code, json.dumps(data, default=str).encode(), "application/json",
+                   extra_headers=extra_headers)
 
     def body(self) -> dict:
         """Memoised: rfile.read() only answers once, so a second call would hang."""
@@ -549,8 +633,11 @@ class Handler(BaseHTTPRequestHandler):
         if SECURITY.required and path in ('/', '/index.html', '/dj', '/dj.html'):
             try:
                 self.member = SECURITY.authenticate(self, boot()[0])
-            except Denied:
-                self.redirect('/login')
+            except Denied as exc:
+                if exc.code == 401:
+                    self.redirect('/login')
+                else:
+                    self.denied(exc)
                 return
         store, _ = boot()
         if path == "/api/state":
@@ -936,6 +1023,93 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Set-Cookie', '__Host-hl_signup=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0')
         self.send_header('Content-Length', '0')
         self.end_headers()
+
+    def session_member_id(self, store) -> str:
+        """The signed-in member, or '' — for deciding sign-in versus linking."""
+        try:
+            return SECURITY.authenticate(self, store)['id']
+        except Denied:
+            return ''
+
+    def session_redirect(self, sid: str, location: str) -> None:
+        """303 that also hands over the session, so the callback lands on a page."""
+        self.send_response(303)
+        self.send_header('Location', location)
+        self.send_header('Set-Cookie',
+                         f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Lax; '
+                         f'Max-Age={SECURITY.SESSION_TTL}')
+        self.send_header('Set-Cookie', '__Host-hl_oauth=; Path=/; Secure; HttpOnly; '
+                                      'SameSite=Lax; Max-Age=0')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def google_auth(self, path: str) -> None:
+        """Start or finish Google sign-in.
+
+        Signing in only ever resumes an identity somebody already linked; an
+        unlinked Google account is refused, because this library is invite-only.
+        Linking happens while a session is held, and `state` ties the callback to
+        the browser that began it.
+        """
+        import oauth_google
+        store, _ = boot()
+        if self.command != 'GET':
+            raise Denied(405, 'Method not allowed')
+        if path == '/auth/google':
+            if not oauth_google.available():
+                self.redirect('/login?google=unavailable')
+                return
+            SECURITY.limit(SECURITY.client_ip(self), 'google', 30)
+            url, cookie = oauth_google.start('link' if self.session_member_id(store) else 'signin')
+            self.send_response(303)
+            self.send_header('Location', url)
+            self.send_header('Set-Cookie',
+                             f'__Host-hl_oauth={cookie}; Path=/; Secure; HttpOnly; '
+                             f'SameSite=Lax; Max-Age={oauth_google.COOKIE_TTL}')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        query = parse_qs(urlparse(self.path).query)
+        saved = oauth_google.parse_cookie(SECURITY.cookie(self, oauth_google.COOKIE))
+        if not saved:
+            self.redirect('/login?google=expired')
+            return
+        state = (query.get('state') or [''])[0]
+        if not secrets.compare_digest(state, saved['state']):
+            self.redirect('/login?google=state')
+            return
+        if (query.get('error') or [''])[0]:
+            self.redirect('/login?google=denied')
+            return
+        try:
+            claims = oauth_google.exchange((query.get('code') or [''])[0], saved['verifier'])
+        except Denied:
+            self.redirect('/login?google=error')
+            return
+        member_id = self.session_member_id(store)
+        if saved['mode'] == 'link' or member_id:
+            if not member_id:
+                self.redirect('/login?google=signin-first')
+                return
+            try:
+                oauth_google.link(store, member_id, claims)
+            except Denied:
+                self.redirect('/?google=conflict')
+                return
+            self.redirect('/?google=linked')
+            return
+        existing = oauth_google.identity_member(store, str(claims.get('sub') or ''))
+        if not existing:
+            self.redirect('/login?google=unknown')
+            return
+        try:
+            SECURITY.member(store, {'id': existing})
+        except Denied:
+            self.redirect('/login?google=blocked')
+            return
+        self.session_redirect(SECURITY.create_session(store, existing, 'google'), '/')
 
     def signup_flow(self, digest: str) -> None:
         """A validated signup link becomes a short-lived cookie; the page erases the fragment."""

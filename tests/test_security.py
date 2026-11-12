@@ -138,6 +138,58 @@ class SecurityHTTP(unittest.TestCase):
         self.assertEqual(self.request('/api/boost', 'POST', {'Origin':'https://evil.example','Authorization':'Bearer fixture'},
                                        json.dumps({'track_id':track_id}))[0], 403)
 
+    def test_valid_sessions_do_not_spend_verification_budget(self):
+        self.user()
+        cookie = {'Cookie': self.token()}
+        for _ in range(400):
+            status, _, _ = self.request('/api/state', headers=cookie)
+            self.assertEqual(status, 200)
+
+        statuses = [self.request('/api/state')[0] for _ in range(400)]
+        self.assertIn(429, statuses)
+
+    def test_rate_limit_includes_retry_after(self):
+        self.user()
+        cookie = {'Cookie': self.token()}
+        for _ in range(601):
+            status, headers, body = self.request('/api/state', headers=cookie)
+            if status == 429:
+                self.assertGreaterEqual(int(headers.get('Retry-After', '0')), 1)
+                self.assertGreaterEqual(json.loads(body)['retry_after'], 1)
+                return
+        self.fail('authenticated action budget did not return 429')
+
+    def test_rate_limited_page_load_returns_429_not_login_redirect(self):
+        seen_429 = False
+        for _ in range(400):
+            status, headers, body = self.request('/')
+            if status == 429:
+                seen_429 = True
+                self.assertIn('application/json', headers.get('Content-Type', ''))
+                self.assertGreaterEqual(int(headers.get('Retry-After', '0')), 1)
+                self.assertGreaterEqual(json.loads(body)['retry_after'], 1)
+                break
+            self.assertEqual(status, 303)
+        self.assertTrue(seen_429, 'rate-limited page load should not keep redirecting to login')
+
+    def test_authenticated_asset_requests_have_separate_budget(self):
+        self.user()
+        cookie = self.token()
+
+        class Request:
+            command = 'GET'
+            path = '/api/track/1/audio'
+            client_address = ('198.51.100.8', 12345)
+            headers = {'Cookie': cookie}
+
+        request = Request()
+        for _ in range(self.sec.ASSET_BUDGET):
+            self.sec.authenticate(request, self.store)
+        self.assertNotIn(('u1', 'requests'), self.sec.rates)
+        with self.assertRaises(Denied) as caught:
+            self.sec.authenticate(request, self.store)
+        self.assertEqual(caught.exception.code, 429)
+
     def test_rate_limits_and_body_bound(self):
         self.user();h={'Cookie':self.token()}
         for _ in range(10):
@@ -255,3 +307,38 @@ class CsrfOrigin(unittest.TestCase):
         for headers in refused:
             with self.assertRaises(Denied, msg=str(headers)):
                 self.sec.csrf(self.Handler(headers))
+
+
+class RateLimitIdentity(unittest.TestCase):
+    """Behind the Cloudflare tunnel every peer is 127.0.0.1, so limits must key on the
+    edge-reported client address — otherwise the whole internet shares one bucket and a
+    stranger can spend it and lock real members out. The header is trusted only when the
+    socket peer is loopback, which is the only way a request reaches a 127.0.0.1 bind."""
+
+    class Handler:
+        def __init__(self, peer, forwarded=None):
+            self.client_address = (peer, 1234)
+            self.headers = {} if forwarded is None else {'CF-Connecting-IP': forwarded}
+
+    def test_edge_address_is_used_for_a_loopback_peer(self):
+        for peer, forwarded, want in (
+                ('127.0.0.1', '203.0.113.9', '203.0.113.9'),
+                ('::1', '198.51.100.7', '198.51.100.7'),
+                ('::ffff:127.0.0.1', '192.0.2.4', '192.0.2.4'),
+                ('127.0.0.1', '2001:0db8:0000::1', '2001:db8::1')):
+            self.assertEqual(Security.client_ip(self.Handler(peer, forwarded)), want)
+
+    def test_missing_or_malformed_header_falls_back_to_the_peer(self):
+        for forwarded in (None, '', 'not-an-ip', '1.2.3.4, 5.6.7.8', '::1:extra'):
+            self.assertEqual(Security.client_ip(self.Handler('127.0.0.1', forwarded)), '127.0.0.1')
+
+    def test_a_direct_peer_cannot_choose_its_own_address(self):
+        self.assertEqual(Security.client_ip(self.Handler('192.168.1.50', '203.0.113.9')), '192.168.1.50')
+
+    def test_each_edge_client_gets_its_own_bucket(self):
+        sec = Security()
+        sec.limit('203.0.113.9', 'login', 2)
+        sec.limit('203.0.113.9', 'login', 2)
+        with self.assertRaises(Denied):
+            sec.limit('203.0.113.9', 'login', 2)
+        sec.limit('198.51.100.7', 'login', 2)   # a different visitor is unaffected

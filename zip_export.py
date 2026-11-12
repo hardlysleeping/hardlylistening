@@ -6,11 +6,39 @@ that is the point of the archive, not a hand-off list of absolute paths on the s
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
 
 _UNSAFE = re.compile(r'[\\/:*?"<>|]+')
+
+# A DJ application has to be able to open every file in the archive. Opus, Ogg and
+# FLAC are fine for Mixxx but invisible to Serato and rekordbox, so anything that is
+# not already DJ-safe is converted to MP3 on its way into the ZIP. The stored file is
+# never touched and never re-encoded on disk — the archive is a delivery copy.
+DJ_SAFE = {'.mp3', '.m4a', '.aac', '.wav'}
+EXPORT_MP3_BITRATE = '320k'
+
+
+def _archived_name(relative: Path) -> Path:
+    """The name the file wears inside the archive."""
+    return relative if relative.suffix.lower() in DJ_SAFE else relative.with_suffix('.mp3')
+
+
+def _to_mp3(source: Path, target: Path) -> None:
+    if not shutil.which('ffmpeg'):
+        raise ValueError('ffmpeg is not installed, so %s cannot be converted to MP3' % source.name)
+    done = subprocess.run(
+        ['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-map', '0:a:0',
+         '-c:a', 'libmp3lame', '-b:a', EXPORT_MP3_BITRATE,
+         '-map_metadata', '0', '-id3v2_version', '3', str(target)],
+        capture_output=True, text=True, timeout=300)
+    if done.returncode != 0 or not target.is_file() or not target.stat().st_size:
+        lines = (done.stderr or '').strip().splitlines()
+        raise ValueError('could not convert %s to MP3 for export: %s'
+                         % (source.name, lines[-1] if lines else 'ffmpeg failed'))
 
 
 def _clean(value: str, fallback: str) -> str:
@@ -64,12 +92,25 @@ def build(store, uid: int, playlist_id: int | None = None) -> tuple[str, str, in
 
     handle = tempfile.NamedTemporaryFile(prefix='hl-export-', suffix='.zip', delete=False)
     handle.close()
+    stage = Path(tempfile.mkdtemp(prefix='hl-export-audio-'))
     manifest = ['#EXTM3U', '#PLAYLIST:HardlyListening %s' % name]
-    with zipfile.ZipFile(handle.name, 'w', zipfile.ZIP_STORED, allowZip64=True) as archive:
-        for track, path, relative in entries:
-            archive.write(path, relative.as_posix())
-            seconds = int(track.get('duration') or 0)
-            manifest.append('#EXTINF:%d,%s - %s' % (seconds, track.get('artist_name') or '', track.get('title') or ''))
-            manifest.append(relative.as_posix())
-        archive.writestr(name + '.m3u8', '\n'.join(manifest) + '\n')
+    try:
+        prepared = []
+        for index, (track, path, relative) in enumerate(entries):
+            archived = _archived_name(relative)
+            source = path
+            if archived != relative:                 # not DJ-safe: one delivery copy
+                source = stage / ('%04d.mp3' % index)
+                _to_mp3(path, source)
+            prepared.append((source, archived))
+        with zipfile.ZipFile(handle.name, 'w', zipfile.ZIP_STORED, allowZip64=True) as archive:
+            for (track, path, relative), (source, archived) in zip(entries, prepared):
+                archive.write(source, archived.as_posix())
+                seconds = int(track.get('duration') or 0)
+                manifest.append('#EXTINF:%d,%s - %s' % (seconds, track.get('artist_name') or '', track.get('title') or ''))
+                manifest.append(archived.as_posix())
+            archive.writestr(name + '.m3u8', '\n'.join(manifest) + '\n')
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
     return handle.name, 'hardlylistening-%s.zip' % name, len(entries)
+

@@ -16,16 +16,16 @@ import sqlite3
 import time
 import hashlib
 import hmac
-import ipaddress
 import secrets
 import threading
+import ipaddress
 from collections import OrderedDict
 from http.cookies import SimpleCookie
 from urllib.parse import urlparse
 
 class Denied(Exception):
-    def __init__(self, code, message):
-        self.code, self.message = code, message
+    def __init__(self, code, message, retry_after=None):
+        self.code, self.message, self.retry_after = code, message, retry_after
 
 class Security:
     # The link IS the account: a member's profile link never expires, and the
@@ -585,6 +585,10 @@ class Security:
         while len(mapping) > 2048:
             mapping.popitem(last=False)
 
+    VERIFY_BUDGET = 300
+    ACTION_BUDGET = 600
+    ASSET_BUDGET = 6000
+
     def limit(self, identity, bucket, maximum):
         now = time.monotonic()
         key = (identity, bucket)
@@ -594,11 +598,11 @@ class Security:
                 start, count = now, 0
             self.bounded(self.rates, key, (start, count+1))
         if count >= maximum:
-            raise Denied(429, 'Rate limit exceeded')
+            retry_after = max(1, int(60 - (now - start)) + 1)
+            raise Denied(429, 'Rate limit exceeded', retry_after=retry_after)
 
-    def authenticate(self, handler, store, requests_limit=240):
+    def authenticate(self, handler, store, requests_limit=None):
         self.config()
-        self.limit(self.client_ip(handler), 'verification', 300)
         self.schema(store)
         sid = self.cookie(handler, '__Host-hl_session')
         digest = self.digest(sid)
@@ -612,6 +616,7 @@ class Security:
                                    (now + self.SESSION_TTL, digest))
                 store.conn.commit()
         if not r:
+            self.limit(self.client_ip(handler), 'verification', self.VERIFY_BUDGET)
             raise Denied(401, 'Sign in required')
         member = self.member(store, {'id': r[0]})
         # How this browser got in follows the session, not the member: the same account may be
@@ -619,8 +624,12 @@ class Security:
         member['auth_method'] = r['auth_method'] or 'login_link'
         if handler.command != 'GET':
             self.csrf(handler)
-        self.limit(member['id'], 'requests', requests_limit)
-        if '/download' in handler.path:
+        path = getattr(handler, 'path', '').split('?', 1)[0]
+        asset = handler.command == 'GET' and (path.startswith('/artwork/') or path.endswith('/audio'))
+        bucket = 'assets' if asset else 'requests'
+        maximum = self.ASSET_BUDGET if asset else (self.ACTION_BUDGET if requests_limit is None else requests_limit)
+        self.limit(member['id'], bucket, maximum)
+        if '/download' in path:
             self.limit(member['id'], 'exports', 10)
         return member
 
