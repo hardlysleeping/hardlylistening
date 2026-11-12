@@ -15,6 +15,7 @@ import os
 import shutil
 import socket
 import sqlite3
+import stat
 import sys
 from pathlib import Path
 
@@ -148,6 +149,22 @@ def check() -> int:
     db_ok, db_detail = _database_probe(paths.DB_PATH)
     add("database", db_ok, db_detail)
 
+    # -- identity -----------------------------------------------------------------
+    # Federation identity is not implemented (FED-001 owns the format), so this checks the
+    # directory, not keys. It is reported only for a declared install: a checkout has no
+    # `identity/` and `ensure()` deliberately creates nothing there. A group- or world-listable
+    # identity directory is a warning, not a failure — the files inside are what must be 600.
+    if paths.DECLARED:
+        if paths.IDENTITY_DIR.is_dir():
+            mode = stat.S_IMODE(paths.IDENTITY_DIR.stat().st_mode)
+            if mode & 0o077:
+                add("identity", False, f"{paths.IDENTITY_DIR} is {mode:04o}, expected 0700",
+                    warn=True)
+            else:
+                add("identity", True, f"{paths.IDENTITY_DIR} ({mode:04o})")
+        else:
+            add("identity", *_creatable(paths.IDENTITY_DIR))
+
     # -- media --------------------------------------------------------------------
     # The declared variable only seeds a new database, so the database is what decides
     # where the library is once it has one.
@@ -209,8 +226,8 @@ def backup(destination: Path, force: bool = False) -> int:
     transactionally consistent snapshot of every committed write.
 
     Scope is the database only. Media is a large tree that wants rsync or a filesystem snapshot, and
-    identity will be a directory this command does not yet know about; both are named in the output
-    so a backup taken here is not mistaken for a complete one.
+    identity is a private directory this command deliberately does not copy; both are named in the
+    output, with their resolved paths, so a backup taken here is not mistaken for a complete one.
     """
     source = paths.DB_PATH
     if not source.is_file():
@@ -248,7 +265,12 @@ def backup(destination: Path, force: bool = False) -> int:
     print(f"hardlylistening {version()}")
     print(f"  database   {target}  ({size / 1024 / 1024:.1f} MiB, integrity ok)")
     print(f"  source     {source}")
-    print("  not copied  media (rsync or snapshot the library root) and identity/ if present")
+    print("  not copied  media (rsync or snapshot the library root)")
+    # Named with its resolved path so a backup is not read as complete: identity is in the
+    # boundary (§5) but is a directory this command does not copy.
+    identity = paths.IDENTITY_DIR
+    print(f"              identity  {identity}"
+          f"{'' if identity.is_dir() else ' (absent, nothing to copy)'}")
     return 0
 
 

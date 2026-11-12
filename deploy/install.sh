@@ -77,7 +77,7 @@ if [ "$ACTION" = uninstall ]; then
     say "Removed $PREFIX and the unit."
   fi
   say "Kept (deliberately):"
-  printf '  %-28s %s\n' "$DATA" "database and caches"
+  printf '  %-28s %s\n' "$DATA" "database, caches and identity"
   printf '  %-28s %s\n' "$MUSIC" "the library"
   printf '  %-28s %s\n' "$CONF" "configuration, including secrets"
   say "Delete those yourself if that is what you want; this script never will."

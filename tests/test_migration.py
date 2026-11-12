@@ -47,6 +47,7 @@ def open_store(**env_extra):
          '  "db": str(paths.DB_PATH),\n'
          '  "cache": str(paths.CACHE_DIR),\n'
          '  "artist_art": str(paths.ARTIST_ART_DIR),\n'
+         '  "identity": str(paths.IDENTITY_DIR),\n'
          '  "settings": store.settings(),\n'
          '  "tracks": [r[0] for r in store.conn.execute("SELECT title FROM tracks ORDER BY id")],\n'
          '  "playlists": [r[0] for r in store.conn.execute("SELECT title FROM playlists ORDER BY id")],\n'
@@ -110,6 +111,11 @@ class Migration(unittest.TestCase):
             (self.app / rel).mkdir(parents=True, exist_ok=True)
         (self.app / '.cache' / 'artwork' / 'abc.webp').write_bytes(b'art')
 
+        # Node identity: storage only (FED-001 owns the format), but this is the directory the
+        # backup boundary names and the one thing a rebuilt container must not lose.
+        (self.app / 'identity').mkdir(exist_ok=True)
+        (self.app / 'identity' / 'node-id').write_text('node-abc')
+
     def migrate(self):
         """§11 of the packaging doc: copy the database and the caches, then set the variable."""
         self.data.mkdir()
@@ -120,6 +126,7 @@ class Migration(unittest.TestCase):
         shutil.copytree(self.app / '.cache' / 'browser-downloads',
                         self.data / 'cache' / 'browser-downloads')
         shutil.move(str(self.app / 'artist-art'), str(self.data / 'cache' / 'artist-art'))
+        shutil.copytree(self.app / 'identity', self.data / 'identity')
 
     def digest(self, path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -141,6 +148,9 @@ class Migration(unittest.TestCase):
         self.assertEqual(after['db'], str(self.data / 'hardlylistening.db'))
         self.assertEqual(after['cache'], str(self.data / 'cache'))
         self.assertEqual(after['artist_art'], str(self.data / 'cache' / 'artist-art'))
+        self.assertEqual(before['identity'], str(self.app / 'identity'))
+        self.assertEqual(after['identity'], str(self.data / 'identity'))
+        self.assertEqual((self.data / 'identity' / 'node-id').read_text(), 'node-abc')
         for key in ('settings', 'tracks', 'playlists', 'members', 'credentials', 'logs'):
             self.assertEqual(after[key], before[key], key)
         self.assertEqual(before['settings']['root'], str(self.music))   # the Repo root moved with it
@@ -160,6 +170,7 @@ class Migration(unittest.TestCase):
         second = parse(open_store(HARDLYLISTENING_DATA_DIR=str(self.data)))
         self.assertEqual(second, first)
         self.assertEqual(self.digest(db_file), stamp)
+        self.assertEqual((self.data / 'identity' / 'node-id').read_text(), 'node-abc')
         with sqlite3.connect(f'file:{db_file}?mode=ro', uri=True) as conn:
             self.assertEqual(conn.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
 

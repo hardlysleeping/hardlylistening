@@ -29,15 +29,44 @@ def run(code: str, **env_overrides):
 class DataDirectory(unittest.TestCase):
     def test_declared_data_dir_moves_the_database_and_the_caches(self):
         with tempfile.TemporaryDirectory() as data:
-            result = run('import paths; print(paths.DATA_DIR); print(paths.CACHE_DIR);'
-                         ' print(paths.ARTIST_ART_DIR); print(paths.DB_PATH)',
+            result = run('import paths\n'
+                         'for name in ("DATA_DIR", "CACHE_DIR", "ARTIST_ART_DIR", "IDENTITY_DIR",\n'
+                         '             "STATE_DIR", "TMP_DIR", "METADATA_CACHE_DIR",\n'
+                         '             "FEDERATION_CACHE_DIR", "DB_PATH"):\n'
+                         '    print(getattr(paths, name))',
                          HARDLYLISTENING_DATA_DIR=data)
             self.assertEqual(result.returncode, 0, result.stderr)
-            data_dir, cache, artist, database = result.stdout.split('\n')[:4]
+            (data_dir, cache, artist, identity, state, tmp, metadata, federation,
+             database) = result.stdout.split('\n')[:9]
             self.assertEqual(data_dir, data)
             self.assertEqual(cache, str(Path(data) / 'cache'))
             self.assertEqual(artist, str(Path(data) / 'cache' / 'artist-art'))
             self.assertEqual(database, str(Path(data) / 'hardlylistening.db'))
+            # The documented layout (§2) is real paths, not a diagram: identity is persistent
+            # state that must survive an application replacement, state/ and tmp/ are the
+            # remaining mutable directories, and the two cache subdirectories are where
+            # federation and metadata would go.
+            self.assertEqual(identity, str(Path(data) / 'identity'))
+            self.assertEqual(state, str(Path(data) / 'state'))
+            self.assertEqual(tmp, str(Path(data) / 'tmp'))
+            self.assertEqual(metadata, str(Path(data) / 'cache' / 'metadata'))
+            self.assertEqual(federation, str(Path(data) / 'cache' / 'federation'))
+
+    def test_ensure_creates_the_whole_declared_tree_and_identity_is_private(self):
+        with tempfile.TemporaryDirectory() as data:
+            result = run('import paths; paths.ensure();'
+                         ' print(paths.IDENTITY_DIR.stat().st_mode)',
+                         HARDLYLISTENING_DATA_DIR=data)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(int(result.stdout.split()[0]) & 0o777, 0o700)
+            for relative in ('identity', 'state', 'tmp', 'cache', 'cache/artist-art',
+                             'cache/metadata', 'cache/federation'):
+                self.assertTrue((Path(data) / relative).is_dir(), relative)
+            # `ensure()` is called on every start: a second run changes nothing and must not
+            # complain about directories that already exist.
+            again = run('import paths; paths.ensure(); print("ok")', HARDLYLISTENING_DATA_DIR=data)
+            self.assertEqual(again.returncode, 0, again.stderr)
+            self.assertIn('ok', again.stdout)
 
     def test_undeclared_keeps_todays_paths(self):
         result = run('import paths, db; print(paths.DECLARED); print(paths.CACHE_DIR);'
@@ -48,6 +77,20 @@ class DataDirectory(unittest.TestCase):
         self.assertEqual(cache, str(APP_DIR / '.cache'))
         self.assertEqual(artist, str(APP_DIR / 'artist-art'))
         self.assertEqual(database, str(APP_DIR / 'hardlylistening.db'))
+
+    def test_undeclared_ensure_creates_nothing_in_the_app_tree(self):
+        """A checkout must not gain an `identity/`, `state/` or `tmp/` just by starting."""
+        result = run('import os, paths\n'
+                     'names = ("IDENTITY_DIR", "STATE_DIR", "TMP_DIR")\n'
+                     'before = {n: os.path.exists(getattr(paths, n)) for n in names}\n'
+                     'paths.ensure()\n'
+                     'print(paths.DECLARED)\n'
+                     'print([n for n in names\n'
+                     '       if os.path.exists(getattr(paths, n)) != before[n]])')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        declared, changed = result.stdout.split('\n')[:2]
+        self.assertEqual(declared, 'False')
+        self.assertEqual(changed, '[]')
 
     def test_a_run_writes_nothing_into_the_app_tree(self):
         before = self.snapshot()

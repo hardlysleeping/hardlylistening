@@ -104,6 +104,19 @@ class Backup(unittest.TestCase):
         # the copy is a standalone database, not a file that needs the original's -wal
         self.assertFalse((self.out / 'hardlylistening.db-wal').exists())
 
+    def test_the_output_names_identity_as_not_copied(self):
+        self.make_store()
+        identity = self.data / 'identity'
+        identity.mkdir()
+        (identity / 'node-id').write_text('node-1')
+        result = self.run_cli(str(self.out))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(str(identity), result.stdout)
+        self.assertIn('not copied', result.stdout)
+        # The directory is the operator's to rsync: a database backup must not read as a
+        # complete backup because it happens to have succeeded.
+        self.assertFalse((self.out / 'identity').exists())
+
     def test_it_refuses_when_there_is_no_database(self):
         result = self.run_cli(str(self.out))
         self.assertEqual(result.returncode, 1)

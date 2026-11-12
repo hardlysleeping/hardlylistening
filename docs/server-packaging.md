@@ -17,7 +17,8 @@ separation → *Runtime boundary*; this document is the operational detail for t
 | ✓ | 008 compose example — `/data` beside the file, media outside the project, loopback port |
 | ~ | 005 systemd unit — `deploy/hardlylistening.{service,env.example}` committed, never installed |
 | ✓ | 006 `deploy/install.sh` — user, directories, code copy, env file, `check`, unit, enable |
-| — | 009 identity + Docker health wiring |
+| ✓ | 009 storage half — `IDENTITY_DIR` declared, created `0700`, in the backup boundary; Docker health in the image |
+| — | 009 key half — node-id/keypair generation and format are FED-001, not packaging |
 
 The rule everything else follows from:
 
@@ -84,11 +85,16 @@ Application code is treated as read-only. **Never store user data inside it.**
 ```
 /var/lib/hardlylistening/
 ├── hardlylistening.db
-├── identity/                node-id, private-key, public-key
-├── cache/                   artwork/, metadata/, federation/
+├── identity/                node-id, private-key, public-key          (0700)
+├── cache/                   artwork/, browser-downloads/, artist-art/,
+│                            metadata/, federation/
 ├── tmp/
 └── state/
 ```
+
+Every one of those directories is declared in `paths.py` and created by `paths.ensure()`; the
+layout in this document and the layout on disk are the same eight paths, not a diagram and an
+approximation. `identity/` is created `0700` because the files that will live in it are private.
 
 Owner `hardlylistening:hardlylistening`. Directories `750`, secrets and private keys `600`,
 database `640` where appropriate.
@@ -214,7 +220,8 @@ Three deliberate properties:
   rsync can copy inconsistently.
 
 Scope is the database only — the output says so. Media wants rsync or a filesystem snapshot, and
-`identity/` will need its own line here once SERVER-PKG-009 exists. `tests/test_backup.py` keeps a
+since SERVER-PKG-009 `identity/` is printed too, with its resolved path, precisely so a successful
+`backup` is not read as a complete one. `tests/test_backup.py` keeps a
 real writer open while the backup runs, then reads the copy back: settings and rows match, the copy
 opens standalone, no `-wal` survives, the source file is byte-identical afterwards, a missing
 database is a refusal rather than an empty backup, and an existing copy is not replaced without
@@ -241,6 +248,22 @@ That test also found a real inconsistency in `check`: with a data directory that
 — the normal state before the first start — the database row said `fail` while the row above said
 "will be created". Both now judge by the nearest existing ancestor (`_creatable`), which is the only
 honest answer to "could this be made" without making it.
+
+**Done (SERVER-PKG-009, storage half).** `paths.py` declares `IDENTITY_DIR`, `STATE_DIR`,
+`TMP_DIR`, `METADATA_CACHE_DIR` and `FEDERATION_CACHE_DIR`, and `ensure()` creates all of them
+under `DATA_DIR` — `identity/` with mode `0700`, because the day key material appears it must not
+be group- or world-listable. Nothing writes to `state/`, `tmp/`, `cache/metadata/` or
+`cache/federation/` yet; they are created so the documented layout is real rather than promised,
+and so a volume that is missing one of them fails here rather than in a feature six months later.
+
+Key generation is deliberately **not** part of this: node-id, keypair format and rotation belong
+to FED-001, which is the code that would read them. Storage without a consumer is honest; invented
+crypto is not.
+
+`check` reports the identity directory only for a declared install (a checkout has none, and
+`ensure()` creates nothing there), warns if it is group- or world-listable, and — like every other
+row — creates nothing. `backup` now prints the resolved identity path in its "not copied" block,
+so a database backup cannot be mistaken for a complete one.
 
 **Done (SERVER-PKG-011).** The move is small enough to look like nothing — copy the database and
 the caches, set `HARDLYLISTENING_DATA_DIR` — and that is the risk: `paths.py` resolves four paths
@@ -410,6 +433,13 @@ Node identity lives in `IDENTITY_DIR` (`/var/lib/hardlylistening/identity` or `/
 is never baked into the image. A rebuilt container that keeps `/data` remains the same federated
 node. This is why identity is in the backup boundary even though federation is not implemented.
 
+**Built (SERVER-PKG-009, storage half):** `IDENTITY_DIR = DATA_DIR/identity`, created by
+`ensure()` with mode `0700`, reported by `check`, named by `backup`, and carried across a move by
+`tests/test_migration.py` — which seeds a `node-id` file, migrates the instance the way §11 says
+to, and asserts the file arrived under the data directory unchanged. **Not built:** the key
+material itself. `node-id`, `private-key` and `public-key` in the diagram above are the intended
+contents, not files that exist.
+
 ---
 
 ## 10. Desktop compatibility
@@ -447,7 +477,7 @@ Not "VPS packaging complete" until all hold:
 ✓ /opt can be read-only
 ✓ database lives outside the source tree
 ✓ music lives outside the source tree
-✓ identity survives application updates
+✓ identity survives application updates   (IDENTITY_DIR under DATA_DIR, never /opt; 0700; carried by the migration test)
 ✓ SIGTERM exits cleanly
 ✓ systemd restart preserves queue and database state
 ✓ Docker restart preserves queue and database state

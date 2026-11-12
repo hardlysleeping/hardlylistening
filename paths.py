@@ -9,6 +9,11 @@ modules that create it once a data directory is declared.
         artwork             /var/lib/hardlylistening/cache/artwork
         browser downloads   /var/lib/hardlylistening/cache/browser-downloads
         artist art          /var/lib/hardlylistening/cache/artist-art
+        metadata cache      /var/lib/hardlylistening/cache/metadata
+        federation cache    /var/lib/hardlylistening/cache/federation
+        identity            /var/lib/hardlylistening/identity          (0700)
+        state               /var/lib/hardlylistening/state
+        tmp                 /var/lib/hardlylistening/tmp
 
 With `HARDLYLISTENING_DATA_DIR` unset every path is exactly what it was before this module
 existed — `<app>/hardlylistening.db`, `<app>/.cache/...`, `<app>/artist-art` — so an existing
@@ -31,6 +36,20 @@ DATA_DIR = Path(os.environ["HARDLYLISTENING_DATA_DIR"]).expanduser() if DECLARED
 #: Cache lives beside the database when declared, and where it always has when not.
 CACHE_DIR = (DATA_DIR / "cache") if DECLARED else (APP_DIR / ".cache")
 ARTIST_ART_DIR = (DATA_DIR / "cache" / "artist-art") if DECLARED else (APP_DIR / "artist-art")
+METADATA_CACHE_DIR = CACHE_DIR / "metadata"
+FEDERATION_CACHE_DIR = CACHE_DIR / "federation"
+
+#: Persistent state that is not the database. `state/` and `tmp/` are part of the documented
+#: layout (`docs/server-packaging.md` §2) and are created now so the layout is real rather than
+#: promised; nothing writes to them yet.
+STATE_DIR = DATA_DIR / "state"
+TMP_DIR = DATA_DIR / "tmp"
+
+#: Node identity for federation. **Storage only**: nothing generates or reads key material here
+#: yet — FED-001 owns the format — but the directory is in the backup boundary and has to survive
+#: an application replacement, so it is declared and created with the rest of the mutable state.
+#: Private: 0700, because the day keys appear they must not be world-listable.
+IDENTITY_DIR = DATA_DIR / "identity"
 
 #: The database file: an explicit path wins, otherwise it sits in the data directory.
 DB_PATH = Path(os.environ.get("HARDLYLISTENING_DB") or (DATA_DIR / "hardlylistening.db"))
@@ -44,5 +63,10 @@ def ensure() -> None:
     """
     if not DECLARED:
         return
-    for directory in (DATA_DIR, CACHE_DIR, ARTIST_ART_DIR):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # `mode=` applies to the leaf and is unaffected by a 022/002 umask, which is exactly why
+    # identity is created separately rather than in the loop below.
+    IDENTITY_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for directory in (CACHE_DIR, ARTIST_ART_DIR, METADATA_CACHE_DIR, FEDERATION_CACHE_DIR,
+                      STATE_DIR, TMP_DIR):
         directory.mkdir(parents=True, exist_ok=True)
