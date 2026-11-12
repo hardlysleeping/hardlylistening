@@ -13,8 +13,10 @@ separation → *Runtime boundary*; this document is the operational detail for t
 | ✓ | 003 `bin/hardlylistening-server` with `run`, `check`, `version` |
 | ✓ | 010 `backup <directory>` — SQLite online-backup API, verified copy |
 | ✓ | 011 migration test — a checkout's Repo, Library and accounts survive the move |
+| ✓ | 007 Dockerfile — same runtime, non-root 10001, config from the environment |
+| ✓ | 008 compose example — `/data` beside the file, media outside the project, loopback port |
 | ~ | 005 systemd unit — `deploy/hardlylistening.{service,env.example}` committed, never installed |
-| — | 006 install script, 007/008 image + compose, 009 identity + health |
+| — | 006 install script, 009 identity + health |
 
 The rule everything else follows from:
 
@@ -337,57 +339,32 @@ architectural difference.
 
 ## 8. Docker
 
-Same runtime, no special build. Non-root (`uid 10001`), small Python base plus `ffmpeg`/`yt-dlp`.
+Same runtime, no special build: the same `server.py`, the same `web/`, the same SQLite file. What
+changes is where the files live and who runs the process. Committed as `Dockerfile`,
+`.dockerignore` and `deploy/docker-compose.yml`.
 
 ```
-/config   optional config/secrets
-/data     database, identity, cache, state, tmp
-/music    Repository media
+/data     database, identity, cache, state, tmp        (volume)
+/music    Repository media                             (volume)
+/app      the application, read-only at runtime
 ```
 
-```dockerfile
-FROM python:3.13-slim
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg yt-dlp \
- && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY . /app
-RUN useradd --system --uid 10001 --home /data hardlylistening
-USER 10001
-ENV HARDLYLISTENING_DATA_DIR=/data \
-    HARDLYLISTENING_DB=/data/hardlylistening.db \
-    HARDLYLISTENING_MUSIC_DIR=/music \
-    HARDLYLISTENING_HOST=0.0.0.0 \
-    HARDLYLISTENING_PORT=8470 \
-    PYTHONUNBUFFERED=1
-EXPOSE 8470
-ENTRYPOINT ["/app/bin/hardlylistening-server"]
-```
+Four choices in the image are load-bearing:
 
-```yaml
-services:
-  hardlylistening:
-    image: ghcr.io/hardlysleeping/hardlylistening:latest
-    container_name: hardlylistening
-    restart: unless-stopped
-    environment:
-      HARDLYLISTENING_HOST: 0.0.0.0
-      HARDLYLISTENING_PORT: 8470
-      HARDLYLISTENING_AUTH_REQUIRED: 1
-      HARDLYLISTENING_PUBLIC_ORIGIN: https://music.example.com
-    volumes:
-      - ./data:/data
-      - /srv/hardlylistening/music:/music
-    ports:
-      - "127.0.0.1:8470:8470"
-    healthcheck:
-      test: ["CMD", "python3", "-c",
-             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8470/api/health', timeout=3)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-```
+* **`yt-dlp` comes from pip, not Debian.** The archive's copy is a year behind the sites it has to
+  parse, and a downloader that cannot read SoundCloud is the whole app.
+* **`HOME=/data`.** yt-dlp and any provider that caches cookies writes under `$HOME`; left at the
+  default, that cache lands on the container filesystem and vanishes with the container.
+* **`.dockerignore` excludes `hardlylistening.db`, its `-wal`/`-shm` siblings, `.cache`,
+  `artist-art` and `backups`.** A checkout holds a live database, and `COPY . /app` would bake
+  somebody's library metadata into an image that is meant to be reproducible.
+* **`stop_grace_period: 30s`, and `exec` in the wrapper.** SIGTERM has to reach the Python process,
+  or the documented shutdown order never runs and every restart is a timeout kill.
+
+The health check lives in the image rather than in Compose, so native and container agree on what
+"healthy" means. **Health means the process answered**, never "the provider is reachable" and never
+"peers respond". `check` is deliberately not the health probe: it wants a writable music mount and
+reports tool state, which is an installer's question.
 
 Keep media outside the Compose project directory so replacing the deployment folder cannot delete
 the library. `chown 10001:10001` the data and music trees; `PUID`/`PGID` only if a NAS forces it.
@@ -396,7 +373,11 @@ Persistent: `/data/hardlylistening.db`, `/data/identity`, `/music`. Recreatable:
 `/data/tmp`. The container filesystem itself holds no unique state — destroying and recreating the
 container must not lose the server.
 
-**Health means the process is alive**, never "the provider is reachable" and never "peers respond".
+```
+docker compose -f /srv/hardlylistening/docker-compose.yml up -d
+docker compose -f /srv/hardlylistening/docker-compose.yml exec hardlylistening \
+    /app/bin/hardlylistening-server check
+```
 
 ---
 

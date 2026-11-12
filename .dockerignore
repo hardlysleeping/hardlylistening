@@ -1,0 +1,21 @@
+# What must not enter the image.
+#
+# The first two lines are the ones that matter: a checkout holds a live database and its caches,
+# and `COPY . /app` would bake somebody's library metadata into an image that is meant to be
+# reproducible. Everything else here is state, tests or tooling that the server never reads.
+.git
+.gitignore
+hardlylistening.db
+hardlylistening.db-wal
+hardlylistening.db-shm
+.cache
+artist-art
+backups
+tmp
+deploy
+tests
+docs
+node_modules
+__pycache__
+*.pyc
+*.log
