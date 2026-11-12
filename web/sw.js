@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'hardlylistening-static-v5';
+const CACHE = 'hardlylistening-static-v6';
 const AUDIO = 'hardlylistening-audio-v1';   // named in web/index.html as well
 // The app's stylesheet is a tree (app.css imports each owner under @layer). Every file in it
 // is precached, because the browser fetches each import as its own request: a missing entry
@@ -18,7 +18,7 @@ const STYLES = [
 ];
 // Feature scripts the shell loads by URL. index.html is never cached (it is authenticated HTML),
 // but a cached copy of its scripts is what lets a same-origin reload paint without the network.
-const SCRIPTS = ['/js/playback-queue.js'];
+const SCRIPTS = ['/js/playback-queue.js', '/js/repo-discovery.js'];
 const STATIC = ['/offline.html','/lifecycle.js','/icon-192.png','/icon-512.png','/app.webmanifest',
                 ...STYLES, ...SCRIPTS];
 self.addEventListener('install', event => {
