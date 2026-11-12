@@ -1,0 +1,39 @@
+[Unit]
+Description=HardlyListening server
+Documentation=https://github.com/hardlysleeping/hardlylistening
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hardlylistening
+Group=hardlylistening
+WorkingDirectory=/opt/hardlylistening
+# Not optional: a packaged install without its environment file would fall back to this
+# checkout's defaults, write next to the code, and die on ProtectSystem=strict with a far
+# less obvious message than "no such file".
+EnvironmentFile=/etc/hardlylistening/hardlylistening.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# `check` reports and repairs nothing, which is what makes it safe here: a broken install
+# fails at the probe with a specific line instead of half-starting.
+ExecStartPre=/opt/hardlylistening/bin/hardlylistening-server check
+ExecStart=/opt/hardlylistening/bin/hardlylistening-server run
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hardlylistening
+ReadWritePaths=/srv/hardlylistening/music
+# On purpose: ffmpeg and the media tooling want normal device access, and sandboxing that
+# before it has been tested is how a working install becomes a puzzle. The protection that
+# matters is ProtectSystem=strict plus exactly two writable paths.
+PrivateDevices=false
+
+[Install]
+WantedBy=multi-user.target

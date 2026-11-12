@@ -1,8 +1,9 @@
 # Headless server packaging — canonical runtime, VPS layout, Docker
 
-Status: **partly built — the process, the paths and the launcher exist; the service, image and
-backup do not.** Owner decisions are recorded in `PLAN.md` § Platform separation → *Runtime
-boundary*; this document is the operational detail for the `SERVER-PKG-###` cards.
+Status: **partly built — the process, its paths, its launcher and its backup exist; no packaged
+install has been started on a host yet.** Owner decisions are recorded in `PLAN.md` § Platform
+separation → *Runtime boundary*; this document is the operational detail for the
+`SERVER-PKG-###` cards.
 
 | done | card |
 | --- | --- |
@@ -11,7 +12,8 @@ boundary*; this document is the operational detail for the `SERVER-PKG-###` card
 | ✓ | 001 runtime config: `HOST`, `PORT`, `MUSIC_DIR` |
 | ✓ | 003 `bin/hardlylistening-server` with `run`, `check`, `version` |
 | ✓ | 010 `backup <directory>` — SQLite online-backup API, verified copy |
-| — | 005 systemd unit, 006 image, 007/008 restart state, 009 identity, 011 migration test |
+| ~ | 005 systemd unit — `deploy/hardlylistening.{service,env.example}` committed, never installed |
+| — | 006 install script, 007/008 image + compose, 009 identity + health, 011 migration test |
 
 The rule everything else follows from:
 
@@ -279,48 +281,34 @@ then migrations run and the service restarts.
 
 ## 6. systemd (native VPS)
 
-```ini
-[Unit]
-Description=HardlyListening Server
-Documentation=https://github.com/hardlysleeping/hardlylistening
-After=network-online.target
-Wants=network-online.target
+Committed as `deploy/hardlylistening.service` and `deploy/hardlylistening.env.example` — read those,
+not a copy in this document. **Not yet installed on a host** (SERVER-PKG-005 stays open until it
+has been started somewhere and stopped cleanly, per the board's own rule).
 
-[Service]
-Type=simple
-User=hardlylistening
-Group=hardlylistening
-WorkingDirectory=/opt/hardlylistening
-EnvironmentFile=/etc/hardlylistening/hardlylistening.env
-Environment=PYTHONUNBUFFERED=1
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStartPre=/opt/hardlylistening/bin/hardlylistening-server check
-ExecStart=/opt/hardlylistening/bin/hardlylistening-server
-Restart=on-failure
-RestartSec=5
-TimeoutStopSec=30
-KillSignal=SIGTERM
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/hardlylistening
-ReadWritePaths=/srv/hardlylistening/music
-PrivateDevices=false
-
-[Install]
-WantedBy=multi-user.target
+```
+deploy/hardlylistening.service        → /etc/systemd/system/hardlylistening.service
+deploy/hardlylistening.env.example    → /etc/hardlylistening/hardlylistening.env   (root:hardlylistening 640)
 ```
 
-`PrivateDevices=false` on purpose: FFmpeg and media tooling may need normal device access, and
-sandboxing that before it is tested is how a working install becomes a puzzle. The protection that
-matters is `ProtectSystem=strict` plus exactly two writable paths.
+Two choices in the unit are worth stating, because a "hardened" unit is where an install quietly
+stops being able to download:
+
+* `ExecStartPre=… check` — safe only because `check` creates, migrates and repairs nothing. A
+  probe with ambition turns a bad config into a half-broken install.
+* `PrivateDevices=false` on purpose. FFmpeg and the media tooling want normal device access, and
+  sandboxing that before it has been tested is how a working install becomes a puzzle. The
+  protection that matters is `ProtectSystem=strict` plus exactly two writable paths —
+  `/var/lib/hardlylistening` and the library root.
 
 ```
 daemon-reload → enable --now → status → journalctl -u hardlylistening -f
 ```
 
 Logs go to journald. No second application log file by default.
+
+The existing per-user unit (`install-service.sh`, `~/.config/systemd/user/hardlylistening.service`)
+is untouched by any of this: it is how the development checkout runs, and the system unit is a
+second, independent way to run the same code.
 
 ---
 
