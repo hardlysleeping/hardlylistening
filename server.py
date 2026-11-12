@@ -363,6 +363,36 @@ class Handler(BaseHTTPRequestHandler):
             if path in ('/auth/google', '/auth/google/callback'):
                 self.google_auth(path)
                 return False
+            if path == '/api/v1/capabilities':
+                # What this server actually offers, told without asking for a session: a
+                # client (or a person reading curl) should not have to probe endpoints to
+                # find out whether a feature exists. Facts only, derived from the modules
+                # that implement them — this endpoint cannot claim more than the server does.
+                import subsonic
+                import oauth_google
+                self.json({
+                    'server': {'name': subsonic.SERVER_TYPE, 'version': db.VERSION,
+                               'api': 'v1', 'requires_members': bool(SECURITY.required)},
+                    'subsonic': {'enabled': True, 'version': subsonic.PROTOCOL_VERSION,
+                                 'server_version': subsonic.SERVER_VERSION,
+                                 'open_subsonic': True,
+                                 'extensions': subsonic.EXTENSIONS,
+                                 'transcode_targets': sorted(subsonic.TRANSCODE_TARGETS),
+                                 'default_transcode': subsonic.DEFAULT_TRANSCODE},
+                    'features': {
+                        'accounts': {'password': True, 'login_link': True,
+                                     'invite_only': True, 'google': oauth_google.available()},
+                        'library': {'scope': 'member', 'bookmarks': True, 'ratings': True,
+                                    'export_zip': True, 'shares': True, 'radio': True,
+                                    'podcasts': True, 'lyrics': True},
+                        'playback': {'range': True, 'transcode': True, 'hls': False},
+                        'party': {'enabled': True, 'chat': True, 'jukebox': False},
+                        'social': {'comments': True, 'votes': True, 'likes': True,
+                                   'activity': True},
+                        'discovery': {'search': True, 'sonic_analysis': False},
+                    },
+                })
+                return False
             if self.command == 'POST' and path == '/api/auth/session':
                 SECURITY.csrf(self)
                 SECURITY.limit(SECURITY.client_ip(self), 'enrollment', 15)

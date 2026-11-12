@@ -35,6 +35,15 @@ MUSIC_TYPES = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'fla
                'ogg': 'audio/ogg', 'opus': 'audio/ogg', 'wav': 'audio/wav', 'aiff': 'audio/aiff',
                'aif': 'audio/aiff', 'wma': 'audio/x-ms-wma', 'alac': 'audio/mp4', 'webm': 'audio/webm'}
 
+#: What a client is told before it asks for anything. One place, so the envelope, the
+#: extension list and `/api/v1/capabilities` cannot describe different servers.
+PROTOCOL_VERSION = '1.16.1'
+SERVER_VERSION = 'scoped-1'
+SERVER_TYPE = 'HardlyListening'
+EXTENSIONS = [{'name': 'formPost', 'versions': [1]},
+              {'name': 'songLyrics', 'versions': [1]},
+              {'name': 'transcoding', 'versions': [1]}]
+
 NOT_IMPLEMENTED = {
     'jukeboxControl', 'hls',
     'downloadPodcastEpisode',
@@ -833,9 +842,7 @@ def handle(endpoint, params, multi, ctx):
         key = 'getSimilarSongs2' if endpoint == 'getSimilarSongs2' else 'getSimilarSongs'
         return {key: {'song': page(pool)}}
     if endpoint == 'getOpenSubsonicExtensions':
-        return {'openSubsonicExtensions': [{'name': 'formPost', 'versions': [1]},
-                                           {'name': 'songLyrics', 'versions': [1]},
-                                           {'name': 'transcoding', 'versions': [1]}]}
+        return {'openSubsonicExtensions': EXTENSIONS}
     if endpoint in ('getScanStatus', 'startScan'):
         return {'scanStatus': {'scanning': False, 'count': len(tracks), 'folderCount': 1,
                                'lastScan': iso(time.time())}}

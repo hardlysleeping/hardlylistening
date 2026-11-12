@@ -331,8 +331,10 @@ def lyrics_for(store, track_id):
 
 
 def envelope(handler, params, payload=None, error=None):
-    data = {'status': 'failed' if error else 'ok', 'version': '1.16.1',
-            'type': 'HardlyListening', 'serverVersion': 'scoped-1', 'openSubsonic': True}
+    import subsonic
+    data = {'status': 'failed' if error else 'ok', 'version': subsonic.PROTOCOL_VERSION,
+            'type': subsonic.SERVER_TYPE, 'serverVersion': subsonic.SERVER_VERSION,
+            'openSubsonic': True}
     data.update({'error': {'code': error[0], 'message': error[1]}} if error else (payload or {}))
     # A request can be refused before its parameters are parsed, so the error still has to
     # honour the format the client asked for in the query string.
