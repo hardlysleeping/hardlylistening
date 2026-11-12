@@ -100,10 +100,25 @@ and the ZIP / save controls.
 - **Favorites** (yours) is added in the Library scope; **Everyone's Favorites** is the
   Repository's list and is added in the shared scope only. Neither is a stored playlist.
 
+## Repository sections
+
+The shared Repository is three sections in one view: **Browse** (the pool), **Releases**
+(what the followed artists have put out) and **Subscribed** (the follows themselves). Feed
+is Activity only — what people did — because a release is catalogue, not activity.
+
+| Piece | Owner |
+| --- | --- |
+| Section row `#repotabs` | `setRepoTab()`, `paintRepoTab()` in `web/index.html`; it is a plain `.seg`, styled with the other library controls (`#repotabs` in `components/library-controls.css`); state in `hl.repoTab` |
+| Panes `#repopane-browse` / `-releases` / `-subscribed` | `paintRepoTab()` hides the two that are not on screen; `renderLibrary()` paints Browse, `renderFeed()` Releases, `renderSubscriptions()` Subscribed |
+| Heading, song count, import target | `paintRepoTab()` sets `#libtitle` to the section and hides `#libcount` and `#dropzone` outside Browse |
+| The personal Library | one list, so the row and the two extra panes do not exist there (`activeRepoTab()` answers `browse`) |
+
+The new-releases badge (`#feedcount`) rides on the Repo tab, not on Feed.
+
 ## Artist catalogue page
 
-The Feeds tab's artist page (`#feedartistpage`) is a catalogue, not a "latest releases"
-list: every album the provider lists, and the songs behind them. Albums and Songs are two
+The release page (`#feedartistpage`, inside `#repopane-releases`) is a catalogue, not a
+"latest releases" list: every album the provider lists, and the songs behind them. Albums and Songs are two
 tabs behind the Library's icon switch (`#fapTabs`), the layout switch (`#fapLayout`) applies
 to both, and both sit on one row above the pane.
 
@@ -149,7 +164,7 @@ Where a component lives:
 | Compact bar and fullscreen player | `components/player.css` |
 | Playback queue sheet | `components/playback-queue.css` |
 | Download queue / search / review | `components/queue-view.css` |
-| Feed and artist catalogue | `components/feed.css` |
+| Feed, the release list and the artist catalogue | `components/feed.css` |
 | Genres dialog | `components/genres.css` |
 | Lyrics pane | `components/lyrics.css` |
 
