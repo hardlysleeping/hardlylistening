@@ -12,8 +12,9 @@ separation → *Runtime boundary*; this document is the operational detail for t
 | ✓ | 001 runtime config: `HOST`, `PORT`, `MUSIC_DIR` |
 | ✓ | 003 `bin/hardlylistening-server` with `run`, `check`, `version` |
 | ✓ | 010 `backup <directory>` — SQLite online-backup API, verified copy |
+| ✓ | 011 migration test — a checkout's Repo, Library and accounts survive the move |
 | ~ | 005 systemd unit — `deploy/hardlylistening.{service,env.example}` committed, never installed |
-| — | 006 install script, 007/008 image + compose, 009 identity + health, 011 migration test |
+| — | 006 install script, 007/008 image + compose, 009 identity + health |
 
 The rule everything else follows from:
 
@@ -216,6 +217,17 @@ opens standalone, no `-wal` survives, the source file is byte-identical afterwar
 database is a refusal rather than an empty backup, and an existing copy is not replaced without
 `--force`.
 
+**Done (SERVER-PKG-011).** The move is small enough to look like nothing — copy the database and
+the caches, set `HARDLYLISTENING_DATA_DIR` — and that is the risk: `paths.py` resolves four paths
+from the environment at import time, so one misspelled variable or a half-moved cache tree reads as
+an empty library rather than as an error. `tests/test_migration.py` builds a checkout-shaped
+instance with a Repo (artist, release, two tracks), a Library (playlist and its one membership), an
+account with a credential, a settings root, an art row and a log row; moves it the way §11 says
+to; and then compares the store opened through the packaged path against the store opened before
+the move — row by row, not "the file exists". It also asserts the cache directories resolve under
+the data directory afterwards, that a second start changes not one byte (idempotent migrations are
+what make an update a file replacement), and that `HARDLYLISTENING_DB` still beats `DATA_DIR`.
+
 Still required before the system service ships:
 
 * **`migrate`** (see §5), and the migrations stay automatic and idempotent at startup as they are
@@ -410,11 +422,14 @@ Generic shape of a migration from an existing install:
 
 1. `check` on the old host, then `backup <path>`.
 2. Copy the database to `DATA_DIR/`, the media to `/srv/hardlylistening/music`, `identity/` if present.
-3. Point the Repository root at the new music path (the `root` setting, once — not every boot).
+3. Point the Repository root at the new music path (the `root` setting, once — not every boot), or
+   let `HARDLYLISTENING_MUSIC_DIR` seed it on a database that never had a chosen root.
 4. Start under systemd or Docker, verify `/api/health`, the web UI, `/rest/ping.view`.
 5. Verify a download, a playback with Range, and one Subsonic client.
 
 The database schema is unchanged by any of this: packaging moves files, it does not reshape data.
+`tests/test_migration.py` is that sentence as a test — Repo, Library and accounts compared before
+and after the move.
 
 ---
 
