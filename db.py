@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+/* An orphan file the sweep looked at and chose not to adopt (a spare copy, a
+   fragment). Remembering it by size and mtime means a 500-file sweep does not
+   re-probe the same file every ten minutes. */
+CREATE TABLE IF NOT EXISTS adopt_skipped (
+  path TEXT PRIMARY KEY,
+  size INTEGER DEFAULT 0,
+  mtime REAL DEFAULT 0,
+  reason TEXT DEFAULT '',
+  checked REAL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS artists (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   provider TEXT NOT NULL,
@@ -404,6 +415,11 @@ ADDED_COLUMNS = {
         "bpm_phase": "REAL DEFAULT 0",
         "bpm_source": "TEXT DEFAULT ''",
         "bpm_at": "REAL DEFAULT 0",
+        # Cover art: the hash of the one image this track shares with every other
+        # track carrying the same cover, and when the file was last looked at.
+        # art_checked 0 = the artwork sweep still has work to do on this row.
+        "art_hash": "TEXT DEFAULT ''",
+        "art_checked": "REAL DEFAULT 0",
     },
 }
 

@@ -95,6 +95,11 @@ def boot() -> tuple[db.Store, Queue]:
             from engine.scheduler import Scheduler
             SCHEDULER = Scheduler(STORE)
             SCHEDULER.start()
+            # A file the queue could not link has no row, so it is invisible: the
+            # sweep adopts those orphans instead of letting a retry download them
+            # again. Standing job, never deletes or moves.
+            from library import reconcile
+            reconcile.start(STORE)
     assert STORE and QUEUE
     return STORE, QUEUE
 

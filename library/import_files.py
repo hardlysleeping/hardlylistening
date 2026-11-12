@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -23,6 +24,22 @@ MIN_BYTES = 16 * 1024            # below this it is a stub or a slice, not a tra
 AUDIO_EXTS = {".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wav", ".aiff",
               ".aif", ".wma", ".alac", ".webm"}
 KEY_BYTES = 256 * 1024          # head and tail sampled, not the whole file
+#: `NN - Title`: what `library.store.path_for` writes, and what a folder of downloads
+#: looks like. The leading number is the track's position, never part of the title.
+STEM_NUMBER = re.compile(r"^\s*(\d{1,3})\s*[-–—._)]\s*(?=\S)")
+#: `Title (2)`: how `library.store.unique_any_suffix` keeps a second file with the
+#: same stem from overwriting the first. It marks a copy, never a different song.
+COPY_SUFFIX = re.compile(r"\s+\((\d{1,3})\)$")
+
+
+def strip_copy_suffix(title: str) -> str:
+    """The library's own "(2)" collision marker, removed from a file name.
+
+    Left on, "Song (2)" read as a title of its own and the sweep adopted a second
+    row for one recording. Provider titles never carry this marker on disk; the
+    downloader appends it after the fact.
+    """
+    return COPY_SUFFIX.sub("", title).strip() or title
 
 
 def is_audio(path: Path) -> bool:
@@ -41,8 +58,40 @@ def content_key(path: Path) -> str:
     return digest.hexdigest()
 
 
-def probe(path: Path) -> dict:
-    """Tags and duration via ffprobe. Missing tags fall back to the filename."""
+def from_filename(path: Path) -> tuple[str, int]:
+    """(title, track number) from a file name in the library's own layout.
+
+    A leading number is the track position — never part of the title, and never an
+    artist. Falling back to the raw stem made an artist called "76" out of
+    "76 - I Believe (feat. Asha) [Nemexi Remix]".
+    """
+    stem = path.stem.strip()
+    match = STEM_NUMBER.match(stem)
+    if match:
+        title = stem[match.end():].strip()
+        return (strip_copy_suffix(title) or stem), int(match.group(1))
+    return strip_copy_suffix(stem), 0
+
+
+def artist_folder(path: Path, root: Path | None) -> str:
+    """The artist level of `<root>/<Artist>/<Collection>/<file>`, or "".
+
+    The app writes that layout itself, so an adopted file that lost its tags still
+    knows whose folder it sits in. One level under the root is a collection, not an
+    artist, and is not guessed.
+    """
+    if root is None:
+        return ""
+    try:
+        relative = path.resolve().relative_to(Path(root).expanduser().resolve())
+    except (OSError, ValueError):
+        return ""
+    return relative.parts[0].strip() if len(relative.parts) >= 3 else ""
+
+
+def probe(path: Path, root: Path | None = None) -> dict:
+    """Tags and duration via ffprobe. Missing tags fall back to the file name and
+    the folder the app itself put the file in."""
     cmd = ["ffprobe", "-v", "error", "-show_entries",
            "format=duration:format_tags=artist,album,title,track,date,album_artist",
            "-of", "json", str(path)]
@@ -52,20 +101,29 @@ def probe(path: Path) -> dict:
     except Exception:
         data = {}
     tags = {k.lower(): v for k, v in (data.get("tags") or {}).items()}
-    title = (tags.get("title") or path.stem).strip()
+    tagged_title = (tags.get("title") or "").strip()
     artist = (tags.get("artist") or tags.get("album_artist") or "").strip()
     album = (tags.get("album") or "").strip()
     number = 0
     raw_track = (tags.get("track") or "").split("/")[0]
     if raw_track.strip().isdigit():
         number = int(raw_track.strip())
+    if tagged_title:
+        title = tagged_title
+    else:
+        title, number = from_filename(path)
+    if not artist:
+        artist = artist_folder(path, root)
+    if not artist and " - " in title:
+        head, rest = [part.strip() for part in title.split(" - ", 1)]
+        # A number in front of a dash is a track position, not a performer.
+        if head and not head.isdigit():
+            artist, title = head, rest
     duration = 0.0
     try:
         duration = float(data.get("duration") or 0)
     except (TypeError, ValueError):
         duration = 0.0
-    if not artist and " - " in title:
-        artist, title = [part.strip() for part in title.split(" - ", 1)]
     return {"title": title, "artist": artist, "album": album,
             "track_number": number, "duration": duration}
 
@@ -108,7 +166,7 @@ def import_paths(store, paths: list[str], *, copy: bool = True, limit: int = 500
             if path.stat().st_size < MIN_BYTES:
                 failed.append(f"{path.name}: too small to be a track")
                 continue
-            meta = probe(path)
+            meta = probe(path, root)
             if meta["duration"] <= 0:
                 failed.append(f"{path.name}: no audio stream found")
                 continue
@@ -136,7 +194,7 @@ def import_paths(store, paths: list[str], *, copy: bool = True, limit: int = 500
                 album=meta["album"] or "Imports", track_number=meta["track_number"],
                 duration=meta["duration"], source_url=str(path), artist_id=artist_id)
             with store.lock:
-                store.conn.execute("UPDATE tracks SET file=?, size=? WHERE id=?",
+                store.conn.execute("UPDATE tracks SET file=?, size=?, art_hash='', art_checked=0 WHERE id=?",
                                    (str(written), written.stat().st_size, track_id))
                 store.conn.commit()
             if not playlist_title:
@@ -193,7 +251,7 @@ def move_library(store, target: str) -> dict:
                 "SELECT file FROM tracks WHERE file<>''")})
         shutil.move(str(source), str(destination))
         with store.lock:
-            store.conn.execute("UPDATE tracks SET file=? WHERE id=?",
+            store.conn.execute("UPDATE tracks SET file=?, art_hash='', art_checked=0 WHERE id=?",
                                (str(destination), row["id"]))
             store.conn.commit()
         moved += 1
