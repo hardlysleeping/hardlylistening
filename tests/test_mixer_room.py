@@ -118,6 +118,36 @@ class Decks(Base):
         time.sleep(0.2)
         self.assertGreater(self.room.position("A"), 0.3)
 
+    def test_the_wire_carries_a_resolved_position_not_a_timestamp(self):
+        """`position_now` is what a client can use; `at` is server time and must not be trusted.
+
+        A phone's clock is not the server's. The page used to seek the playing deck by
+        subtracting `at` from its own `Date.now()`, which lands past the end of the track
+        when the phone is behind — the song stops, and it looks like a broken player.
+        Publishing the anchor's age instead makes the arithmetic clock-free.
+        """
+        alex = member("a", "Alex")
+        self.room.set_deck(alex, "A", {"track_id": 5, "position": 30, "playing": True})
+        time.sleep(0.25)
+        wire = self.room.wire_deck("A")
+        self.assertIn("position_now", wire)
+        self.assertGreater(wire["position_now"], 30.2, "the resolved position, not the anchor")
+        self.assertLess(wire["position_now"], 31.0)
+        # Every deck in a full snapshot is shaped the same way, or a joining client
+        # would fall back to comparing the two clocks.
+        for side, deck in self.room.snapshot()["decks"].items():
+            self.assertIn("position_now", deck, side)
+
+    def test_a_paused_deck_reports_its_frozen_position(self):
+        alex = member("a", "Alex")
+        self.room.set_deck(alex, "A", {"track_id": 5, "position": 12, "playing": True})
+        time.sleep(0.2)
+        self.room.set_deck(alex, "A", {"playing": False})
+        frozen = self.room.wire_deck("A")["position_now"]
+        self.assertAlmostEqual(frozen, 12.0, delta=0.35)
+        time.sleep(0.15)
+        self.assertAlmostEqual(self.room.wire_deck("A")["position_now"], frozen, places=3)
+
     def test_a_new_track_rewinds_the_clock(self):
         alex = member("a", "Alex")
         self.room.set_deck(alex, "A", {"track_id": 5, "playing": True, "position": 90})

@@ -31,8 +31,11 @@
   .small{font-size:12px;padding:5px 9px}
 
   main{max-width:1180px;margin:0 auto;padding:14px;display:grid;gap:14px}
+  /* Desktop: two decks with the mixer rail between them. The phone layout is a
+     different grid altogether (see the max-width:900px block) — the old
+     `max-width:860px` override here fought it, pinning deck B into a second
+     implicit column while the grid declared one. */
   .decks{display:grid;grid-template-columns:1fr 90px 1fr;gap:12px;align-items:stretch}
-  @media (max-width:860px){ .decks{grid-template-columns:1fr} .mid{order:3} }
 
   .deck{background:var(--panel);border:1px solid var(--line);border-radius:16px;
     padding:12px;display:grid;gap:10px;border-top:3px solid var(--a)}
@@ -295,12 +298,21 @@
     .deck .bpmrow{flex-wrap:nowrap;gap:4px;overflow:hidden}
     .deck .bpmrow .bpmchip,.deck .bpmrow .small,.deck .bpmrow .time{font-size:9.5px;padding:2px 5px}
 
-    .mid{grid-column:1 / -1;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;
-      gap:6px 8px;padding:6px 8px;border-radius:12px}
-    .mid .cross{flex:1 1 150px;min-width:120px;gap:3px}
-    .mid .cross input[type=range]{height:20px}
-    .mid > .row{gap:10px !important;align-items:center !important}
-    .meter{width:9px;height:38px;border-radius:4px}
+    /* The rail becomes a full-width strip under the decks, and it reads top to
+       bottom: CROSSFADER, the meters, MASTER. Side by side, two faders and three
+       meters had to share ~370 px and wrapped into a two-line mess; stacked they
+       are full-width throws, which are also easier to catch with a thumb. */
+    .mid{grid-column:1 / -1;grid-row:2;display:grid;grid-template-columns:1fr;
+      justify-items:stretch;gap:8px;padding:8px 10px;border-radius:12px}
+    .mid .cross{width:100%;gap:4px;justify-items:stretch}
+    .mid .cross b{font-size:10px}
+    .mid .cross input[type=range]{height:26px;width:100%}
+    .mid .cross .time{text-align:center;font-size:10.5px}
+    .mid > .row{display:flex;justify-content:center;gap:16px;align-items:flex-end}
+    .meter{width:10px;height:34px;border-radius:5px}
+
+    /* A hairline above MASTER so the two throws never read as one control. */
+    .mid > .cross:last-child{padding-top:7px;border-top:1px solid #242430}
 
     .deck{padding:8px;gap:6px;border-radius:12px;border-top-width:2px}
     .deckno{font-size:9.5px;letter-spacing:.8px}
@@ -2408,6 +2420,14 @@ const localDeckClock = {A: false, B: false};
 let audioJoined = false;
 function applyRemoteDeck(side, deck){
   if (!deck) return;
+  // The wire carries the position already resolved (`position_now`), not a timestamp,
+  // because a phone's clock is not the server's: subtracting `deck.at` (server time)
+  // from `Date.now()` seeked the playing deck by the skew between two unrelated clocks.
+  // Skewed backwards that landed past the end of the track, so the song "finished" and
+  // stopped. Re-anchor on the local clock as the event arrives; then the same arithmetic
+  // works on any device and the server keeps owning the timeline.
+  if (deck.position_now != null) deck = {...deck, pos: deck.position_now, at: Date.now() / 1000};
+  const mine = localDeckClock[side];   // this tab is driving the deck, not following it
   lastDecks[side] = deck;
   localDeckClock[side] = false;
   const audio = $("#audio" + side);
@@ -2421,9 +2441,12 @@ function applyRemoteDeck(side, deck){
     }
   }
   const target = roomNow(deck);
-  if (audio.duration && Math.abs((audio.currentTime || 0) - target) > 0.9){
+  // A follower is nudged onto the room's timeline; the deck we are driving is left
+  // alone (its own echo is not a remote move). Never seek to the very end either —
+  // a rounding error there fires `ended` and looks exactly like a broken player.
+  if (!mine && audio.duration && Math.abs((audio.currentTime || 0) - target) > 0.9){
     applyingRemote = true;
-    audio.currentTime = Math.max(0, Math.min(audio.duration, target));
+    audio.currentTime = Math.max(0, Math.min(audio.duration - 0.35, target));
     applyingRemote = false;
   }
   audio.playbackRate = deck.rate || 1;

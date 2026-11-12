@@ -169,7 +169,7 @@ class Room:
                 "values": dict(self.values),
                 "claims": dict(self.claims),
                 "members": self.online(),
-                "decks": {side: dict(deck) for side, deck in self.decks.items()},
+                "decks": {side: self.wire_deck(side) for side in self.decks},
                 "queues": {side: list(ids) for side, ids in self.queues.items()},
             }
 
@@ -281,7 +281,7 @@ class Room:
                 except (TypeError, ValueError):
                     pass
             self.touch(member)
-            state = dict(deck, at=deck["at"])
+            state = self.wire_deck(side)
         self._broadcast({"decks": {side: state}, "members": self.online()})
         return state
 
@@ -291,6 +291,19 @@ class Room:
         if not deck["playing"]:
             return deck["pos"]
         return deck["pos"] + max(0.0, time.time() - deck["at"]) * deck["rate"]
+
+    def wire_deck(self, side):
+        """One deck as the wire carries it, with the position already resolved.
+
+        `position_now` is where the deck is *at the moment this payload was built*, on
+        the server's clock. A client re-anchors it on its own clock as the event arrives
+        and the arithmetic needs no shared time source. That matters: `at` is server
+        time, and a client that subtracted it from its own `Date.now()` seeked by the
+        difference between two unrelated clocks — on a phone whose clock is behind, past
+        the end of the track, which stops the song and looks like a broken player.
+        """
+        deck = self.decks[side]
+        return dict(deck, position_now=max(0.0, self.position(side)))
 
     def set_queue(self, member, side, payload):
         side = "B" if side == "B" else "A"
