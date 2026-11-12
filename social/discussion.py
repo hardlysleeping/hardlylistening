@@ -1,4 +1,9 @@
-"""Approved-community discussions. No identity or target supplied by a client is trusted."""
+"""Approved-community discussions. No identity or target supplied by a client is trusted.
+
+The domain functions live here and the HTTP adapter (`dispatch`) is thin on purpose: `social.service`
+is the entry point the rest of the server talks to (`ARCH-005`), and it must not be able to depend
+on a request object to read a comment count.
+"""
 import hashlib
 import json
 import re
@@ -132,7 +137,110 @@ def batch(store, kind, targets, member, latest: int = 0):
     return out
 
 
+def comments(store, kind, target, member, after: int = 0) -> dict:
+    """One page of comments with their likes, plus the target's own summary."""
+    with store.lock:
+        validate_target(store, kind, target)
+        schema(store)
+        rows = [dict(r) for r in store.conn.execute('''SELECT c.id,c.member_id,c.body,c.created_at,c.updated_at,
+            m.display_name,m.profile_icon
+            FROM social_comments c LEFT JOIN members m ON m.id=c.member_id
+            WHERE c.kind=? AND c.target=? AND c.id>? ORDER BY c.id LIMIT ?''',
+            (kind, target, after, PAGE_SIZE + 1))]
+        more = len(rows) > PAGE_SIZE
+        rows = rows[:PAGE_SIZE]
+        liked = set()
+        if rows:
+            ids = [r['id'] for r in rows]
+            marks = ','.join('?' for _ in ids)
+            for like_row in store.conn.execute(
+                    f'SELECT comment_id FROM social_comment_likes WHERE member_id=?'
+                    f' AND comment_id IN ({marks})', (member['id'], *ids)):
+                liked.add(like_row['comment_id'])
+            counts = {r['comment_id']: r['n'] for r in store.conn.execute(
+                f'SELECT comment_id, COUNT(*) n FROM social_comment_likes'
+                f' WHERE comment_id IN ({marks}) GROUP BY comment_id', ids)}
+        else:
+            counts = {}
+        for row in rows:
+            row['likes'] = counts.get(row['id'], 0)
+            row['liked'] = row['id'] in liked
+            row['can_edit'] = member['role'] == 'admin' or row['member_id'] == member['id']
+            # Comments carry who wrote them, so the name opens their profile instead of
+            # printing a raw member id.
+            row['name'] = (row.pop('display_name') or '').strip() or 'Member'
+            row['icon'] = row.pop('profile_icon') or 'music'
+        return dict(summary(store, kind, target, member), items=rows,
+                    next_after=rows[-1]['id'] if more else None)
+
+
+def vote(store, kind, target, member, value) -> dict:
+    """Set, switch or clear one member's vote. Returns the target's new summary."""
+    if type(value) is not int or value not in (-1, 0, 1):
+        raise Denied(400, 'Vote must be -1, 0 or 1')
+    with store.lock:
+        validate_target(store, kind, target)
+        schema(store)
+        with store.conn:
+            if value == 0:
+                store.conn.execute('DELETE FROM social_votes WHERE kind=? AND target=? AND member_id=?',
+                                   (kind, target, member['id']))
+            else:
+                store.conn.execute('''INSERT INTO social_votes VALUES(?,?,?,?)
+                    ON CONFLICT(kind,target,member_id) DO UPDATE SET value=excluded.value''',
+                    (kind, target, member['id'], value))
+        return summary(store, kind, target, member)
+
+
+def like(store, kind, target, member, comment_id) -> dict:
+    """Toggle one member's like on a comment. A like needs a comment that exists."""
+    with store.lock:
+        validate_target(store, kind, target)
+        schema(store)
+        if not store.conn.execute('SELECT id FROM social_comments WHERE id=? AND kind=? AND target=?',
+                                  (int(comment_id), kind, target)).fetchone():
+            raise Denied(404, 'Comment not found')
+        with store.conn:
+            if store.conn.execute('SELECT 1 FROM social_comment_likes WHERE comment_id=? AND member_id=?',
+                                  (int(comment_id), member['id'])).fetchone():
+                store.conn.execute('DELETE FROM social_comment_likes WHERE comment_id=? AND member_id=?',
+                                   (int(comment_id), member['id']))
+            else:
+                store.conn.execute('INSERT INTO social_comment_likes(comment_id, member_id) VALUES(?,?)',
+                                   (int(comment_id), member['id']))
+        return summary(store, kind, target, member)
+
+
+def comment(store, kind, target, member, *, body=None, comment_id=None, delete=False) -> dict:
+    """Add, edit or delete a comment. Only the author or an administrator may moderate."""
+    with store.lock:
+        validate_target(store, kind, target)
+        schema(store)
+        if comment_id:
+            row = store.conn.execute('SELECT member_id FROM social_comments WHERE id=? AND kind=? AND target=?',
+                                     (int(comment_id), kind, target)).fetchone()
+            if not row:
+                raise Denied(404, 'Comment not found')
+            if row[0] != member['id'] and member['role'] != 'admin':
+                raise Denied(403, 'Only author or administrator may moderate')
+        with store.conn:
+            if comment_id and delete is True:
+                store.conn.execute('DELETE FROM social_comments WHERE id=?', (int(comment_id),))
+            else:
+                text = body
+                if not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_TEXT or '\x00' in text:
+                    raise Denied(400, 'Comment must contain 1–2000 text characters')
+                if comment_id:
+                    store.conn.execute('UPDATE social_comments SET body=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                                       (text.strip(), int(comment_id)))
+                else:
+                    store.conn.execute('INSERT INTO social_comments(kind,target,member_id,body) VALUES(?,?,?,?)',
+                                       (kind, target, member['id'], text.strip()))
+        return summary(store, kind, target, member)
+
+
 def dispatch(handler, store):
+    """The HTTP adapter: parse, call one domain function, answer. No logic lives here."""
     path = urlparse(handler.path).path
     if path == '/api/social/summary':
         if handler.command != 'GET':
@@ -151,100 +259,30 @@ def dispatch(handler, store):
         raise Denied(404, 'Unknown social endpoint')
     kind, target, action, comment_id = match.groups()
     member = handler.member
-    with store.lock:
-        validate_target(store, kind, target)
-        schema(store)
-        if handler.command == 'GET':
-            if action or comment_id:
-                raise Denied(404, 'Unknown social endpoint')
-            query = parse_qs(urlparse(handler.path).query)
-            try:
-                after = int(query.get('after', ['0'])[0])
-                if after < 0 or after > 9223372036854775807:
-                    raise ValueError()
-            except ValueError:
-                raise Denied(400, 'Invalid pagination cursor')
-            rows = [dict(r) for r in store.conn.execute('''SELECT c.id,c.member_id,c.body,c.created_at,c.updated_at,
-                m.display_name,m.profile_icon
-                FROM social_comments c LEFT JOIN members m ON m.id=c.member_id
-                WHERE c.kind=? AND c.target=? AND c.id>? ORDER BY c.id LIMIT ?''',
-                (kind,target,after,PAGE_SIZE+1))]
-            more = len(rows) > PAGE_SIZE
-            rows = rows[:PAGE_SIZE]
-            liked = set()
-            if rows:
-                ids = [r['id'] for r in rows]
-                marks = ','.join('?' for _ in ids)
-                for like in store.conn.execute(
-                        f'SELECT comment_id FROM social_comment_likes WHERE member_id=?'
-                        f' AND comment_id IN ({marks})', (member['id'], *ids)):
-                    liked.add(like['comment_id'])
-                counts = {r['comment_id']: r['n'] for r in store.conn.execute(
-                    f'SELECT comment_id, COUNT(*) n FROM social_comment_likes'
-                    f' WHERE comment_id IN ({marks}) GROUP BY comment_id', ids)}
-            else:
-                counts = {}
-            for row in rows:
-                row['likes'] = counts.get(row['id'], 0)
-                row['liked'] = row['id'] in liked
-                row['can_edit'] = member['role'] == 'admin' or row['member_id'] == member['id']
-                # Comments carry who wrote them, so the name opens their profile
-                # instead of printing a raw member id.
-                row['name'] = (row.pop('display_name') or '').strip() or 'Member'
-                row['icon'] = row.pop('profile_icon') or 'music'
-            result = dict(summary(store,kind,target,member), items=rows,
-                          next_after=rows[-1]['id'] if more else None)
-        else:
-            data = handler.body()
-            if not isinstance(data, dict):
-                raise Denied(400, 'Expected JSON object')
-            with store.conn:
-                if action == 'vote' and not comment_id:
-                    value = data.get('value')
-                    if type(value) is not int or value not in (-1,0,1):
-                        raise Denied(400, 'Vote must be -1, 0 or 1')
-                    if value == 0:
-                        store.conn.execute('DELETE FROM social_votes WHERE kind=? AND target=? AND member_id=?', (kind,target,member['id']))
-                    else:
-                        store.conn.execute('''INSERT INTO social_votes VALUES(?,?,?,?)
-                            ON CONFLICT(kind,target,member_id) DO UPDATE SET value=excluded.value''', (kind,target,member['id'],value))
-                elif action == 'like':
-                    if not comment_id:
-                        raise Denied(400, 'Comment id required')
-                    row = store.conn.execute(
-                        'SELECT id FROM social_comments WHERE id=? AND kind=? AND target=?',
-                        (int(comment_id), kind, target)).fetchone()
-                    if not row:
-                        raise Denied(404, 'Comment not found')
-                    exists = store.conn.execute(
-                        'SELECT 1 FROM social_comment_likes WHERE comment_id=? AND member_id=?',
-                        (int(comment_id), member['id'])).fetchone()
-                    if exists:
-                        store.conn.execute(
-                            'DELETE FROM social_comment_likes WHERE comment_id=? AND member_id=?',
-                            (int(comment_id), member['id']))
-                    else:
-                        store.conn.execute(
-                            'INSERT INTO social_comment_likes(comment_id, member_id) VALUES(?,?)',
-                            (int(comment_id), member['id']))
-                elif action == 'comments':
-                    if comment_id:
-                        row = store.conn.execute('SELECT member_id FROM social_comments WHERE id=? AND kind=? AND target=?', (int(comment_id),kind,target)).fetchone()
-                        if not row:
-                            raise Denied(404, 'Comment not found')
-                        if row[0] != member['id'] and member['role'] != 'admin':
-                            raise Denied(403, 'Only author or administrator may moderate')
-                    if comment_id and data.get('delete') is True:
-                        store.conn.execute('DELETE FROM social_comments WHERE id=?', (int(comment_id),))
-                    else:
-                        body = data.get('body')
-                        if not isinstance(body, str) or not 1 <= len(body.strip()) <= MAX_TEXT or '\x00' in body:
-                            raise Denied(400, 'Comment must contain 1–2000 text characters')
-                        if comment_id:
-                            store.conn.execute('UPDATE social_comments SET body=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (body.strip(),int(comment_id)))
-                        else:
-                            store.conn.execute('INSERT INTO social_comments(kind,target,member_id,body) VALUES(?,?,?,?)', (kind,target,member['id'],body.strip()))
-                else:
-                    raise Denied(404, 'Unknown social endpoint')
-            result = summary(store,kind,target,member)
-    handler.json(result)
+    if handler.command == 'GET':
+        if action or comment_id:
+            raise Denied(404, 'Unknown social endpoint')
+        query = parse_qs(urlparse(handler.path).query)
+        try:
+            after = int(query.get('after', ['0'])[0])
+            if after < 0 or after > 9223372036854775807:
+                raise ValueError()
+        except ValueError:
+            raise Denied(400, 'Invalid pagination cursor')
+        handler.json(comments(store, kind, target, member, after))
+        return
+    data = handler.body()
+    if not isinstance(data, dict):
+        raise Denied(400, 'Expected JSON object')
+    if action == 'vote' and not comment_id:
+        handler.json(vote(store, kind, target, member, data.get('value')))
+    elif action == 'like':
+        if not comment_id:
+            raise Denied(400, 'Comment id required')
+        handler.json(like(store, kind, target, member, int(comment_id)))
+    elif action == 'comments':
+        handler.json(comment(store, kind, target, member, body=data.get('body'),
+                             comment_id=int(comment_id) if comment_id else None,
+                             delete=data.get('delete') is True))
+    else:
+        raise Denied(404, 'Unknown social endpoint')

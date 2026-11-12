@@ -62,11 +62,6 @@ Top-level modules (26):
 | `replacements.py` | Repo | staged source replacements (`source_replacements`) |
 | `podcasts.py` | Repo | podcast feeds and episode acquisition (`listening_podcast_*`) |
 | `listening.py` | Library | devices, saves, folders, personal preferences routes — **and today the Subsonic entry point (`rest`, `envelope`)**, which is Adapter code living in the wrong file until SUB-010 |
-| `library/service.py` | Library | the personal-library queries: scope union, starred, ratings, bookmarks,
-playlists, playlist membership, favourites, devices. The web API and the Subsonic surface read
-these instead of each keeping their own copy of the SQL |
-| `library/playback.py` | Playback | which file to serve, which byte slice, and the 200/206/416
-decision (`Stream`, `resolve`, `available`, `plan`). HTTP stays in the handler |
 | `nowplaying.py` | Library | resume state (`listening_now`) |
 | `preferences.py` | Library | favourites, pins, album likes, theme, UI snapshot |
 | `zip_export.py` | Library | a member's own library as a ZIP |
@@ -76,7 +71,7 @@ decision (`Stream`, `resolve`, `available`, `plan`). HTTP stays in the handler |
 | `lyrics.py` | Playback | lyrics cache and playback metadata |
 | `mixer_room.py` | Playback | mixer audio streams |
 | `activity.py` | Social | the Activity log (`activity`) |
-| `social.py` | Social | discussions, votes, boosts validation (`social_*`, `song_boosts`) |
+| `social/` | Social | `service.py` is the entry point (ARCH-005); `discussion.py` holds comments, votes, likes and the thin HTTP adapter (`social_*`, `song_boosts`); Activity and profiles stay their own modules for now |
 | `profiles.py` | Social | the member profile page (reads Library and Repo) |
 | `party.py` | Party | rooms, guests, sessions, presence, votes, skips, chat |
 | `subsonic.py` | Adapter | OpenSubsonic surface; creates `listening_plays`, `listening_ratings` |
@@ -88,7 +83,8 @@ Packages:
 | `engine/` | Repo | acquisition queue and scheduler |
 | `downloaders/` | Repo | yt-dlp invocation and AI match helpers |
 | `providers/` | Repo | provider adapters (SoundCloud, Apple Music, generic) |
-| `discovery/` | Repo | artist profile, subscriptions, tracklist |
+| `repo/` | Repo | `service.py`: the entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue |
+| `discovery/` | Repo | artist profile, subscriptions, tracklist — the provider-facing reads `repo/service.py` delegates to |
 | `library/` | **Repo today, Library tomorrow** | artwork, art store, id3 art, imports, import rules, metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser export, playlist views — see §7 |
 | `tools/` | none | operator scripts, not imported by the server |
 | `edge-fallback/` | infrastructure | Cloudflare Worker, no Python domain |
@@ -172,6 +168,12 @@ UI depend on them; treat this table as the mapping. The versioned APIs (`/api/v1
 Existing routes stay as compatibility adapters when a service facade lands. No frontend contract
 changes in this refactor.
 
+**Built so far (ARCH-002, ARCH-005).** `repo/service.py` and `social/service.py` exist as
+delegating facades with no behaviour change, and `social.py` became the `social/` package with its
+old names re-exported, so `import social` still works. The routes still call their own code:
+`ARCH-006` is the card that makes them delegate, which is why the facades are pinned to the
+functions underneath by tests rather than trusted.
+
 ---
 
 ## 6. Known inversions (measured, not suspected)
@@ -187,29 +189,14 @@ changes in this refactor.
 Everything else in the import graph already points the allowed way. `server.py` importing every
 domain is correct: it is the composition root.
 
-**Progress on the list (ARCH-003/ARCH-004).** `library/service.py` and `library/playback.py` now
-exist, so two of the inversions have moved:
-
-* `listening.py` no longer contains the personal-library SQL it used to paste next to the Subsonic
-  response builder. `catalog()`, starred, ratings, bookmarks, playlists, playlist membership and
-  favourites all route through `library/service.py`, which is also what the Subsonic dispatch now
-  reads. One query, two callers, no second copy to drift.
-* Every "is this file playable" check (`listening.py` stream/download and the transcoding stream,
-  `server.stream_audio`) goes through `library/playback.py`. The Range arithmetic lives in one
-  place; the handler only writes headers and bytes.
-
-Still open on this table: `preferences.py` → `social` (album identity), `shares.py` →
-`subsonic.BLANK_PNG`, `rest()` still living in `listening.py`, `security.py` → `activity`, and the
-`db.py` repository accessors. Those are ARCH-002/005, ARCH-006 and SUB-010/011.
-
 ---
 
 ## 7. The `library/` package name
 
 `library/` currently holds **Repo-side** code: artwork, art store, id3 art, imports, import rules,
 metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser exports,
-playlist views. The personal-Library facades (`library/service.py`, `library/playback.py`) live
-there too, and that mixing is the reason the name is now inaccurate rather than merely early.
+playlist views. The personal-Library facades (`library/service.py`, `library/playback.py`) will
+join that package because the plan names them there.
 
 That is a deliberate compromise, and the debt is the name: files in `library/` that are not the
 personal library. Rule: **do not mass-rename**. As each helper is touched, it moves behind
