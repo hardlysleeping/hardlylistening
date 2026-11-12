@@ -106,6 +106,24 @@ redisplay it after close. This is sensitive data: share privately. App logs
 suppress auth/People/rest paths; reverse proxies must suppress/redact auth and
 `/rest` query logs independently. Never put invite secrets into URL queries.
 
+## Listening devices: password and Subsonic token auth
+
+A device secret is generated server-side (`secrets.token_urlsafe(32)`) and shown once.
+Two credentials are stored for it, because Subsonic clients authenticate in two ways:
+
+- `digest` — SHA-256 of the secret, used to verify the `p` / `enc:p` password form. It is
+  not reversible, so a database leak does not hand over the usable password directly.
+- `token_secret` — the secret in Subsonic's `enc:` hex form, used only to verify MD5 token
+  auth (`t = md5(secret + s)`). This is reversible by construction: that hash cannot be
+  computed from a SHA-256, and the Subsonic protocol has no other token scheme. It exists
+  so a token-only player can connect at all. Rows created before this column existed have
+  `token_secret` NULL and stay password-only; recreate the device to enable tokens.
+  Revoking the device deletes its usable secret from the authentication path.
+
+Neither value is ever written to a response, a log line or an export. A wrong password, a
+wrong token, a revoked device and an unknown device all answer the same `Invalid device
+credentials` (Subsonic code 40), so the reply does not confirm which devices exist.
+
 ## Shared pool versus personal listening
 
 There is ONE canonical community pool, library and feed visible to approved

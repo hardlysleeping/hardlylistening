@@ -23,6 +23,11 @@ def schema(store, security):
         CREATE TABLE IF NOT EXISTS listening_devices (
           id TEXT PRIMARY KEY, member_id TEXT NOT NULL REFERENCES members(id),
           label TEXT NOT NULL, digest TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0,
+          -- Subsonic's MD5 token auth sends md5(password + salt), which cannot be checked
+          -- against `digest`: a SHA-256 cannot be turned back into the password. Devices
+          -- created from now on also keep the secret in the Subsonic `enc:` hex form so a
+          -- token-only client can connect. NULL means password auth only; see SECURITY.md.
+          token_secret TEXT,
           created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE IF NOT EXISTS listening_tracks (
           member_id TEXT NOT NULL REFERENCES members(id),
@@ -60,6 +65,10 @@ def schema(store, security):
           PRIMARY KEY(member_id,folder_id,track_id),
           FOREIGN KEY(member_id,folder_id) REFERENCES listening_folders(member_id,id) ON DELETE CASCADE);
         ''')
+        # Devices that predate token auth keep a NULL secret and stay password-only.
+        columns = {r[1] for r in store.conn.execute('PRAGMA table_info(listening_devices)')}
+        if 'token_secret' not in columns:
+            store.conn.execute('ALTER TABLE listening_devices ADD COLUMN token_secret TEXT')
         store.conn.commit()
 
 
@@ -196,10 +205,11 @@ def browser(handler, store, security):
             if store.conn.execute('SELECT count(*) FROM listening_devices WHERE member_id=? AND revoked=0', (uid,)).fetchone()[0] >= 20:
                 raise Denied(400, 'Revoke an existing device first')
             identity, password = 'hl_' + secrets.token_hex(16), secrets.token_urlsafe(32)
-            store.conn.execute('INSERT INTO listening_devices(id,member_id,label,digest) VALUES(?,?,?,?)',
-                               (identity, uid, label.strip(), hashlib.sha256(password.encode()).hexdigest()))
+            store.conn.execute('INSERT INTO listening_devices(id,member_id,label,digest,token_secret) VALUES(?,?,?,?,?)',
+                               (identity, uid, label.strip(), hashlib.sha256(password.encode()).hexdigest(),
+                                password.encode().hex()))
             store.conn.commit()
-            handler.json({'username': identity, 'password': password})
+            handler.json({'username': identity, 'password': password, 'token_auth': True})
             return
         if path == '/api/listening/devices/revoke':
             store.conn.execute('UPDATE listening_devices SET revoked=1 WHERE id=? AND member_id=?', (str(body.get('id', '')), uid))
@@ -327,9 +337,12 @@ def lyrics_for(store, track_id):
 
 def envelope(handler, params, payload=None, error=None):
     data = {'status': 'failed' if error else 'ok', 'version': '1.16.1',
-            'type': 'HardlyListening', 'serverVersion': 'scoped-1'}
+            'type': 'HardlyListening', 'serverVersion': 'scoped-1', 'openSubsonic': True}
     data.update({'error': {'code': error[0], 'message': error[1]}} if error else (payload or {}))
-    if params.get('f') == 'json':
+    # A request can be refused before its parameters are parsed, so the error still has to
+    # honour the format the client asked for in the query string.
+    fmt = params.get('f') or (parse_qs(urlparse(handler.path).query).get('f') or ['xml'])[0]
+    if fmt == 'json':
         handler._send(200, json.dumps({'subsonic-response': data}).encode(), 'application/json')
     else:
         root = ET.Element('subsonic-response', xmlns='http://subsonic.org/restapi')
@@ -352,17 +365,35 @@ def rest(handler, store, security):
         if len(handler.path) > 16384:
             raise Denied(400, 'Request too long')
         query = parse_qs(urlparse(handler.path).query, keep_blank_values=True, max_num_fields=60)
+        endpoint = urlparse(handler.path).path.removeprefix('/rest/').removesuffix('.view')
+        client_info = None
         if handler.command == 'POST':
             handler.close_connection = True
-            if int(handler.headers.get('Content-Length', '0')) > 16384:
-                raise Denied(400, 'Request too long')
-            if handler.headers.get('Content-Type', '').split(';')[0] != 'application/x-www-form-urlencoded':
-                raise Denied(400, 'Form encoding required')
-            raw = handler.rfile.read(int(handler.headers.get('Content-Length', '0')))
-            form = parse_qs(raw.decode(), keep_blank_values=True, max_num_fields=60)
-            if set(form) & set(query):
-                raise Denied(400, 'Duplicate parameter')
-            query.update(form)
+            length = int(handler.headers.get('Content-Length', '0'))
+            encoding = handler.headers.get('Content-Type', '').split(';')[0]
+            if encoding == 'application/json':
+                # The transcoding extension carries the client's playback capabilities in a
+                # JSON body. Every other POST here stays a form.
+                if endpoint != 'getTranscodeDecision':
+                    raise Denied(400, 'A JSON body is only read by getTranscodeDecision')
+                if length > 65536:
+                    raise Denied(400, 'Request too long')
+                try:
+                    client_info = json.loads(handler.rfile.read(length).decode() or '{}')
+                except (ValueError, UnicodeError):
+                    raise Denied(400, 'Invalid JSON body')
+                if not isinstance(client_info, dict):
+                    raise Denied(400, 'Invalid JSON body')
+            else:
+                if length > 16384:
+                    raise Denied(400, 'Request too long')
+                if encoding != 'application/x-www-form-urlencoded':
+                    raise Denied(400, 'Form encoding required')
+                raw = handler.rfile.read(length)
+                form = parse_qs(raw.decode(), keep_blank_values=True, max_num_fields=60)
+                if set(form) & set(query):
+                    raise Denied(400, 'Duplicate parameter')
+                query.update(form)
         # Subsonic repeats `id` / `songId` for multi-item operations (star, scrobble, queue).
         repeated = {'id', 'songId', 'albumId', 'artistId'}
         if any(len(v) != 1 for k, v in query.items() if k not in repeated):
@@ -371,6 +402,8 @@ def rest(handler, store, security):
         multi = {k: v for k, v in query.items() if len(v) > 1}
         if params.get('f', 'xml') not in ('xml', 'json'):
             raise Denied(400, 'Unsupported response format')
+        if endpoint == 'getTranscodeDecision' and handler.command != 'POST':
+            raise Denied(400, 'getTranscodeDecision requires POST with a JSON client profile')
         schema(store, security)
         security.limit(handler.client_address[0], 'device-auth', 300)
         with store.lock:
@@ -379,8 +412,23 @@ def rest(handler, store, security):
             password = params.get('p', '')
             if password.startswith('enc:'):
                 password = bytes.fromhex(password[4:]).decode()
-            if (not device or device['revoked'] or device['role'] not in ('member', 'admin') or not password or
-                not hmac.compare_digest(device['digest'], hashlib.sha256(password.encode()).hexdigest())):
+            authorised = False
+            if device and password:
+                authorised = hmac.compare_digest(
+                    device['digest'], hashlib.sha256(password.encode()).hexdigest())
+            if not authorised:
+                # Subsonic token auth: t = md5(password + s). Only a device that kept its
+                # secret in `token_secret` can answer that; older rows stay password-only.
+                token, salt = params.get('t', ''), params.get('s', '')
+                secret = device['token_secret'] if device else None
+                if token and salt and secret:
+                    try:
+                        expected = hashlib.md5(bytes.fromhex(secret) + salt.encode()).hexdigest()
+                    except ValueError:
+                        expected = ''
+                    authorised = hmac.compare_digest(expected, token.lower())
+            if (not device or device['revoked'] or device['role'] not in ('member', 'admin')
+                    or not authorised):
                 raise Denied(401, 'Invalid device credentials')
             uid = device['member_id']
             security.limit(uid, 'device-requests', 240)
@@ -424,7 +472,6 @@ def rest(handler, store, security):
             preferences.schema(store)
             favorites = [dict(r) for r in store.conn.execute('SELECT t.* FROM tracks t JOIN listening_favorites f ON t.id=f.track_id WHERE f.member_id=? ORDER BY t.id', (uid,))]
             playlists.append({'id': preferences.FAVORITES_ID, 'title': 'Favorites'})
-        endpoint = urlparse(handler.path).path.removeprefix('/rest/').removesuffix('.view')
         def find(rows):
             result = next((r for r in rows if str(r['id']) == params.get('id', '')), None)
             if result is None:
@@ -450,9 +497,29 @@ def rest(handler, store, security):
             # Only the scoped id above can reach a file; no transcoding or acquisition.
             handler.stream_audio(selected['id'])
             return
+        if endpoint == 'getTranscodeStream':
+            # The extension's stream is the stored file, byte for byte: this server has no
+            # encoder, and getTranscodeDecision only issues params when the client can play
+            # that file as it is. Range seeking is the player's job, not an offset transcode.
+            if params.get('mediaType') != 'song':
+                raise Denied(430, 'Only song media is served by this server')
+            try:
+                offset = int(params.get('offset') or 0)
+            except ValueError:
+                raise Denied(400, 'Invalid offset')
+            if offset > 0:
+                raise Denied(430, 'This server does not transcode; seek with HTTP Range instead')
+            track_id = subsonic.resolve_transcode_params(params.get('transcodeParams'), uid)
+            if track_id is None or str(track_id) != params.get('mediaId', ''):
+                raise Denied(400, 'transcodeParams is unknown, expired, or for another track')
+            selected = next((dict(t) for t in tracks if t['id'] == track_id), None)
+            if selected is None or local_path(store, selected) is None:
+                raise Denied(404, 'Media unavailable')
+            handler.stream_audio(track_id)
+            return
         payload = subsonic.handle(endpoint, params, multi, {
             'store': store, 'uid': uid, 'username': params.get('u', ''), 'role': device['role'],
-            'handler': handler, 'security': security,
+            'handler': handler, 'security': security, 'client': client_info,
             'tracks': tracks, 'songs': songs, 'albums': albums, 'artists': artists,
             'favorites': favorites, 'playlists': playlists, 'links': links, 'art': artwork,
             'find': find, 'page': page, 'playlist': playlist,

@@ -2,13 +2,22 @@
 
 `listening.rest()` authenticates the device, builds that member's catalogue and hands the
 endpoint here. Everything that maps onto real app data is implemented; the subsystems this
-app has no equivalent for (chat, jukebox, transcoding, sonic analysis, podcast downloads,
-user administration) answer Subsonic error 30 with a plain message, never a silent lie.
+app has no equivalent for (chat, jukebox, sonic analysis, podcast downloads, user
+administration) answer Subsonic error 30 with a plain message, never a silent lie.
+
+Transcoding is answered as the OpenSubsonic extension #1 requires, but honestly: this app
+keeps one canonical file per track and has no encoder, so `getTranscodeDecision` can only
+say "play the stored file as it is". A client whose direct-play profile accepts the stored
+container and codec gets `canDirectPlay` plus an opaque `transcodeParams`, and
+`getTranscodeStream` serves those exact bytes with Range support. A client that would need
+a re-encode gets `canTranscode: false` and a stated reason instead of audio in the wrong
+format. `hls` stays unimplemented, because there is nothing to segment.
 """
 from __future__ import annotations
 
 import base64
 import random
+import secrets
 import time
 
 from security import Denied
@@ -21,7 +30,7 @@ MUSIC_TYPES = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'fla
                'aif': 'audio/aiff', 'wma': 'audio/x-ms-wma', 'alac': 'audio/mp4', 'webm': 'audio/webm'}
 
 NOT_IMPLEMENTED = {
-    'jukeboxControl', 'getTranscodeDecision', 'getTranscodeStream', 'hls',
+    'jukeboxControl', 'hls',
     'downloadPodcastEpisode',
     'addChatMessage', 'getChatMessages',
     'getSonicSimilarTracks', 'findSonicPath', 'getVideos', 'getVideoInfo', 'getCaptions',
@@ -80,6 +89,179 @@ def song(t, starred=(), ratings=None, bookmarks=None):
     if bookmarks and track_id in bookmarks:
         data['bookmarkPosition'] = int(bookmarks[track_id])
     return data
+
+
+# ---- transcoding extension (OpenSubsonic #1) -------------------------------
+# One entry per stored suffix: the container a client would name, and every codec the file
+# may contain. `.m4a` is the only ambiguous one — aac is what provider downloads produce,
+# alac is possible — and either is accepted, because refusing every m4a for an unprovable
+# codec would be worse than the rare wrong guess.
+STREAM_FORMATS = {
+    'mp3': ('mp3', ('mp3',)),
+    'm4a': ('mp4', ('aac', 'alac')),
+    'mp4': ('mp4', ('aac', 'alac')),
+    'aac': ('aac', ('aac',)),
+    'flac': ('flac', ('flac',)),
+    'ogg': ('ogg', ('vorbis', 'opus')),
+    'opus': ('ogg', ('opus',)),
+    'webm': ('webm', ('opus', 'vorbis')),
+    'wav': ('wav', ('pcm', 'wav')),
+    'aiff': ('aiff', ('pcm', 'aiff')),
+    'aif': ('aiff', ('pcm', 'aiff')),
+    'wma': ('asf', ('wmav2', 'wma')),
+}
+
+# Clients name the same container differently, especially for Opus: the file is an Ogg
+# container but a player's direct-play list often says "opus", and an mp4 audio file is
+# "m4a" to some. A refusal on the name alone would be wrong, so aliases match together.
+CONTAINER_ALIASES = {
+    'mp4': {'mp4', 'm4a', 'm4b'},
+    'ogg': {'ogg', 'opus'},
+    'asf': {'asf', 'wma'},
+    'aiff': {'aiff', 'aif'},
+}
+
+TRANSCODE_TTL = 30 * 60
+_TRANSCODE_PARAMS = {}
+
+
+def _int(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def stored_format(track):
+    """(suffix, container, accepted codecs, average bitrate) for the file on disk.
+
+    Channel count and sample rate are not probed: the catalogue stores no such columns and
+    a probe per decision is not worth a subprocess, so they are left out rather than
+    guessed.
+    """
+    path = track.get('file') or ''
+    suffix = path.rsplit('.', 1)[-1].lower() if '.' in path else 'mp3'
+    container, codecs = STREAM_FORMATS.get(suffix, (suffix, (suffix,)))
+    size, seconds = _int(track.get('size')), float(track.get('duration') or 0)
+    bitrate = int(round(size * 8 / seconds)) if size > 0 and seconds > 0 else 0
+    return suffix, container, codecs, bitrate
+
+
+def stream_details(track):
+    _, container, codecs, bitrate = stored_format(track)
+    details = {'protocol': 'http', 'container': container, 'codec': codecs[0]}
+    if bitrate:
+        details['audioBitrate'] = bitrate
+    return details
+
+
+def _limitations_met(limitations, bitrate):
+    """A required limitation must be provable from the stored file; an optional one is a
+    preference and is ignored. Only the average bitrate is known, so a required channel,
+    sample-rate or bit-depth limitation cannot be confirmed and fails the profile."""
+    for limit in limitations:
+        if not isinstance(limit, dict) or not limit.get('required'):
+            continue
+        if limit.get('name') != 'audioBitrate' or not bitrate:
+            return False
+        values = limit.get('values') or []
+        target = _int(values[0]) if isinstance(values, list) and values else 0
+        if not target:
+            return False
+        comparison = str(limit.get('comparison') or '')
+        if comparison == 'LessThanEqual' and bitrate > target:
+            return False
+        if comparison == 'GreaterThanEqual' and bitrate < target:
+            return False
+        if comparison == 'Equals' and bitrate != target:
+            return False
+        if comparison == 'NotEquals' and bitrate == target:
+            return False
+        if comparison not in ('LessThanEqual', 'GreaterThanEqual', 'Equals', 'NotEquals'):
+            return False
+    return True
+
+
+def can_direct_play(track, client):
+    """(playable, reasons) for one ClientInfo payload against the stored file.
+
+    Reasons carry one entry per direct-play profile that was refused, as the spec asks.
+    """
+    if not isinstance(client, dict):
+        return False, ['NoClientInfo']
+    _, container, codecs, bitrate = stored_format(track)
+    profiles = [p for p in (client.get('directPlayProfiles') or []) if isinstance(p, dict)]
+    if not profiles:
+        return False, ['NoDirectPlayProfile']
+    max_bitrate = _int(client.get('maxAudioBitrate'))
+    limits = []
+    for profile in client.get('codecProfiles') or []:
+        if isinstance(profile, dict) and str(profile.get('name') or '').lower() in codecs:
+            limits.extend(profile.get('limitations') or [])
+    reasons = []
+    for index, profile in enumerate(profiles, 1):
+        containers = {str(c).lower() for c in profile.get('containers') or []}
+        accepted = {str(c).lower() for c in profile.get('audioCodecs') or []}
+        protocols = {str(p).lower() for p in profile.get('protocols') or []}
+        channels = _int(profile.get('maxAudioChannels'))
+        names = {container.lower()} | CONTAINER_ALIASES.get(container.lower(), set())
+        if containers and not (containers & names):
+            reasons.append('Profile%dContainerNotSupported' % index)
+        elif accepted and not (accepted & set(codecs)):
+            reasons.append('Profile%dAudioCodecNotSupported' % index)
+        elif protocols and 'http' not in protocols:
+            reasons.append('Profile%dProtocolNotSupported' % index)
+        elif channels and channels < 2:
+            # A mono-only sink cannot be confirmed without probing the file.
+            reasons.append('Profile%dAudioChannelsUnknown' % index)
+        elif max_bitrate and bitrate > max_bitrate:
+            reasons.append('Profile%dAudioBitrateTooHigh' % index)
+        elif not _limitations_met(limits, bitrate):
+            reasons.append('Profile%dCodecLimitationNotMet' % index)
+        else:
+            return True, []
+    return False, reasons
+
+
+def issue_transcode_params(uid, track_id):
+    """An opaque token tying a decision to one member and one track.
+
+    Kept in memory for half an hour, which the extension explicitly allows. A restart
+    invalidates outstanding decisions; the client simply asks again.
+    """
+    now = time.time()
+    if len(_TRANSCODE_PARAMS) > 1000:
+        for token in [t for t, (_, _, expiry) in _TRANSCODE_PARAMS.items() if expiry < now]:
+            _TRANSCODE_PARAMS.pop(token, None)
+    token = secrets.token_urlsafe(24)
+    _TRANSCODE_PARAMS[token] = (uid, int(track_id), now + TRANSCODE_TTL)
+    return token
+
+
+def resolve_transcode_params(token, uid):
+    """The track id a token was issued for, or None when it is unknown, expired or another
+    member's."""
+    entry = _TRANSCODE_PARAMS.get(str(token or ''))
+    if not entry:
+        return None
+    owner, track_id, expiry = entry
+    if expiry < time.time() or owner != uid:
+        return None
+    return track_id
+
+
+def transcode_decision(track, client, uid):
+    playable, reasons = can_direct_play(track, client)
+    decision = {'canDirectPlay': playable, 'canTranscode': False,
+                'sourceStream': stream_details(track)}
+    if reasons:
+        decision['transcodeReason'] = reasons
+    if playable:
+        decision['transcodeParams'] = issue_transcode_params(uid, track['id'])
+    else:
+        decision['errorReason'] = ('This server does not transcode, and the client offered no '
+                                   'direct-play profile for the stored file.')
+    return {'transcodeDecision': decision}
 
 
 def handle(endpoint, params, multi, ctx):
@@ -142,6 +324,15 @@ def handle(endpoint, params, multi, ctx):
             'song': page([s for s in songs if term in s['title'].casefold()], 'songCount', 'songOffset'),
             'album': page([a for a in albums.values() if term in a['name'].casefold()], 'albumCount', 'albumOffset'),
             'artist': page([a for a in artists.values() if term in a['name'].casefold()], 'artistCount', 'artistOffset')}}
+
+    # ---- transcoding extension (OpenSubsonic #1) --------------------------
+    if endpoint == 'getTranscodeDecision':
+        if params.get('mediaType') != 'song':
+            raise Denied(430, 'This server only decides on song media')
+        track = next((dict(t) for t in tracks if str(t.get('id')) == params.get('mediaId', '')), None)
+        if track is None:
+            raise Denied(404, 'Not found')
+        return transcode_decision(track, ctx.get('client'), uid)
 
     # ---- artwork ----------------------------------------------------------
     if endpoint == 'getCoverArt':
@@ -519,7 +710,9 @@ def handle(endpoint, params, multi, ctx):
         key = 'getSimilarSongs2' if endpoint == 'getSimilarSongs2' else 'getSimilarSongs'
         return {key: {'song': page(pool)}}
     if endpoint == 'getOpenSubsonicExtensions':
-        return {'openSubsonicExtensions': [{'name': 'formPost', 'versions': [1]}]}
+        return {'openSubsonicExtensions': [{'name': 'formPost', 'versions': [1]},
+                                           {'name': 'songLyrics', 'versions': [1]},
+                                           {'name': 'transcoding', 'versions': [1]}]}
     if endpoint in ('getScanStatus', 'startScan'):
         return {'scanStatus': {'scanning': False, 'count': len(tracks), 'folderCount': 1,
                                'lastScan': iso(time.time())}}

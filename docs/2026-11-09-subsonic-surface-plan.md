@@ -1,6 +1,7 @@
 # Plan — Subsonic surface: completeness, bookmarks, shares, jukebox, sonic, radio, podcasts, chat
 
-Status: **decided, not started**. Decisions are locked; do not re-open them while building.
+Status: Phase 0, 1, 2, 5 and 6 shipped. Phase 3 (jukebox), 4 (sonic analysis) and 7 (chat) open.
+Decisions are locked; do not re-open them while building.
 
 ## Locked decisions
 
@@ -15,8 +16,17 @@ Status: **decided, not started**. Decisions are locked; do not re-open them whil
    the existing tempo worker, which stays as it is.
 7. **Phase 0 ships as one release.**
 
-Still out of scope: transcoding (`getTranscodeDecision`, `getTranscodeStream`, `hls`), user administration
-(`createUser`, `updateUser`, `deleteUser`, `changePassword`), jukebox-as-server-sound-card.
+Still out of scope: re-encoding (`hls`, and any target format other than the stored file), user
+administration (`createUser`, `updateUser`, `deleteUser`, `changePassword`), jukebox-as-server-sound-card.
+
+The OpenSubsonic transcoding extension (`getTranscodeDecision`, `getTranscodeStream`) **is** served,
+but only as direct play: the decision evaluates the client's direct-play profiles against the stored
+container, codec and average bitrate; a client that accepts the file gets those exact bytes with
+Range seeking, and one that would need a re-encode gets `canTranscode: false` with a reason. A time
+`offset` is refused, because without an encoder it cannot be honoured.
+
+Radio shipped **member-scoped**, not install-wide: `radio_stations` carries `member_id`, and a member
+only ever sees, changes or deletes their own stations. Locked decision 5 was not implemented that way.
 
 ## Phase 0 — everything that maps onto data we already have (one release)
 
