@@ -67,9 +67,23 @@ class Queue:
         self.thread = threading.Thread(target=self._loop, name="queue", daemon=True)
         self.thread.start()
 
-    def stop(self) -> None:
+    def stop(self, grace: float = 5.0) -> None:
+        """Stop the worker, waiting up to `grace` seconds for the current job.
+
+        A download in flight is not abandoned halfway: if it is still running when the grace
+        expires the child is killed and its partial file removed, and the job goes back to
+        `queued` (see `_run`) — a restart resumes it instead of silently cancelling someone's
+        track. That is the same rule the constructor applies to rows left by a hard kill.
+        """
         self._stop.set()
         self._wake.set()
+        thread = self.thread
+        if not (thread and thread.is_alive()):
+            return
+        thread.join(grace)
+        if thread.is_alive():
+            self._cancel.set()
+            thread.join(10)
 
     def disk_blocked(self) -> bool:
         return self.store.stats()["disk_blocked"]
@@ -425,6 +439,13 @@ class Queue:
             if removed:
                 self.store.log(f"removed {removed} partial file(s)", "warn",
                                f"job:{job['id']}")
+            if self._stop.is_set():
+                # Shutdown, not a decision: hand the job back so the next start resumes it.
+                self.store.update_job(job["id"], status="queued", progress=0, speed=0,
+                                      eta=0, error_message="")
+                self.store.log(f"shutdown: “{track['title']}” returned to the queue",
+                               "info", f"job:{job['id']}")
+                return
             self.store.update_job(job["id"], status="cancelled", progress=0, speed=0,
                                   eta=0, finished=time.time(),
                                   error_message="cancelled by hand")

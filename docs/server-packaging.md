@@ -123,24 +123,46 @@ New variables: `HARDLYLISTENING_DATA_DIR`, `HARDLYLISTENING_MUSIC_DIR`, `HARDLYL
 
 ## 3. What must change in the code (measured, not guessed)
 
-Today the process writes into its own source tree, which is exactly what a read-only `/opt`
-forbids:
+**Done (SERVER-PKG-002).** `paths.py` is now the single answer to "where may this process write",
+and the four sites that used to sit in the source tree resolve through it:
 
-| write site | today | target |
-| --- | --- | --- |
-| database | `HARDLYLISTENING_DB` else `<app>/hardlylistening.db` | `DATA_DIR/hardlylistening.db` |
-| artwork cache | `<app>/.cache/artwork` (`library/art_store.py`) | `DATA_DIR/cache/artwork` |
-| browser-download cache | `<app>/.cache/browser-downloads` | `DATA_DIR/cache/` |
-| artist pictures | `<app>/artist-art/` (`server.py`) | `DATA_DIR/cache/artist-art` |
+| write site | before | declared `DATA_DIR` | undeclared |
+| --- | --- | --- | --- |
+| database | `<app>/hardlylistening.db` | `DATA_DIR/hardlylistening.db` | unchanged |
+| artwork cache | `<app>/.cache/artwork` | `DATA_DIR/cache/artwork` | unchanged |
+| browser-download cache | `<app>/.cache/browser-downloads` | `DATA_DIR/cache/browser-downloads` | unchanged |
+| artist pictures | `<app>/artist-art/` | `DATA_DIR/cache/artist-art` | unchanged |
 
-Acceptance is literal: **`/opt/hardlylistening` can be mounted read-only and the server still runs.**
+`HARDLYLISTENING_DB` still wins over all of it. With `DATA_DIR` unset every path is byte-identical
+to what it was, which is why the live install needed no move and no migration: the two layouts are
+the same code, one environment variable apart. `paths.ensure()` creates the declared directories and
+deliberately does nothing when they were not declared — creating them "just in case" would be the
+write to the source tree this module exists to prevent.
 
-Also required before the system service ships:
+Acceptance is literal: **`/opt/hardlylistening` can be mounted read-only and the server still
+runs.** `tests/test_paths.py` proves the mechanism (resolution both ways, plus a run that opens the
+store, writes artwork, artist art and a browser archive, and leaves the app tree untouched); the
+mount itself is an operator check.
 
-* **SIGTERM / SIGINT handling.** No signal handler exists today. Order: stop accepting HTTP work →
-  stop the scheduler → stop/pause the queue worker cleanly → finish or roll back the database
-  transaction → close SQLite → exit. systemd and Docker both rely on this path; a bare kill is not
-  acceptable.
+**Done (SERVER-PKG-004).** `SIGTERM` and `SIGINT` stop the process in the documented order. The
+handler only sets a flag; the main thread does the stopping, because `shutdown()` may not be called
+from the thread running `serve_forever`.
+
+```
+HTTP: stop accepting, close the socket        httpd.shutdown(), server_close()
+Scheduler: stop and join                      SCHEDULER.stop(); join(5)
+Queue: stop, grace 5 s, else kill the child   QUEUE.stop(grace=5.0)
+SQLite: commit and close                      STORE.close()
+```
+
+A download interrupted at shutdown is **not** marked cancelled: the child is killed, its partial
+file removed, and the row goes back to `queued` so the next start resumes it. That is the same rule
+the constructor already applies to rows left behind by a hard kill. `tests/test_shutdown.py` runs
+the real entry point in a subprocess, signals it, and asserts exit 0, the log line, a released port
+and a checkpointed WAL.
+
+Still required before the system service ships:
+
 * **`check` and `backup` subcommands** (see §5), and the migrations stay automatic and idempotent at
   startup as they are now.
 

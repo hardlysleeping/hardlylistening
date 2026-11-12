@@ -54,7 +54,8 @@ def track_name(track, path, with_id=True):
 
 
 def archive(store, tracks, title=None):
-    cache = Path(__file__).resolve().parents[1] / '.cache' / 'browser-downloads'
+    from paths import CACHE_DIR
+    cache = CACHE_DIR / 'browser-downloads'
     cache.mkdir(parents=True, exist_ok=True)
     output = tempfile.TemporaryFile(dir=cache)
     try:

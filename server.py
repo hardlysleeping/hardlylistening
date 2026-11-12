@@ -13,17 +13,20 @@ import argparse
 import json
 import mimetypes
 import re
+import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import db
+import paths
 from security import SECURITY, Denied
 from engine.queue import Queue
 
 APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
+ARTIST_ART_DIR = paths.ARTIST_ART_DIR
 
 STORE: db.Store | None = None
 QUEUE: Queue | None = None
@@ -76,6 +79,7 @@ def boot() -> tuple[db.Store, Queue]:
     global STORE, QUEUE, SCHEDULER
     with LOCK:
         if STORE is None:
+            paths.ensure()
             STORE = db.Store()
             # Choices made by hand before the ranking kept a record still count.
             import ranking
@@ -770,7 +774,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         artist_art = re.match(r"^/api/artist/art/([a-f0-9]{24})$", path)
         if artist_art:
-            folder = APP_DIR / "artist-art"
+            folder = ARTIST_ART_DIR
             for suffix, ctype in (("png","image/png"), ("jpg","image/jpeg"),
                                   ("jpeg","image/jpeg"), ("gif","image/gif"),
                                   ("webp","image/webp")):
@@ -1610,8 +1614,8 @@ class Handler(BaseHTTPRequestHandler):
         elif raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
             suffix = "webp"
         digest = hashlib.sha256(store._artist_key(name).encode()).hexdigest()[:24]
-        folder = APP_DIR / "artist-art"
-        folder.mkdir(exist_ok=True)
+        folder = ARTIST_ART_DIR
+        folder.mkdir(parents=True, exist_ok=True)
         for old in folder.glob(digest + ".*"):
             old.unlink(missing_ok=True)
         (folder / f"{digest}.{suffix}").write_bytes(raw)
@@ -1635,6 +1639,25 @@ class Handler(BaseHTTPRequestHandler):
         self.json({"settings": store.set_settings(self.body())})
 
 
+def shutdown(httpd: ThreadingHTTPServer) -> None:
+    """Stop in the order the systemd unit and Docker both depend on.
+
+    HTTP first, so no new request can touch a half-closed database; then the scheduler, which
+    would otherwise start a follow check mid-shutdown; then the queue worker, which is given a
+    short grace period and otherwise hands its job back to the queue; then SQLite. A bare kill
+    skips all of this, which is why the handler exists at all.
+    """
+    httpd.shutdown()
+    httpd.server_close()
+    if SCHEDULER is not None:
+        SCHEDULER.stop()
+        SCHEDULER.join(5)
+    if QUEUE is not None:
+        QUEUE.stop(grace=5.0)
+    if STORE is not None:
+        STORE.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8470)
@@ -1646,13 +1669,27 @@ def main() -> int:
     httpd.daemon_threads = True
     print(f"HardlyListening on http://{args.host}:{args.port}  (db: {db.DB_PATH})",
           flush=True)
+
+    # `serve_forever` blocks, and `shutdown()` must be called from another thread, so the
+    # signal handler's only job is to set a flag and the main thread does the stopping.
+    stop = threading.Event()
+
+    def received(signum, _frame):
+        print(f"\n{signal.Signals(signum).name}: shutting down", flush=True)
+        stop.set()
+
+    for name in ("SIGTERM", "SIGINT"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), received)
+
+    serving = threading.Thread(target=httpd.serve_forever, name="http", daemon=True)
+    serving.start()
     try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\nbye", flush=True)
+        while not stop.wait(0.5):
+            pass
     finally:
-        if QUEUE:
-            QUEUE.stop()
+        shutdown(httpd)
+        print("bye", flush=True)
     return 0
 
 

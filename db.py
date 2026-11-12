@@ -23,7 +23,8 @@ import time
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
-DB_PATH = Path(os.environ.get("HARDLYLISTENING_DB", APP_DIR / "hardlylistening.db"))
+import paths  # noqa: E402  (same directory; kept next to APP_DIR for readability)
+DB_PATH = paths.DB_PATH
 VERSION = (APP_DIR / "VERSION").read_text().strip() if (APP_DIR / "VERSION").exists() else "0.2.0"
 
 # Download-job states. A track's state is its job's state — there is no second
@@ -507,6 +508,19 @@ class Store:
                 self.projection_error = ''
             except (OSError, ValueError) as exc:
                 self.projection_error = str(exc)
+
+    # -- lifecycle --
+    def close(self) -> None:
+        """Commit what is pending and close the connection. Called once, at shutdown.
+
+        The lock is the same one every other thread uses, so this waits for an in-flight
+        statement rather than closing the handle underneath it.
+        """
+        with self.lock:
+            try:
+                self.conn.commit()
+            finally:
+                self.conn.close()
 
     # -- settings --
     def settings(self) -> dict[str, str]:
