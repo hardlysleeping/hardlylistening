@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+/* One row per distinct cover image: the store is content-addressed, so twenty
+   tracks sharing a cover share one file. art_files is the sweep's memory, not a
+   second track table. */
+CREATE TABLE IF NOT EXISTS art_files (
+  path TEXT PRIMARY KEY,
+  size INTEGER DEFAULT 0,
+  mtime REAL DEFAULT 0,
+  art_hash TEXT DEFAULT '',
+  checked REAL DEFAULT 0
+);
+
 /* An orphan file the sweep looked at and chose not to adopt (a spare copy, a
    fragment). Remembering it by size and mtime means a 500-file sweep does not
    re-probe the same file every ten minutes. */

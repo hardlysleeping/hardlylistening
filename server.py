@@ -97,6 +97,10 @@ def boot() -> tuple[db.Store, Queue]:
             from engine.scheduler import Scheduler
             SCHEDULER = Scheduler(STORE)
             SCHEDULER.start()
+            # Cover art dedupe is a standing job, not a chore: it picks up whatever
+            # the download path did not already do, then keeps watching.
+            from library import art_store
+            art_store.start(STORE)
             # A file the queue could not link has no row, so it is invisible: the
             # sweep adopts those orphans instead of letting a retry download them
             # again. Standing job, never deletes or moves.
