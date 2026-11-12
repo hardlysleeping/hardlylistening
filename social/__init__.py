@@ -5,8 +5,9 @@
 point: `social.service`. `discussion.py` holds the domain functions, `dispatch` stays the thin HTTP
 adapter, and Activity/profiles remain their own modules until a later card moves them in.
 """
-from social.discussion import (          # noqa: F401  (re-exported on purpose)
-    MAX_TEXT, PAGE_SIZE, album_id, annotate, batch, comment, comments, dispatch, like,
+from social.api import dispatch            # noqa: F401  (re-exported on purpose)
+from social.discussion import (            # noqa: F401  (re-exported on purpose)
+    MAX_TEXT, PAGE_SIZE, album_id, annotate, batch, comment, comments, like,
     schema, summary, validate_target, vote,
 )
 

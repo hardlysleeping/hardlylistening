@@ -71,7 +71,7 @@ Top-level modules (26):
 | `lyrics.py` | Playback | lyrics cache and playback metadata |
 | `mixer_room.py` | Playback | mixer audio streams |
 | `activity.py` | Social | the Activity log (`activity`) |
-| `social/` | Social | `service.py` is the entry point (ARCH-005); `discussion.py` holds comments, votes, likes and the thin HTTP adapter (`social_*`, `song_boosts`); Activity and profiles stay their own modules for now |
+| `social/` | Social | `service.py` is the entry point (ARCH-005); `discussion.py` holds comments, votes, likes and summaries, `api.py` is the HTTP adapter (`social_*`, `song_boosts`); Activity and profiles stay their own modules for now |
 | `profiles.py` | Social | the member profile page (reads Library and Repo) |
 | `party.py` | Party | rooms, guests, sessions, presence, votes, skips, chat |
 | `subsonic.py` | Adapter | OpenSubsonic surface; creates `listening_plays`, `listening_ratings` |
@@ -168,11 +168,20 @@ UI depend on them; treat this table as the mapping. The versioned APIs (`/api/v1
 Existing routes stay as compatibility adapters when a service facade lands. No frontend contract
 changes in this refactor.
 
-**Built so far (ARCH-002, ARCH-005).** `repo/service.py` and `social/service.py` exist as
-delegating facades with no behaviour change, and `social.py` became the `social/` package with its
-old names re-exported, so `import social` still works. The routes still call their own code:
-`ARCH-006` is the card that makes them delegate, which is why the facades are pinned to the
-functions underneath by tests rather than trusted.
+**Built so far (ARCH-002, ARCH-005, ARCH-006).** `repo/service.py` and `social/service.py` are
+delegating facades, and `server.py` now reaches Repo and Social only through them:
+`/api/state`, `/api/artist`, `/api/tracks`, `/api/catalogue`, `/api/subscriptions` and every
+subscription action call `repo.service`; `/api/activity`, `/api/member/<id>`, `/api/boost` and
+`/api/activity/listen` call `social.service`. The social endpoints go through `social/api.py`, the
+adapter that was `dispatch` inside `social.py`. `social.py` became the `social/` package with its
+old names re-exported, so `import social` still works.
+
+The facades are pinned to the functions underneath by tests rather than trusted, because the
+delegation was meant to change who calls whom and nothing else.
+
+**Still open, and not a route problem:** `security.py` still calls `activity.record` on join, rename
+and session events (the Core → Social row below). Delegating routes does not touch it; the fix is
+an event the composition root subscribes to, which is its own change.
 
 ---
 
@@ -180,7 +189,7 @@ functions underneath by tests rather than trusted.
 
 | edge | where | why it is wrong | fix |
 | --- | --- | --- | --- |
-| Core → Social | `security.py` calls `activity.record` on session, join and member events | Core must not know Social exists; a Social bug would break sign-in | Core emits a domain event; the composition root subscribes Activity to it (ARCH-005/006) |
+| Core → Social | `security.py` calls `activity.record` on session, join and member events | Core must not know Social exists; a Social bug would break sign-in | Core emits a domain event; the composition root subscribes Activity to it. **Still open after ARCH-005/006** — it is not a route, so delegating routes could not close it |
 | Library → Social | `preferences.py` uses `social.album_id` and `social.validate_target` | album identity is metadata, not a social concept | move both to a Core/Library metadata helper (ARCH-003) |
 | Library → Adapter | `shares.py` imports `subsonic.BLANK_PNG` | a domain reaching into the protocol adapter for a constant | move the constant to a shared asset module (SUB-010) |
 | Library → Adapter | `listening.py` contains `rest()`/`envelope()` and imports `subsonic` | the adapter lives in a Library file | move Subsonic dispatch into `subsonic.py` (SUB-010/011) |

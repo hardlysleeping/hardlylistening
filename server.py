@@ -410,16 +410,17 @@ class Handler(BaseHTTPRequestHandler):
                 # Boosts require a verified member in both hosted and local modes.
                 store, _ = boot()
                 self.member = SECURITY.authenticate(self, store)
-                import activity
+                from social import service as social_service
                 if self.command == 'GET':
-                    self.json({'boost': activity.current_boost(store, self.member['id'])})
+                    self.json({'boost': social_service.current_boost(store, self.member['id'])})
                 elif self.command == 'POST':
                     SECURITY.csrf(self)
                     SECURITY.limit(self.member['id'], 'boost', 30)
                     payload = self.body()
                     if not isinstance(payload, dict):
                         raise Denied(400, 'Object required')
-                    result = activity.boost(store, self.member['id'], payload.get('track_id'))
+                    result = social_service.boost(store, self.member['id'],
+                                                  payload.get('track_id'))
                     self.json({'ok': True, 'boost': result})
                 else:
                     raise Denied(405, 'Method not allowed')
@@ -431,8 +432,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.member = SECURITY.authenticate(self, store)
                 if self.command == 'POST':
                     SECURITY.limit(self.member['id'], 'social', 30)
-                import social
-                social.dispatch(self, store)
+                from social import api as social_api
+                social_api.dispatch(self, store)
                 return False
             if not SECURITY.required:
                 return True
@@ -542,7 +543,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
         store, _ = boot()
         if path == "/api/state":
-            snapshot = store.state()
+            from repo import service as repo_service
+            snapshot = repo_service.snapshot(store)
             # The snapshot's own list is the raw table, so it has no idea who owns
             # what. The UI adopts this on every poll: handing it the bare rows is
             # what emptied the member's own list and hid the follow seat.
@@ -587,16 +589,16 @@ class Handler(BaseHTTPRequestHandler):
                 limit = int((query.get("limit") or ["80"])[0])
             except ValueError:
                 limit = 80
-            import activity
-            self.json({"items": activity.feed(store, max(1, min(200, limit)))})
+            from social import service as social_service
+            self.json({"items": social_service.feed(store, max(1, min(200, limit)))})
             return
         if path.startswith("/api/member/"):
             target = path.rsplit("/", 1)[-1]
             if not target or len(target) > 64:
                 self.json({"error": "Unknown member"}, 404)
                 return
-            import profiles
-            found = profiles.profile(store, target)
+            from social import service as social_service
+            found = social_service.profile(store, target)
             if not found:
                 self.json({"error": "Unknown member"}, 404)
                 return
@@ -630,8 +632,8 @@ class Handler(BaseHTTPRequestHandler):
             if not name:
                 self.json({"error": "name is required"}, 400)
                 return
-            from discovery.artist_profile import profile
-            self.json(profile(store, name))
+            from repo import service as repo_service
+            self.json(repo_service.artist(store, name))
             return
         if path == "/api/tracks":
             # The songs inside one album. Read-only and user-initiated: the Feed
@@ -641,9 +643,9 @@ class Handler(BaseHTTPRequestHandler):
             if not raw:
                 self.json({"error": "url is required"}, 400)
                 return
-            from discovery import tracklist
+            from repo import service as repo_service
             try:
-                self.json({"tracks": tracklist.tracks(raw)})
+                self.json({"tracks": repo_service.tracks(raw)})
             except ValueError as error:
                 self.json({"error": str(error)}, 400)
             except Exception as error:                      # noqa: BLE001
@@ -664,9 +666,9 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 self.json({"error": "invalid catalogue page"}, 400)
                 return
-            from discovery import tracklist
+            from repo import service as repo_service
             try:
-                self.json(tracklist.catalogue(store, int(raw), offset=offset, limit=limit))
+                self.json(repo_service.releases(store, int(raw), offset=offset, limit=limit))
             except ValueError as error:
                 self.json({"error": str(error)}, 400)
             except Exception as error:                      # noqa: BLE001
@@ -1022,8 +1024,8 @@ class Handler(BaseHTTPRequestHandler):
         if track_id <= 0:
             raise ValueError("id is required")
         store, _ = boot()
-        import activity
-        activity.listen(store, self.member, track_id)
+        from social import service as social_service
+        social_service.listen(store, self.member, track_id)
         self.json({"ok": True})
 
     def do_library_titles(self) -> None:
@@ -1104,54 +1106,40 @@ class Handler(BaseHTTPRequestHandler):
     def subscriptions_with_ownership(self, store) -> list[dict]:
         """Subscriptions, each marked with whether this member may call it theirs.
 
-        One made before ownership existed has no owner. It belongs to nobody until
-        somebody asks for it again — inheriting it here is what made every artist
-        look subscribed as soon as one of them was.
+        The rule (an unowned follow belongs to nobody; an anonymous reader sees all of
+        them) lives in Repo, so the endpoint and the feed cannot drift apart.
         """
+        from repo import service as repo_service
         member = getattr(self, "member", None) or {}
-        uid = str(member.get("id") or "")
-        rows = store.watches()
-        for row in rows:
-            owner = str(row.get("member_id") or "")
-            row["mine"] = True if not uid else bool(owner and owner == uid)
-        return rows
+        return repo_service.subscriptions(store, str(member.get("id") or ""))
 
     def do_subscription_add(self) -> None:
         body = self.body()
         store, _ = boot()
-        from discovery import subscriptions
+        from repo import service as repo_service
         member_id = str((getattr(self, "member", None) or {}).get("id") or "")
-        url = (body.get("url") or "").strip()
-        if url:
-            self.json(subscriptions.subscribe(store, url, member_id=member_id))
-            return
-        # From an artist page: it may have no known link, so the artist is named
-        # and the subscribable source is resolved from the library.
-        self.json(subscriptions.subscribe_by_name(
-            store, str(body.get("name") or "").strip(),
-            str(body.get("provider") or ""), member_id=member_id))
+        # From a link, or — from an artist page that has no known link — by name, with
+        # the subscribable source resolved from the library.
+        self.json(repo_service.subscribe(
+            store, str(body.get("url") or "").strip(),
+            name=str(body.get("name") or "").strip(),
+            provider=str(body.get("provider") or ""), member_id=member_id))
 
     def do_subscription_check(self, watch_id: int) -> None:
         store, _ = boot()
-        watch = store.watch_get(watch_id)
-        if not watch:
-            raise ValueError("no such subscription")
-        from discovery import subscriptions
-        self.json(subscriptions.check(store, watch))
+        from repo import service as repo_service
+        self.json(repo_service.check(store, repo_service.watch(store, watch_id)))
 
     def do_subscription_toggle(self, watch_id: int) -> None:
         store, _ = boot()
-        watch = store.watch_get(watch_id)
-        if not watch:
-            raise ValueError("no such subscription")
-        enabled = not bool(watch["enabled"])
-        store.watch_mark(watch_id, enabled=enabled)
-        self.json({"id": watch_id, "enabled": enabled})
+        from repo import service as repo_service
+        watch = repo_service.watch(store, watch_id)
+        self.json(repo_service.set_enabled(store, watch_id, not bool(watch["enabled"])))
 
     def do_subscription_remove(self, watch_id: int) -> None:
         store, _ = boot()
-        store.watch_remove(watch_id)
-        self.json({"removed": watch_id})
+        from repo import service as repo_service
+        self.json(repo_service.remove(store, watch_id))
 
     def do_subscription_leave(self, watch_id: int) -> None:
         """Stop calling this artist one of mine — without stopping the tracking.
@@ -1160,13 +1148,9 @@ class Handler(BaseHTTPRequestHandler):
         seat goes back to the "+" so it can be picked up again.
         """
         store, _ = boot()
-        if not store.watch_get(watch_id):
-            raise ValueError("no such subscription")
+        from repo import service as repo_service
         member_id = str((getattr(self, "member", None) or {}).get("id") or "")
-        mine = store.watch_release(watch_id, member_id)
-        if not mine:
-            raise ValueError("that is not one of your subscriptions")
-        self.json({"unsubscribed": watch_id})
+        self.json(repo_service.release_seat(store, watch_id, member_id))
 
     def do_feed_refresh_all(self) -> None:
         """Manual sweep: every enabled follow, once, in order.
@@ -1176,13 +1160,13 @@ class Handler(BaseHTTPRequestHandler):
         with the button spinning until the last artist answers.
         """
         store, _ = boot()
-        from discovery import subscriptions
+        from repo import service as repo_service
         done = []
-        for watch in store.watches():
+        for watch in repo_service.subscriptions(store):
             if not watch["enabled"]:
                 continue
             try:
-                done.append(subscriptions.check(store, watch))
+                done.append(repo_service.check(store, watch))
             except Exception as exc:                    # noqa: BLE001
                 done.append({"artist": watch["artist_name"], "error": str(exc)})
         self.json({"checked": done})
