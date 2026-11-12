@@ -420,6 +420,10 @@ ADDED_COLUMNS = {
         # art_checked 0 = the artwork sweep still has work to do on this row.
         "art_hash": "TEXT DEFAULT ''",
         "art_checked": "REAL DEFAULT 0",
+        # Tombstone: 0 = live, otherwise the time the owner deleted the song. The
+        # row, its playlists and its provider identity stay so a restore does not
+        # have to re-create anything; every read path filters these out.
+        "deleted": "REAL DEFAULT 0",
     },
 }
 
@@ -734,6 +738,19 @@ class Store:
                                     (track_id,)).fetchone()
         return dict(row) if row else None
 
+    def deleted_tracks(self) -> list[dict]:
+        """Tombstones: songs the owner deleted, newest first.
+
+        The row keeps its provider identity, its playlists and its file path, so
+        restoring it is a flag change (or one download) rather than a new song.
+        """
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT t.*, (SELECT COUNT(*) FROM playlist_tracks pt"
+                "  WHERE pt.track_id=t.id) AS playlists"
+                " FROM tracks t WHERE t.deleted>0 ORDER BY t.deleted DESC").fetchall()
+        return [dict(row) for row in rows]
+
     # -- playlists --
     def playlist(self, title: str, provider: str, source_url: str, *,
                  kind: str = "url", artwork: str = "") -> int:
@@ -764,8 +781,17 @@ class Store:
     # -- jobs --
     def enqueue(self, track_id: int, provider: str, source_url: str = "",
                 priority: int = 0) -> int | None:
-        """One job per track while a job is still open; re-queueing is a no-op."""
+        """One job per track while a job is still open; re-queueing is a no-op.
+
+        A tombstoned song is never re-queued: a playlist refresh that lists it again
+        must not quietly download the file the owner just deleted. Restoring clears
+        the tombstone first, so this only blocks the automatic path.
+        """
         with self.lock:
+            deleted = self.conn.execute(
+                "SELECT deleted FROM tracks WHERE id=?", (track_id,)).fetchone()
+            if deleted and deleted["deleted"]:
+                return None
             open_job = self.conn.execute(
                 "SELECT id FROM download_jobs WHERE track_id=? AND status IN"
                 " ('queued','resolving','downloading','retry_wait')", (track_id,)).fetchone()
@@ -843,8 +869,8 @@ class Store:
         with self.lock:
             rows = self.conn.execute(
                 "SELECT status, COUNT(*) n FROM download_jobs GROUP BY status").fetchall()
-            sizes = self.conn.execute("SELECT COALESCE(SUM(size),0) s FROM tracks").fetchone()["s"]
-            tracks = self.conn.execute("SELECT COUNT(*) n FROM tracks").fetchone()["n"]
+            sizes = self.conn.execute("SELECT COALESCE(SUM(size),0) s FROM tracks WHERE deleted=0").fetchone()["s"]
+            tracks = self.conn.execute("SELECT COUNT(*) n FROM tracks WHERE deleted=0").fetchone()["n"]
         counts = {r["status"]: r["n"] for r in rows}
         free = disk_free_gb(self.setting("root"))
         floor = self.setting_float("min_free_gb", 2.0)
@@ -1079,7 +1105,8 @@ class Store:
         with self.lock:
             rows = [dict(r) for r in self.conn.execute(
                 "SELECT t.*, r.release_type AS release_type, r.artwork AS release_artwork, j.status, j.resolved_url FROM tracks t LEFT JOIN releases r ON r.id=t.release_id LEFT JOIN (SELECT track_id, MAX(id) AS latest FROM download_jobs GROUP BY track_id) latest ON latest.track_id=t.id LEFT JOIN download_jobs j ON j.id=latest.latest "
-                + ("" if include_pending else "WHERE t.file<>'' ") +
+                + ("WHERE t.deleted=0 " if include_pending
+                   else "WHERE t.file<>'' AND t.deleted=0 ") +
                 "ORDER BY t.artist_name, t.album, t.track_number").fetchall()]
             links = self.conn.execute(
                 "SELECT pt.track_id AS track_id, p.id AS pid, p.title AS ptitle,"
@@ -1132,6 +1159,7 @@ class Store:
                     " FROM playlist_tracks pt"
                     " JOIN tracks t ON t.id = pt.track_id"
                     " LEFT JOIN releases r ON r.id = t.release_id WHERE pt.playlist_id=?"
+                    " AND t.deleted=0"
                     " ORDER BY pt.position, t.id", (playlist["id"],)).fetchall()
                 tracks = []
                 for row in rows:

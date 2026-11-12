@@ -11,6 +11,8 @@ the route before calling in.
 from __future__ import annotations
 
 import sqlite3
+import shutil
+import time
 from pathlib import Path
 
 AUDIO_SUFFIXES = {".mp3", ".m4a", ".flac", ".opus", ".ogg", ".wav", ".aac", ".webm"}
@@ -32,13 +34,13 @@ def _playlist_tracks(store, playlist_id: int) -> list[dict]:
     with store.lock:
         return [dict(r) for r in store.conn.execute(
             "SELECT t.* FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id"
-            " WHERE pt.playlist_id=?", (playlist_id,)).fetchall()]
+            " WHERE pt.playlist_id=? AND t.deleted=0", (playlist_id,)).fetchall()]
 
 
 def _release_tracks(store, release_id: int) -> list[dict]:
     with store.lock:
         return [dict(r) for r in store.conn.execute(
-            "SELECT * FROM tracks WHERE release_id=?", (release_id,)).fetchall()]
+            "SELECT * FROM tracks WHERE release_id=? AND deleted=0", (release_id,)).fetchall()]
 
 
 def _other_playlists(store, track_id: int, playlist_id: int | None) -> int:
@@ -90,6 +92,18 @@ def plan(store, kind: str, target_id: int) -> dict:
             outside.append(raw)          # row goes, the file stays put
         else:
             files.append(path)
+
+    # A file can be the same recording shared by a row that survives this delete
+    # (the queue links rather than copies). Unlinking it would leave that row
+    # pointing at nothing.
+    survivors = set()
+    if deleting:
+        marks = ",".join("?" * len(deleting))
+        with store.lock:
+            survivors = {row[0] for row in store.conn.execute(
+                f"SELECT file FROM tracks WHERE file<>'' AND id NOT IN ({marks})",
+                tuple(t["id"] for t in deleting))}
+    files = [path for path in files if str(path) not in survivors]
 
     return {
         "kind": kind, "id": target_id, "title": (meta["title"] if meta else ""),
@@ -148,3 +162,105 @@ def apply(store, kind: str, target_id: int, *, delete_files: bool = True) -> dic
     report.update({"ok": True, "deleted_files": len(removed), "failed": failed,
                    "delete_files": delete_files})
     return report
+
+
+def delete_track(store, track_id: int, *, delete_files: bool = True) -> dict:
+    """Delete one song: its file, its job, and its visibility — not its identity.
+
+    The row stays as a tombstone. Keeping it means the next playlist refresh finds
+    an existing song instead of downloading it again, and Settings can put it back
+    with its playlists and cover intact. The file only goes when no other row in
+    the library still points at it.
+    """
+    track = store.track_by_id(track_id)
+    if not track:
+        raise ValueError("no such song")
+    if track.get("deleted"):
+        return {"id": track_id, "deleted": False, "already": True,
+                "title": track.get("title") or ""}
+
+    raw = (track.get("file") or "").strip()
+    path = Path(raw).expanduser() if raw else None
+    removed, kept_by = False, None
+    if path and path.is_file():
+        with store.lock:
+            shared = store.conn.execute(
+                "SELECT id FROM tracks WHERE id<>? AND file=? AND deleted=0",
+                (track_id, raw)).fetchone()
+        if shared:
+            kept_by = shared["id"]          # another row still plays this exact file
+        elif delete_files and _inside(path, _root(store)):
+            try:
+                path.unlink()
+                removed = True
+            except OSError as error:
+                return {"id": track_id, "deleted": False, "error": str(error),
+                        "title": track.get("title") or ""}
+
+    with store.lock:
+        store.conn.execute("UPDATE tracks SET deleted=?, size=0 WHERE id=?",
+                           (time.time(), track_id))
+        # A queued retry would otherwise re-create the file the person just removed.
+        store.conn.execute("DELETE FROM download_jobs WHERE track_id=?", (track_id,))
+        store.conn.commit()
+    store.log(f"deleted “{track.get('title') or ''}” from the library", "warn", "library")
+    return {"id": track_id, "deleted": True, "title": track.get("title") or "",
+            "removed_file": removed, "kept_by": kept_by}
+
+
+def restore_track(store, track_id: int) -> dict:
+    """Undo a song delete: show it again, and get its audio back if it is gone.
+
+    A download is re-queued from the provider it came from. An import has no
+    provider to ask, so it is copied back from the file it was imported from —
+    and when that is gone too, the tombstone stays: a row that can never play is
+    not a restored song.
+    """
+    track = store.track_by_id(track_id)
+    if not track:
+        raise ValueError("no such song")
+    if not track.get("deleted"):
+        return {"id": track_id, "restored": False, "already": True,
+                "title": track.get("title") or ""}
+
+    raw = (track.get("file") or "").strip()
+    path = Path(raw).expanduser() if raw else None
+    if path and path.is_file():
+        with store.lock:
+            store.conn.execute("UPDATE tracks SET deleted=0, size=? WHERE id=?",
+                               (path.stat().st_size, track_id))
+            store.conn.commit()
+        store.log(f"restored “{track.get('title') or ''}”", "ok", "library")
+        return {"id": track_id, "restored": True, "queued": False,
+                "title": track.get("title") or ""}
+
+    if (track.get("provider") or "") == "local":
+        source = Path((track.get("source_url") or "").strip()).expanduser()
+        if not path or not source.is_file():
+            return {"id": track_id, "restored": False,
+                    "error": "The imported file is gone and an import has no source "
+                             "to download from, so this song cannot be restored.",
+                    "title": track.get("title") or ""}
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, path)
+        except OSError as error:
+            return {"id": track_id, "restored": False, "error": str(error),
+                    "title": track.get("title") or ""}
+        with store.lock:
+            store.conn.execute("UPDATE tracks SET deleted=0, size=? WHERE id=?",
+                               (path.stat().st_size, track_id))
+            store.conn.commit()
+        store.log(f"restored “{track.get('title') or ''}” from its import", "ok", "library")
+        return {"id": track_id, "restored": True, "queued": False, "copied": True,
+                "title": track.get("title") or ""}
+
+    with store.lock:
+        store.conn.execute("UPDATE tracks SET deleted=0 WHERE id=?", (track_id,))
+        store.conn.commit()
+    job = store.enqueue(track_id, track.get("provider") or "",
+                        track.get("source_url") or "")
+    store.log(f"restored “{track.get('title') or ''}”"
+              + (" and queued it to download again" if job else ""), "ok", "library")
+    return {"id": track_id, "restored": True, "queued": bool(job),
+            "title": track.get("title") or ""}

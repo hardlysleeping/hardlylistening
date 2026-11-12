@@ -155,6 +155,109 @@ class AlbumDelete(Case):
             deletion.plan(self.store, "artist", 1)
 
 
+class TrackDelete(Case):
+    """One song off the shelf: file and visibility, never identity."""
+
+    def test_the_file_goes_and_the_row_stays_as_a_tombstone(self):
+        tid = self.track("One")
+        path = self.root / "Artist" / "Album" / "One.mp3"
+        report = deletion.delete_track(self.store, tid)
+        self.assertTrue(report["removed_file"])
+        self.assertFalse(path.exists())
+        row = self.store.track_by_id(tid)
+        self.assertTrue(row["deleted"])
+        self.assertEqual(row["title"], "One")
+        self.assertEqual(self.store.conn.execute(
+            "SELECT COUNT(*) c FROM tracks").fetchone()["c"], 1)
+
+    def test_a_deleted_song_is_invisible_to_the_library_and_the_queue(self):
+        tid = self.track("Gone")
+        pid = self.playlist("Set", [tid])
+        deletion.delete_track(self.store, tid)
+        self.assertEqual(self.store.library(), [])
+        self.assertEqual(self.store.library(include_pending=True), [])
+        playlists = [p for p in self.store.state()["playlists"] if p["id"] == pid]
+        self.assertEqual(playlists[0]["tracks"], [])
+        self.assertEqual(self.store.stats()["tracks"], 0)
+
+    def test_a_queued_retry_is_cancelled_so_it_cannot_come_back(self):
+        tid = self.track("Later", file=False)
+        self.store.enqueue(tid, "local", "")
+        deletion.delete_track(self.store, tid)
+        self.assertIsNone(self.store.job_for_track(tid))
+        # A playlist refresh that lists it again is refused, not downloaded again.
+        self.assertIsNone(self.store.enqueue(tid, "local", ""))
+        self.assertIsNone(self.store.job_for_track(tid))
+
+    def test_a_file_another_row_still_plays_is_not_unlinked(self):
+        one, two = self.track("One"), self.track("Two")
+        shared = self.root / "Artist" / "Album" / "One.mp3"
+        with self.store.lock:
+            self.store.conn.execute("UPDATE tracks SET file=? WHERE id=?",
+                                    (str(shared), two))
+            self.store.conn.commit()
+        report = deletion.delete_track(self.store, one)
+        self.assertFalse(report["removed_file"])
+        self.assertEqual(report["kept_by"], two)
+        self.assertTrue(shared.exists())
+
+    def test_a_file_outside_the_root_is_never_unlinked(self):
+        tid = self.track("Outside", file=False)
+        stray = Path(self.dir.name) / "elsewhere.mp3"
+        stray.write_bytes(b"y" * 10)
+        with self.store.lock:
+            self.store.conn.execute("UPDATE tracks SET file=? WHERE id=?",
+                                    (str(stray), tid))
+            self.store.conn.commit()
+        report = deletion.delete_track(self.store, tid)
+        self.assertFalse(report["removed_file"])
+        self.assertTrue(stray.exists())
+
+    def test_restore_puts_it_back_without_downloading_a_file_that_is_still_here(self):
+        tid = self.track("Back")
+        deletion.delete_track(self.store, tid, delete_files=False)
+        report = deletion.restore_track(self.store, tid)
+        self.assertTrue(report["restored"])
+        self.assertFalse(report["queued"])
+        self.assertEqual([t["id"] for t in self.store.library()], [tid])
+
+    def test_restore_queues_a_download_when_the_audio_is_gone(self):
+        tid = self.track("Again", provider="soundcloud")
+        deletion.delete_track(self.store, tid)
+        report = deletion.restore_track(self.store, tid)
+        self.assertTrue(report["restored"])
+        self.assertTrue(report["queued"])
+        self.assertFalse(self.store.track_by_id(tid)["deleted"])
+
+    def test_an_import_is_copied_back_from_where_it_came_from(self):
+        tid = self.track("Imported")
+        source = Path(self.dir.name) / "downloads" / "Imported.mp3"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"z" * 4096)
+        with self.store.lock:
+            self.store.conn.execute("UPDATE tracks SET source_url=? WHERE id=?",
+                                    (str(source), tid))
+            self.store.conn.commit()
+        path = Path(self.store.track_by_id(tid)["file"])
+        deletion.delete_track(self.store, tid)
+        report = deletion.restore_track(self.store, tid)
+        self.assertTrue(report["copied"])
+        self.assertTrue(path.is_file())
+        self.assertEqual(path.read_bytes(), source.read_bytes())
+
+    def test_an_import_with_no_source_left_is_not_restored(self):
+        tid = self.track("Nowhere")
+        with self.store.lock:
+            self.store.conn.execute("UPDATE tracks SET source_url=? WHERE id=?",
+                                    (str(Path(self.dir.name) / "gone.mp3"), tid))
+            self.store.conn.commit()
+        deletion.delete_track(self.store, tid)
+        report = deletion.restore_track(self.store, tid)
+        self.assertFalse(report["restored"])
+        self.assertIn("cannot be restored", report["error"])
+        self.assertTrue(self.store.track_by_id(tid)["deleted"])
+
+
 class Permissions(Case):
     admin = {"id": "m-admin", "role": "admin", "email": "a@b"}
     alice = {"id": "m-alice", "role": "member", "email": "alice@b"}

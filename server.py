@@ -52,6 +52,8 @@ ROUTES = [
     ("POST", r"^/api/track/(\d+)/source$", "track_source"),
     ("POST", r"^/api/track/(\d+)/unpick$", "track_unpick"),
     ("POST", r"^/api/track/(\d+)/move$", "track_move"),
+    ("POST", r"^/api/track/(\d+)/delete$", "track_delete"),
+    ("POST", r"^/api/track/(\d+)/restore$", "track_restore"),
     ("POST", r"^/api/playlist/(\d+)/remove$", "playlist_remove"),
     ("POST", r"^/api/release/(\d+)/remove$", "release_remove"),
     ("POST", r"^/api/playlist/(\d+)/requeue$", "playlist_requeue"),
@@ -689,6 +691,20 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/tempo/status":
             from library import tempo
             self.json(tempo.status())
+            return
+        if path == "/api/deleted":
+            # Tombstones, for the Settings page. Admin-only, like deleting itself.
+            if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+                self.json({"error": "Administrator required"}, 403)
+                return
+            rows = store.deleted_tracks()
+            self.json({"deleted": [{
+                "id": row["id"], "title": row["title"],
+                "artist": row["artist_name"], "album": row["album"],
+                "provider": row["provider"], "deleted": row["deleted"],
+                "has_file": bool(row.get("file")) and Path(row["file"]).is_file(),
+                "playlists": row.get("playlists") or 0,
+            } for row in rows]})
             return
         if path == "/api/library":
             from social import annotate
@@ -1463,6 +1479,38 @@ class Handler(BaseHTTPRequestHandler):
         moved = store.move_job(job["id"], -1 if direction == "up" else 1)
         queue.wake()
         self.json({"moved": moved})
+
+    def do_track_delete(self, tid: int) -> None:
+        """Delete one song. The row stays as a tombstone, so a refresh cannot
+        download it again and Settings can put it back."""
+        import deletion
+        store, queue = boot()
+        if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+            self.json({"error": "Administrator required"}, 403)
+            return
+        try:
+            report = deletion.delete_track(store, tid,
+                                           delete_files=self.body().get("delete_file") is not False)
+        except ValueError as error:
+            self.json({"error": str(error)}, 404)
+            return
+        queue.wake()
+        self.json(report)
+
+    def do_track_restore(self, tid: int) -> None:
+        import deletion
+        store, queue = boot()
+        if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+            self.json({"error": "Administrator required"}, 403)
+            return
+        try:
+            report = deletion.restore_track(store, tid)
+        except ValueError as error:
+            self.json({"error": str(error)}, 404)
+            return
+        if report.get("queued"):
+            queue.wake()
+        self.json(report)
 
     def _may_delete(self, store, kind: str, target_id: int) -> bool:
         """Local mode has no members, so it behaves like the admin it already is."""
