@@ -34,7 +34,7 @@ NOT_IMPLEMENTED = {
     'downloadPodcastEpisode',
     'addChatMessage', 'getChatMessages',
     'getSonicSimilarTracks', 'findSonicPath', 'getVideos', 'getVideoInfo', 'getCaptions',
-    'changePassword', 'createUser', 'updateUser', 'deleteUser', 'getNowPlaying', 'tokenInfo',
+    'changePassword', 'createUser', 'updateUser', 'deleteUser', 'tokenInfo',
 }
 
 
@@ -529,6 +529,27 @@ def handle(endpoint, params, multi, ctx):
                               'position': int(float(state.get('time') or 0) * 1000),
                               'username': uid, 'changed': iso(state.get('updated')),
                               'entry': entry}}
+
+    if endpoint == 'getNowPlaying':
+        # The position comes from the member's own saved state (`listening_now`), which the
+        # web player writes as it plays: one row per member, so the most recent writer wins.
+        # This surface only reports that state — nothing plays on the server — so `minutesAgo`
+        # is the age of the last write and is reported rather than hidden. The player fields
+        # name the device this request authenticated as, since that is this app's Subsonic
+        # user. A track the member no longer has in scope is not described, rather than
+        # named with fields the scope forbids.
+        state = ctx.get('now')() or {}
+        current = next((s for s in songs if s['id'] == str(state.get('id') or '')), None)
+        entry = []
+        if current is not None:
+            updated = float(state.get('updated') or 0)
+            item = dict(current)
+            item.update({'username': ctx.get('username') or uid,
+                         'minutesAgo': max(0, int((time.time() - updated) // 60)) if updated else 0,
+                         'playerId': ctx.get('username') or uid,
+                         'playerName': ctx.get('device_label') or 'HardlyListening'})
+            entry.append(item)
+        return {'nowPlaying': {'entry': entry}}
 
     # ---- bookmarks (Phase 1) ----------------------------------------------
     if endpoint == 'getBookmarks':

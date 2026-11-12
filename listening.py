@@ -433,6 +433,7 @@ def rest(handler, store, security):
             uid = device['member_id']
             security.limit(uid, 'device-requests', 240)
             import subsonic
+            import nowplaying
             tracks = catalog(store, uid)
             try:
                 import genres
@@ -523,6 +524,8 @@ def rest(handler, store, security):
             'tracks': tracks, 'songs': songs, 'albums': albums, 'artists': artists,
             'favorites': favorites, 'playlists': playlists, 'links': links, 'art': artwork,
             'find': find, 'page': page, 'playlist': playlist,
+            'device_label': device['label'],
+            'now': lambda: nowplaying.get(store, uid),
             'lyrics': lambda track_id: lyrics_for(store, track_id)})
         if payload is not None:
             envelope(handler, params, payload)

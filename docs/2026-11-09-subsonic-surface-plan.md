@@ -41,7 +41,10 @@ Client-facing completeness; no new state beyond two small tables.
 - Plays: `scrobble`, `reportPlayback`, `getNowPlaying` → new `listening_plays(member_id, track_id, plays,
   last_played)`; powers `getTopSongs` and the `frequent` album list.
 - Queue: `savePlayQueue`, `savePlayQueueByIndex`, `getPlayQueue`, `getPlayQueueByIndex` → existing
-  `nowplaying` state (already written by the web player).
+  `nowplaying` state (already written by the web player). `getNowPlaying` reports the same member
+  state as one entry: the song fields plus `username`, `minutesAgo` (the real age of that write),
+  `playerId` and `playerName` (the device the request authenticated as). Nothing is playing on the
+  server, and a track the member no longer has in scope produces no entry rather than a guess.
 - Lists & search: remaining `getAlbumList2` types (`newest`, `recent`, `random`, `frequent`, `highest`),
   legacy `getAlbumList`, `search`, `search2`, `getRandomSongs`.
 - Genres: `getGenres`, `getSongsByGenre` from `genre_labels`.
