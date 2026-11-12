@@ -45,16 +45,9 @@ NOT_IMPLEMENTED = {
 
 
 def schema(store):
-    with store.lock:
-        store.conn.executescript('''
-        CREATE TABLE IF NOT EXISTS listening_ratings (
-          member_id TEXT NOT NULL, track_id INTEGER NOT NULL, rating INTEGER NOT NULL,
-          PRIMARY KEY (member_id, track_id));
-        CREATE TABLE IF NOT EXISTS listening_plays (
-          member_id TEXT NOT NULL, track_id INTEGER NOT NULL, plays INTEGER NOT NULL DEFAULT 0,
-          last_played REAL NOT NULL DEFAULT 0, PRIMARY KEY (member_id, track_id));
-        ''')
-        store.conn.commit()
+    """Kept as the name the Subsonic entry point calls; the tables belong to the library."""
+    from library import service
+    service.schema(store)
 
 
 def iso(seconds):
@@ -599,25 +592,12 @@ def handle(endpoint, params, multi, ctx):
                 track_id = int(value)
             except ValueError:
                 continue
-            with store.lock:
-                if on:
-                    store.conn.execute('INSERT OR IGNORE INTO listening_favorites VALUES(?,?)', (uid, track_id))
-                else:
-                    store.conn.execute('DELETE FROM listening_favorites WHERE member_id=? AND track_id=?',
-                                       (uid, track_id))
-                store.conn.commit()
+            service.star(store, uid, track_id, on)
         for value in ids_of('albumId'):
             album = albums.get(value)
             if not album:
                 continue
-            key = album.get('key') or value
-            with store.lock:
-                if on:
-                    store.conn.execute('INSERT OR IGNORE INTO listening_album_likes VALUES(?,?)', (uid, key))
-                else:
-                    store.conn.execute('DELETE FROM listening_album_likes WHERE member_id=? AND album_key=?',
-                                       (uid, key))
-                store.conn.commit()
+            service.like_album(store, uid, album.get('key') or value, on)
         return {}
     if endpoint in ('getStarred', 'getStarred2'):
         starred_songs = [s for s in songs if int(s['id']) in starred]
@@ -633,28 +613,16 @@ def handle(endpoint, params, multi, ctx):
             rating = max(0, min(int(params.get('rating', 0)), 5))
         except ValueError:
             raise Denied(400, 'Invalid rating')
-        with store.lock:
-            if rating:
-                store.conn.execute('INSERT OR REPLACE INTO listening_ratings VALUES(?,?,?)',
-                                   (uid, track_id, rating))
-            else:
-                store.conn.execute('DELETE FROM listening_ratings WHERE member_id=? AND track_id=?',
-                                   (uid, track_id))
-            store.conn.commit()
+        service.rate(store, uid, track_id, rating)
         return {}
     if endpoint in ('scrobble', 'reportPlayback'):
         now = time.time()
-        with store.lock:
-            for value in ids_of('id'):
-                try:
-                    track_id = int(value)
-                except ValueError:
-                    continue
-                store.conn.execute(
-                    'INSERT INTO listening_plays (member_id,track_id,plays,last_played) VALUES (?,?,1,?)'
-                    ' ON CONFLICT(member_id,track_id) DO UPDATE SET plays=plays+1,'
-                    ' last_played=excluded.last_played', (uid, track_id, now))
-            store.conn.commit()
+        for value in ids_of('id'):
+            try:
+                track_id = int(value)
+            except ValueError:
+                continue
+            service.record_play(store, uid, track_id, when=now)
         return {}
     if endpoint == 'getTopSongs':
         artist = params.get('artist', '').casefold()
@@ -708,10 +676,7 @@ def handle(endpoint, params, multi, ctx):
     # ---- bookmarks (Phase 1) ----------------------------------------------
     if endpoint == 'getBookmarks':
         out = []
-        with store.lock:
-            rows = [dict(r) for r in store.conn.execute(
-                'SELECT track_id,position_ms,comment,created,updated FROM listening_bookmarks '
-                'WHERE member_id=? ORDER BY updated DESC,track_id', (uid,))]
+        rows = service.bookmark_rows(store, uid)
         by_id = {s['id']: s for s in songs}
         for row in rows:
             entry = by_id.get(str(row['track_id']))
@@ -733,31 +698,14 @@ def handle(endpoint, params, multi, ctx):
         comment = params.get('comment', '')
         if not isinstance(comment, str) or len(comment) > 500:
             raise Denied(400, 'comment may be at most 500 characters')
-        now = time.time()
-        with store.lock:
-            exists = store.conn.execute(
-                'SELECT created FROM listening_bookmarks WHERE member_id=? AND track_id=?',
-                (uid, int(entry['id']))).fetchone()
-            if exists:
-                store.conn.execute(
-                    'UPDATE listening_bookmarks SET position_ms=?,comment=?,updated=? '
-                    'WHERE member_id=? AND track_id=?',
-                    (position, comment.strip(), now, uid, int(entry['id'])))
-            else:
-                store.conn.execute(
-                    'INSERT INTO listening_bookmarks(member_id,track_id,position_ms,comment,created,updated) '
-                    'VALUES(?,?,?,?,?,?)', (uid, int(entry['id']), position, comment.strip(), now, now))
-            store.conn.commit()
+        service.save_bookmark(store, uid, int(entry['id']), position, comment.strip())
         return {}
     if endpoint == 'deleteBookmark':
         try:
             track_id = int(identity)
         except ValueError:
             raise Denied(400, 'Invalid bookmark id')
-        with store.lock:
-            store.conn.execute('DELETE FROM listening_bookmarks WHERE member_id=? AND track_id=?',
-                               (uid, track_id))
-            store.conn.commit()
+        service.remove_bookmark(store, uid, track_id)
         return {}
 
     # ---- public shares (Phase 2) ------------------------------------------

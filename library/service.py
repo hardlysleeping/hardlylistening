@@ -18,6 +18,33 @@ SCOPE = '''SELECT DISTINCT t.* FROM tracks t WHERE t.deleted=0 AND t.id IN
    SELECT track_id FROM listening_favorites WHERE member_id=?)'''
 
 
+def schema(store):
+    """Create the member-state tables this service touches, if a quiet database lacks them.
+
+    `CREATE TABLE IF NOT EXISTS` throughout, so this is the same statement the original
+    owner ran — not a migration. Favourites and album likes come from `preferences`, which
+    already owns those two definitions.
+    """
+    import preferences
+    preferences.schema(store)
+    with store.lock:
+        store.conn.executescript('''
+        CREATE TABLE IF NOT EXISTS listening_ratings (
+          member_id TEXT NOT NULL, track_id INTEGER NOT NULL, rating INTEGER NOT NULL,
+          PRIMARY KEY (member_id, track_id));
+        CREATE TABLE IF NOT EXISTS listening_plays (
+          member_id TEXT NOT NULL, track_id INTEGER NOT NULL, plays INTEGER NOT NULL DEFAULT 0,
+          last_played REAL NOT NULL DEFAULT 0, PRIMARY KEY (member_id, track_id));
+        CREATE TABLE IF NOT EXISTS listening_bookmarks (
+          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          position_ms INTEGER NOT NULL DEFAULT 0, comment TEXT NOT NULL DEFAULT '',
+          created REAL NOT NULL, updated REAL NOT NULL,
+          PRIMARY KEY (member_id, track_id));
+        ''')
+        store.conn.commit()
+
+
 def catalog(store, uid):
     """Every track in the member's scope, in album order."""
     import preferences
@@ -37,12 +64,14 @@ def in_scope(store, uid, track_id) -> bool:
 
 
 def starred(store, uid) -> set:
+    schema(store)
     with store.lock:
         return {r[0] for r in store.conn.execute(
             'SELECT track_id FROM listening_favorites WHERE member_id=?', (uid,))}
 
 
 def ratings(store, uid) -> dict:
+    schema(store)
     with store.lock:
         return {r[0]: r[1] for r in store.conn.execute(
             'SELECT track_id, rating FROM listening_ratings WHERE member_id=?', (uid,))}
@@ -50,6 +79,7 @@ def ratings(store, uid) -> dict:
 
 def plays(store, uid) -> dict:
     """{track id: (play count, last played)} — the scrobble ledger, per member."""
+    schema(store)
     with store.lock:
         return {r[0]: (r[1], r[2]) for r in store.conn.execute(
             'SELECT track_id, plays, last_played FROM listening_plays WHERE member_id=?', (uid,))}
@@ -68,9 +98,104 @@ def album_added(store) -> dict:
 
 
 def bookmarks(store, uid) -> dict:
+    schema(store)
     with store.lock:
         return {r[0]: r[1] for r in store.conn.execute(
             'SELECT track_id, position_ms FROM listening_bookmarks WHERE member_id=?', (uid,))}
+
+
+def bookmark_rows(store, uid) -> list:
+    """Every bookmark this member holds, newest change first, comment included."""
+    schema(store)
+    with store.lock:
+        return [dict(r) for r in store.conn.execute(
+            'SELECT track_id,position_ms,comment,created,updated FROM listening_bookmarks'
+            ' WHERE member_id=? ORDER BY updated DESC,track_id', (uid,))]
+
+
+# -- writes ------------------------------------------------------------------
+# The same rows the reads above answer, so a toggle and a listing cannot disagree about
+# what a member starred or where they stopped listening.
+
+def star(store, uid, track_id: int, on: bool) -> None:
+    schema(store)
+    with store.lock:
+        if on:
+            store.conn.execute('INSERT OR IGNORE INTO listening_favorites VALUES(?,?)',
+                               (uid, int(track_id)))
+        else:
+            store.conn.execute('DELETE FROM listening_favorites WHERE member_id=? AND track_id=?',
+                               (uid, int(track_id)))
+        store.conn.commit()
+
+
+def like_album(store, uid, album_key: str, on: bool) -> None:
+    schema(store)
+    with store.lock:
+        if on:
+            store.conn.execute('INSERT OR IGNORE INTO listening_album_likes VALUES(?,?)',
+                               (uid, album_key))
+        else:
+            store.conn.execute('DELETE FROM listening_album_likes WHERE member_id=? AND album_key=?',
+                               (uid, album_key))
+        store.conn.commit()
+
+
+def rate(store, uid, track_id: int, rating: int) -> None:
+    """0 clears the rating; 1–5 stores it."""
+    rating = max(0, min(int(rating), 5))
+    schema(store)
+    with store.lock:
+        if rating:
+            store.conn.execute('INSERT OR REPLACE INTO listening_ratings VALUES(?,?,?)',
+                               (uid, int(track_id), rating))
+        else:
+            store.conn.execute('DELETE FROM listening_ratings WHERE member_id=? AND track_id=?',
+                               (uid, int(track_id)))
+        store.conn.commit()
+
+
+def record_play(store, uid, track_id: int, when: float | None = None) -> None:
+    """One scrobble: the count goes up and the track becomes the member's last played."""
+    import time
+    when = time.time() if when is None else float(when)
+    schema(store)
+    with store.lock:
+        store.conn.execute(
+            'INSERT INTO listening_plays (member_id,track_id,plays,last_played) VALUES (?,?,1,?)'
+            ' ON CONFLICT(member_id,track_id) DO UPDATE SET plays=plays+1,'
+            ' last_played=excluded.last_played', (uid, int(track_id), when))
+        store.conn.commit()
+
+
+def save_bookmark(store, uid, track_id: int, position_ms: int, comment: str = '',
+                  when: float | None = None) -> None:
+    import time
+    when = time.time() if when is None else float(when)
+    schema(store)
+    with store.lock:
+        exists = store.conn.execute(
+            'SELECT 1 FROM listening_bookmarks WHERE member_id=? AND track_id=?',
+            (uid, int(track_id))).fetchone()
+        if exists:
+            store.conn.execute(
+                'UPDATE listening_bookmarks SET position_ms=?,comment=?,updated=?'
+                ' WHERE member_id=? AND track_id=?',
+                (int(position_ms), comment, when, uid, int(track_id)))
+        else:
+            store.conn.execute(
+                'INSERT INTO listening_bookmarks(member_id,track_id,position_ms,comment,created,updated)'
+                ' VALUES(?,?,?,?,?,?)',
+                (uid, int(track_id), int(position_ms), comment, when, when))
+        store.conn.commit()
+
+
+def remove_bookmark(store, uid, track_id: int) -> None:
+    schema(store)
+    with store.lock:
+        store.conn.execute('DELETE FROM listening_bookmarks WHERE member_id=? AND track_id=?',
+                           (uid, int(track_id)))
+        store.conn.commit()
 
 
 def playlists(store, uid) -> list:
@@ -91,6 +216,7 @@ def playlist_tracks(store, uid) -> list:
 
 def favorites(store, uid) -> list:
     """Favourited track rows, newest id last — the order the Favourites playlist uses."""
+    schema(store)
     with store.lock:
         return [dict(r) for r in store.conn.execute(
             'SELECT t.* FROM tracks t JOIN listening_favorites f ON t.id=f.track_id '

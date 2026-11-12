@@ -43,13 +43,31 @@ class ServiceOwnsTheQueries(unittest.TestCase):
         self.assertEqual(sorted(set(asked)), ['album_added', 'plays', 'ratings', 'starred'])
 
     def test_no_query_layer_of_its_own(self):
+        """Neither a read nor a write: the adapter translates, the service owns the rows."""
         text = (Path(__file__).resolve().parent.parent / 'subsonic.py').read_text()
-        for table in ('listening_favorites', 'listening_ratings', 'listening_plays'):
-            self.assertNotRegex(
-                text, r'SELECT[^;]*FROM %s' % table,
-                f'{table} is read with SQL in subsonic.py; it belongs to library/service.py')
+        for table in ('listening_favorites', 'listening_ratings', 'listening_plays',
+                      'listening_bookmarks'):
+            self.assertNotIn(table, text,
+                             f'{table} is touched in subsonic.py; it belongs to library/service.py')
         self.assertNotIn('MAX(added)', text,
                          'the album sort key belongs to library/service.py (album_added)')
+
+    def test_a_scrobble_and_a_bookmark_round_trip(self):
+        """The write side of the service is the same row the read side answers."""
+        service.record_play(self.store, 'u1', self.ids[0])
+        service.record_play(self.store, 'u1', self.ids[0])
+        self.assertEqual(service.plays(self.store, 'u1')[self.ids[0]][0], 2)
+        service.save_bookmark(self.store, 'u1', self.ids[0], 1234, 'intro')
+        service.save_bookmark(self.store, 'u1', self.ids[0], 4321, 'verse')
+        rows = service.bookmark_rows(self.store, 'u1')
+        self.assertEqual([(r['position_ms'], r['comment']) for r in rows], [(4321, 'verse')])
+        self.assertEqual(service.bookmarks(self.store, 'u1')[self.ids[0]], 4321)
+        service.remove_bookmark(self.store, 'u1', self.ids[0])
+        self.assertEqual(service.bookmarks(self.store, 'u1'), {})
+        service.star(self.store, 'u1', self.ids[0], True)
+        self.assertEqual(service.starred(self.store, 'u1'), {self.ids[0]})
+        service.star(self.store, 'u1', self.ids[0], False)
+        self.assertEqual(service.starred(self.store, 'u1'), set())
 
     def test_a_deleted_song_does_not_age_its_album(self):
         """`album_added` feeds the album wall's sort: a tombstone is not a new addition."""
