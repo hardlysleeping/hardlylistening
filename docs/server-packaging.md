@@ -1,8 +1,16 @@
 # Headless server packaging — canonical runtime, VPS layout, Docker
 
-Status: **specification and board, nothing built.** Owner decisions are recorded in
-`PLAN.md` § Platform separation → *Runtime boundary*; this document is the operational
-detail for the `SERVER-PKG-###` cards.
+Status: **partly built — the process, the paths and the launcher exist; the service, image and
+backup do not.** Owner decisions are recorded in `PLAN.md` § Platform separation → *Runtime
+boundary*; this document is the operational detail for the `SERVER-PKG-###` cards.
+
+| done | card |
+| --- | --- |
+| ✓ | 002 `paths.py` — runtime writes leave the source tree when `DATA_DIR` is declared |
+| ✓ | 004 graceful shutdown on `SIGTERM`/`SIGINT` |
+| ✓ | 001 runtime config: `HOST`, `PORT`, `MUSIC_DIR` |
+| ✓ | 003 `bin/hardlylistening-server` with `run`, `check`, `version` |
+| — | 005 systemd unit, 006 image, 007/008 restart state, 009 identity, 010 `backup`, 011 migration test |
 
 The rule everything else follows from:
 
@@ -111,13 +119,20 @@ HARDLYLISTENING_FEDERATION_ENABLED=0
 ```
 
 New variables: `HARDLYLISTENING_DATA_DIR`, `HARDLYLISTENING_MUSIC_DIR`, `HARDLYLISTENING_HOST`,
-`HARDLYLISTENING_PORT`.
+`HARDLYLISTENING_PORT`. All four are read by `paths.py` and `config.py`; nothing else in the process
+looks at the environment for them.
 
 * `DATA_DIR` — default keeps today's behaviour for existing installs; the packaged default is
   `/var/lib/hardlylistening`.
-* `MUSIC_DIR` — on a **new database**, the initial `root` setting. Once an admin changes the
-  Repository location in the UI, the database setting wins; never override a chosen root at every
-  start.
+* `MUSIC_DIR` — the initial `root` setting. "Initial" is narrower than it sounds: `db.connect()`
+  inserts every default on creation, so a fresh database already holds
+  `~/Music/HardlyListening`. The variable applies only while the stored root is still that
+  default (or absent) and stops applying the moment an admin chooses a location in the UI. It is a
+  seed, never an override — anything else would re-point the library on every start.
+* `HOST` / `PORT` — defaults for the listen socket. An explicit `--host`/`--port` still wins, so a
+  unit file can set both and a one-off run can override either. A malformed `PORT` refuses to start
+  (exit 2) instead of falling back to 8470: starting somewhere the operator did not ask for is
+  worse than not starting.
 
 ---
 
@@ -161,23 +176,44 @@ the constructor already applies to rows left behind by a hard kill. `tests/test_
 the real entry point in a subprocess, signals it, and asserts exit 0, the log line, a released port
 and a checkpointed WAL.
 
+**Done (SERVER-PKG-001).** `config.py` owns the three settings that are not filesystem paths —
+`host()`, `port()`, `music_dir()` — plus `seed_music_root(store)`, and `server.main(argv)` takes the
+environment as its argument defaults. With nothing declared the server binds `127.0.0.1:8470` and
+seeds no root, byte-identical to before. `tests/test_config.py` runs the module and the launcher in
+subprocesses against a temporary data directory: nothing declared is today's behaviour, the
+environment supplies all three, a bad port refuses, a new database takes the declared root, and a
+chosen root survives the variable.
+
+**Done (SERVER-PKG-003).** `bin/hardlylistening-server` is a `sh` wrapper that resolves its own
+directory and `exec`s `cli.py`; `cli.py` owns the command dispatch and `check`. `check` reports and
+repairs nothing — a missing music directory is a `fail` and is still missing afterwards, a missing
+database is reported as "will be created" and is not created, and the database itself is opened
+`mode=rw` inside `BEGIN IMMEDIATE` … `ROLLBACK` to prove the write lock without writing. A busy
+port is a warning, because a manual `check` against a running instance is normal.
+
 Still required before the system service ships:
 
-* **`check` and `backup` subcommands** (see §5), and the migrations stay automatic and idempotent at
-  startup as they are now.
+* **`backup` and `migrate` subcommands** (see §5), and the migrations stay automatic and idempotent
+  at startup as they are now.
 
 ---
 
 ## 4. Launcher, process model, users
 
-`/opt/hardlylistening/bin/hardlylistening-server` does almost nothing: read the environment,
-validate directories and tools, `exec` the Python entry point. No daemonisation, no PID files —
-one external supervisor owns the process.
+`/opt/hardlylistening/bin/hardlylistening-server` does almost nothing: resolve its own directory,
+then `exec` the Python entry point and let that read the environment. No daemonisation, no PID
+files — one external supervisor owns the process.
 
-```bash
-exec /usr/bin/python3 /opt/hardlylistening/server.py \
-    --host "$HARDLYLISTENING_HOST" --port "$HARDLYLISTENING_PORT"
+```sh
+#!/bin/sh
+set -eu
+APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "${HARDLYLISTENING_PYTHON:-python3}" "$APP_DIR/cli.py" "$@"
 ```
+
+That is the whole script. `HARDLYLISTENING_PYTHON` exists for installs whose interpreter is not on
+`PATH` (a venv under `/opt`); everything else is `cli.py`'s job, where it can be tested without
+spawning a shell.
 
 Dedicated account `hardlylistening:hardlylistening`, no interactive login, home
 `/var/lib/hardlylistening`. It owns the data and media trees, **not** `/opt` or `/etc`.
@@ -190,14 +226,20 @@ or `Desktop → hardlylistening-server`. Never systemd → Docker → another su
 ## 5. CLI contract
 
 ```
-hardlylistening-server run                 # default
-hardlylistening-server check               # config, DB read/write, music dir, free disk, yt-dlp, ffmpeg, port
-hardlylistening-server migrate             # explicit upgrade path
-hardlylistening-server backup <path>       # SQLite online-backup API, consistent snapshot
-hardlylistening-server version
+hardlylistening-server run                 # default; --host/--port override the environment   ✓ built
+hardlylistening-server check               # config, app, data, DB read/write, music, disk, yt-dlp, ffmpeg, port   ✓ built
+hardlylistening-server version             # prints VERSION                                    ✓ built
+hardlylistening-server migrate             # explicit upgrade path                             — not built
+hardlylistening-server backup <path>       # SQLite online-backup API, consistent snapshot      — not built
 ```
 
-`check` is used by the installer and by `ExecStartPre`. Never put destructive work in `ExecStartPre`.
+Exit codes: `0` success (warnings included), `1` a failed check, `2` a usage error — an unknown
+command, or a malformed `HARDLYLISTENING_PORT`. No command means `run`, so the unit file needs no
+argument.
+
+`check` is used by the installer and by `ExecStartPre`. Never put destructive work in `ExecStartPre`,
+which is why `check` creates nothing, migrates nothing and opens the database read-only or inside a
+rolled-back transaction.
 
 **Backup boundary.** Required: the database, `/srv/hardlylistening/music/`, and `identity/`.
 Optional and rebuildable: `cache/`. Do not copy a live SQLite file by hand — `backup` uses the

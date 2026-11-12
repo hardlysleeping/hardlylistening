@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import config
 import db
 import paths
 from security import SECURITY, Denied
@@ -81,6 +82,11 @@ def boot() -> tuple[db.Store, Queue]:
         if STORE is None:
             paths.ensure()
             STORE = db.Store()
+            # `MUSIC_DIR` supplies the first root only: once the settings table holds a value
+            # the admin chose, it wins and the variable is inert (see config.seed_music_root).
+            if config.seed_music_root(STORE):
+                print(f"library root seeded from HARDLYLISTENING_MUSIC_DIR: {STORE.setting('root')}",
+                      flush=True)
             # Choices made by hand before the ranking kept a record still count.
             import ranking
             ranking.seed_from_jobs(STORE)
@@ -1658,11 +1664,21 @@ def shutdown(httpd: ThreadingHTTPServer) -> None:
         STORE.close()
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """Serve until a signal arrives.
+
+    `--host`/`--port` beat the environment, which beats today's defaults, so a unit file can
+    set both and a one-off run can still override either.
+    """
+    try:
+        default_host, default_port = config.host(), config.port()
+    except ValueError as exc:
+        print(f"config: {exc}", flush=True)
+        return 2
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8470)
-    parser.add_argument("--host", default="127.0.0.1")
-    args = parser.parse_args()
+    parser.add_argument("--port", type=int, default=default_port)
+    parser.add_argument("--host", default=default_host)
+    args = parser.parse_args(argv)
 
     boot()      # fail fast if the DB or yt-dlp is broken
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
