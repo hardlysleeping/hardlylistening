@@ -107,6 +107,14 @@ def boot() -> tuple[db.Store, Queue]:
             # again. Standing job, never deletes or moves.
             from library import reconcile
             reconcile.start(STORE)
+            # Core publishes domain events (a member joining or renaming); Social subscribes
+            # Activity to them here, so `security.py` never reaches into the Feed. A server
+            # running without Social still boots — those events simply go nowhere (ARCH-007).
+            try:
+                from social import service as social_service
+                social_service.subscribe_events()
+            except Exception:
+                pass
     assert STORE and QUEUE
     return STORE, QUEUE
 

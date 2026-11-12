@@ -179,11 +179,11 @@ class Security:
         with store.lock:
             store.conn.execute('UPDATE members SET display_name=?,profile_icon=? WHERE id=?', (name, icon, member['id']))
             store.conn.commit()
-        # A rename is feed-worthy, but only when the name actually changed.
+        # A rename is feed-worthy, but only when the name actually changed. Core says what
+        # happened; Social subscribes to it and writes the Feed row (no Core → Social edge).
         if (member.get('display_name') or '').strip() != name:
-            import activity
-            activity.record(store, activity.KIND_NAME, member_id=member['id'],
-                            detail=name)
+            import events
+            events.publish(store, events.MEMBER_RENAMED, member_id=member['id'], detail=name)
         return {'display_name': name, 'profile_icon': icon}
 
     def member(self, store, user):
@@ -262,11 +262,8 @@ class Security:
         # Somebody new just chose their name: that is the "joined" event. Written
         # after the transaction commits, so the feed can never roll one back.
         if joined:
-            try:
-                import activity
-                activity.record(store, activity.KIND_JOIN, member_id=r[0], detail=joined)
-            except Exception:
-                pass
+            import events
+            events.publish(store, events.MEMBER_JOINED, member_id=r[0], detail=joined)
         return sid
 
     # -- sessions ----------------------------------------------------------
@@ -535,11 +532,8 @@ class Security:
             except Exception:
                 store.conn.rollback()
                 raise
-        try:
-            import activity
-            activity.record(store, activity.KIND_JOIN, member_id=member_id, detail=name)
-        except Exception:
-            pass
+        import events
+        events.publish(store, events.MEMBER_JOINED, member_id=member_id, detail=name)
         return sid
 
     def revoke(self, store, uid):

@@ -24,6 +24,28 @@ from social import discussion as _discussion
 
 # -- the Activity log -----------------------------------------------------------------------------
 
+def subscribe_events() -> None:
+    """Attach Activity to the Core events that belong in the Feed.
+
+    Called once by the composition root. Core publishes `member.joined` and `member.renamed`
+    (`events.py`) and never learns what the Feed does with them; the mapping from Core's
+    vocabulary to Activity's kinds lives here.
+    """
+    import events as _events
+    _events.subscribe(_events.MEMBER_JOINED, _record_join)
+    _events.subscribe(_events.MEMBER_RENAMED, _record_name)
+
+
+def _record_join(store, fields) -> None:
+    _activity.record(store, _activity.KIND_JOIN, member_id=fields.get('member_id', ''),
+                     detail=fields.get('detail', ''))
+
+
+def _record_name(store, fields) -> None:
+    _activity.record(store, _activity.KIND_NAME, member_id=fields.get('member_id', ''),
+                     detail=fields.get('detail', ''))
+
+
 def record(store, kind: str, member_id: str = "", track_id: int = 0, playlist_id: int = 0,
            detail: str = "", commit: bool = True) -> None:
     """Append one event. Silent by contract: the feed must never break a write path."""

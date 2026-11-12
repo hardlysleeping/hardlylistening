@@ -187,9 +187,13 @@ route is the only thing that fails. One honest gap is pinned there too: `do_GET`
 so a route that raises drops its connection instead of answering 5xx — the process survives, but
 the client sees a reset.
 
-**Still open, and not a route problem:** `security.py` still calls `activity.record` on join, rename
-and session events (the Core → Social row below). Delegating routes does not touch it; the fix is
-an event the composition root subscribes to, which is its own change.
+**The last Core → Social call is gone.** `security.py` used to call `activity.record` on join and
+rename, which put the Feed inside the sign-in path. Core now publishes `events.MEMBER_JOINED` /
+`events.MEMBER_RENAMED` (`events.py`); `social.service.subscribe_events()` attaches Activity to them
+from the composition root (`server.boot()`), and the mapping from Core's vocabulary to Activity's
+kinds lives in Social. Publishing never raises and needs no subscribers, so a server without Social
+still boots and still lets people in — the Feed rows simply do not happen. `tests/test_events.py`
+pins both halves, and `security.py` naming `activity` at all fails the suite.
 
 ---
 
@@ -197,7 +201,7 @@ an event the composition root subscribes to, which is its own change.
 
 | edge | where | why it is wrong | fix |
 | --- | --- | --- | --- |
-| Core → Social | `security.py` calls `activity.record` on session, join and member events | Core must not know Social exists; a Social bug would break sign-in | Core emits a domain event; the composition root subscribes Activity to it. **Still open after ARCH-005/006** — it is not a route, so delegating routes could not close it |
+| ~~Core → Social~~ | closed: `security.py` publishes `events.MEMBER_JOINED` / `MEMBER_RENAMED`; `social.service.subscribe_events()` turns them into Activity rows at boot | Core must not know Social exists; a Social bug must not break sign-in | done — `events.py` + `tests/test_events.py` |
 | Library → Social | `preferences.py` uses `social.album_id` and `social.validate_target` | album identity is metadata, not a social concept | move both to a Core/Library metadata helper (ARCH-003) |
 | Library → Adapter | `shares.py` imports `subsonic.BLANK_PNG` | a domain reaching into the protocol adapter for a constant | move the constant to a shared asset module (SUB-010) |
 | Library → Adapter | `listening.py` contains `rest()`/`envelope()` and imports `subsonic` | the adapter lives in a Library file | SUB-010/011 took the queries out of it; the remaining step is moving the dispatch itself into `subsonic.py` |
