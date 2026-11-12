@@ -63,20 +63,14 @@
 <!-- One persistent app menu: sticky at the top on desktop, a fixed bottom bar on phones and in the installed PWA. -->
 <nav class="tabs" id="appnav" aria-label="Main">
   <!-- The five destinations share one centred group. The secondary pages live behind
-       More on every tab; on the Library itself they also stay right-aligned in the row. -->
+       More on every tab, so the row itself carries nothing else. -->
   <div class="navmain">
     <button class="tab on" data-view="queue">Queue</button>
     <button class="tab" data-view="feed">Feed <span id="feedcount"></span></button>
     <button class="tab" data-view="library" data-scope="shared" title="Repository">Repo</button>
     <button class="tab" data-view="library" data-scope="mine">Library</button>
     <button class="tab" id="btn-more" aria-expanded="false" aria-controls="navpanel"
-      aria-haspopup="menu" aria-label="More" title="More">More</button>
-  </div>
-  <div class="navquick" id="navquick" hidden>
-    <a href="/party" class="tab" style="text-decoration:none">Party</a>
-    <a href="/dj" class="tab" style="text-decoration:none">Mixer</a>
-    <a href="/swipe" class="tab" style="text-decoration:none">Swipe</a>
-    <button class="tab" data-export title="Your saved songs as a ZIP with an M3U8 inside">Export library (.zip)</button>
+      aria-haspopup="menu" aria-label="More" title="More">...</button>
   </div>
   <div class="navpanel" id="navpanel" role="menu" aria-label="More pages">
     <button class="tab" id="btn-settings" data-admin-only role="menuitem">Settings</button>
@@ -191,6 +185,7 @@
   </dialog>
 
   <section id="view-library" hidden>
+    <div id="libcooldown" class="libnote" role="status" hidden>Cooling down — the server asked for a pause.</div>
     <div class="libtop">
       <h2 id="libtitle">Repository</h2>
       <span class="libcount" id="libcount"></span>
@@ -359,9 +354,7 @@
       <button class="iconbtn" id="plnext" title="Next" aria-label="Next"></button>
       <button class="iconbtn small" id="plmute" title="Mute" aria-label="Mute" aria-pressed="false"></button>
     </div>
-    <div class="pend">
-      <button class="iconbtn" id="plfull" title="Fullscreen player" aria-label="Fullscreen player">⤢</button>
-    </div>
+    <div class="pend"></div>
 
   </div>
   <span class="ptime" id="pltime">0:00</span>
@@ -510,6 +503,28 @@
     </div>
   </form>
 </dialog>
+<dialog id="dlg-fix">
+  <form method="dialog">
+    <div class="dlg-head"><b>Wrong song?</b><button value="cancel">Close</button></div>
+  </form>
+  <div class="dlg-body">
+    <p class="fixnow" id="fix-now"></p>
+    <div class="field fixrow">
+      <input id="fix-query" type="search" aria-label="Search words for the right version">
+      <button id="fix-search" type="button" class="primary">Search</button>
+    </div>
+    <p class="hint" id="fix-status" role="status" aria-live="polite"></p>
+    <div id="fix-results"></div>
+    <details class="fixpaste">
+      <summary>Paste a link instead</summary>
+      <div class="field fixrow">
+        <input id="fix-url" type="url" placeholder="https://…" aria-label="Source link">
+        <button id="fix-use-url" type="button" class="chip">Use link</button>
+      </div>
+    </details>
+    <div id="fix-restore"></div>
+  </div>
+</dialog>
 <dialog id="dlg-export-confirm" class="smallconfirm">
   <form method="dialog">
     <h2>Export library?</h2>
@@ -586,6 +601,12 @@
   <input id="account-confirm" type="password" autocomplete="new-password" minlength="10">
   <button type="button" id="account-save">Change password</button>
   <p id="account-status" role="status" class="hint"></p>
+  <div id="account-google">
+    <label>Google</label>
+    <p id="account-google-state" class="hint">Not connected.</p>
+    <button type="button" id="account-google-connect">Connect Google</button>
+    <button type="button" id="account-google-disconnect" hidden>Disconnect Google</button>
+  </div>
   <div id="account-providers" hidden>
     <label>Connected accounts</label>
     <p id="account-provider-list" class="hint"></p>
@@ -627,6 +648,7 @@
       <div class="field">
         <label>Audio format</label>
         <select id="s-format">
+          <option value="best">source (no re-encoding)</option>
           <option value="mp3">mp3</option><option value="m4a">m4a</option>
           <option value="opus">opus</option><option value="flac">flac</option>
           <option value="wav">wav</option>
@@ -674,6 +696,11 @@
         <select id="s-thumb"><option value="1">yes</option><option value="0">no</option></select>
       </div>
       <div class="field">
+        <label>Deleted songs</label>
+        <button type="button" onclick="openDeleted()">Show deleted songs</button>
+        <span class="hint">A song deleted from its menu is kept here without its audio, so it will not download itself again — restore it, or let it fetch a fresh copy.</span>
+      </div>
+      <div class="field">
         <label>People</label>
         <div class="memlist" id="memberlist"><div class="hint">Loading…</div></div>
         <p>Signup links are single use and expire after a week. People choose their own name, icon and password when they join.</p>
@@ -684,6 +711,14 @@
     </div>
     <div class="dlg-foot"><button class="primary" id="btn-save-settings" value="save">Save</button></div>
   </form>
+</dialog>
+
+<dialog id="dlg-deleted">
+  <div class="dlg-head"><b>Deleted songs</b><button type="button" onclick="document.getElementById('dlg-deleted').close()">Close</button></div>
+  <div class="dlg-body">
+    <div class="hint">Deleting keeps the song’s identity so a playlist refresh cannot download it again. Restore puts it back in its playlists; a song with no audio left is queued to download again.</div>
+    <div class="memlist" id="deleted-list"><div class="hint">Loading…</div></div>
+  </div>
 </dialog>
 
 <script>
@@ -705,7 +740,12 @@ async function api(path, body, options){
   const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
                               body: JSON.stringify(body || {}), ...(options || {})});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  if (!r.ok){
+    const error = new Error(j.error || `HTTP ${r.status}`);
+    error.status = r.status;
+    error.retryAfter = Number(j.retry_after || r.headers.get('Retry-After') || 0);
+    throw error;
+  }
   return j;
 }
 
@@ -872,14 +912,17 @@ async function runSongSearch(){
   button.disabled = true;
   try {
     const response = await fetch("/api/search?q=" + encodeURIComponent(query), {cache: "no-store"});
+    const data = await response.json().catch(() => ({}));
     if (response.status === 401){
-      // Artwork and other side requests share this transport; a single 401 there used to
-      // throw the whole page to sign-in mid-action. Only leave if the session is really gone.
+      // Side requests do not establish that the page session has expired.
       let reallyOut = false;
-      try { reallyOut = (await fetch('/api/state', {cache:'no-store'})).status === 401; } catch (_) {}
+      try {
+        const stateResponse = await fetch('/api/state', {cache:'no-store'});
+        const state = await stateResponse.json().catch(() => ({}));
+        reallyOut = stateResponse.status === 401 && /sign in required/i.test(state.error || '');
+      } catch (_) {}
       if (reallyOut){ location.replace('/login'); return; }
     }
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "Search failed");
     if (token !== songSearchSeq) return;
     songHits = data.results || [];
@@ -1308,11 +1351,15 @@ function refresh(){
 async function refreshSnapshot(){
   let st;
   try {
-    const response = await fetch("/api/state");
-    if (response.status === 401){ location.replace("/login"); return; }
-    st = await response.json();
+    const response = await fetch("/api/state", {cache: 'no-store'});
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 401 && /sign in required/i.test(payload.error || '')){
+      location.replace("/login"); return false;
+    }
+    if (!response.ok || !payload.stats) return false;
+    st = payload;
   }
-  catch(e){ return; }
+  catch(e){ return false; }
   last = st;
   paintViewAsUser();
   const viewer = st.viewer || {};
@@ -1354,12 +1401,123 @@ async function refreshSnapshot(){
   renderReview();
   ensureDecisionHistory();
   renderLogs(st.logs);
+  return true;
 }
 
 // -- actions --
 function toggleOpen(id){ open.has(id) ? open.delete(id) : open.add(id); refresh(); }
 function editSource(id){ editing.add(id); refresh(); }
 async function pinSource(id, url){ editing.delete(id); await api(`/api/track/${id}/source`, {url}); refresh(); }
+// ---- wrong song? one dialog to re-search and change a track's source -----------------
+// Every change goes through the existing source route: a downloaded track stages a new
+// file, verifies it, then switches once — the old audio is kept and can be restored.
+let fixTrackId = null, fixBusy = false, fixHits = [], fixSeq = 0;
+const fixRow = id => (currentRows || []).find(t => t.id === id) ||
+                     (libAll || []).find(t => t.id === id) || {};
+function fixStatus(text, bad){
+  const node = $("#fix-status");
+  node.textContent = text || "";
+  node.style.color = bad ? "var(--warn)" : "";
+}
+function openFixSource(id){
+  const row = fixRow(id);
+  if (!row || !row.id) return;
+  fixTrackId = id; fixBusy = false; fixHits = [];
+  $("#fix-now").textContent = [row.title || "Untitled", row.artist_name || "",
+    row.duration ? fmtClock(row.duration) : ""].filter(Boolean).join(" · ");
+  $("#fix-query").value = [row.artist_name, row.title].filter(Boolean).join(" ");
+  $("#fix-results").innerHTML = "";
+  $("#fix-restore").innerHTML = "";
+  $("#fix-url").value = "";
+  fixStatus("");
+  const dialog = $("#dlg-fix");
+  if (!dialog.open) dialog.showModal();
+  searchFixSource();
+}
+async function searchFixSource(){
+  if (!fixTrackId || fixBusy) return;
+  const query = $("#fix-query").value.trim();
+  if (!query){ fixStatus("Type what the song is called.", true); return; }
+  fixBusy = true;
+  const button = $("#fix-search");
+  button.disabled = true;
+  fixStatus("Searching the sources…");
+  const token = ++fixSeq;
+  try {
+    const response = await fetch(`/api/track/${fixTrackId}/candidates?q=` + encodeURIComponent(query),
+      {cache: "no-store"});
+    const data = await response.json().catch(() => ({}));
+    if (token !== fixSeq) return;
+    if (!response.ok) throw new Error(data.error || "Search failed");
+    fixHits = data.results || [];
+    // The count first: paintFixResults() owns the status line when a replacement is already
+    // in flight, and it must not be overwritten by the count afterwards.
+    fixStatus(fixHits.length ? `${fixHits.length} version${fixHits.length === 1 ? "" : "s"} — check duration, then Use this.`
+      : "Nothing found for that. Try fewer words, or paste a link.");
+    paintFixResults(data);
+  } catch (e){
+    if (token === fixSeq) fixStatus(e.message || "Could not search", true);
+  } finally {
+    if (token === fixSeq){ fixBusy = false; button.disabled = false; }
+  }
+}
+function paintFixResults(data){
+  const host = $("#fix-results");
+  if (!fixHits.length){
+    host.innerHTML = '<p class="hint">No version cleared the search. Fewer words usually finds more.</p>';
+  } else {
+    host.innerHTML = fixHits.map((hit, i) => `<div class="fixhit">
+      <div class="fixhit-main"><b>${esc(hit.title || "Untitled")}</b>
+        <small>${esc(hit.artist || "")}${hit.duration ? " · " + fmtClock(hit.duration) : ""} · ${esc(hit.provider || "")}${hit.match ? " · " + Math.round(hit.match * 100) + "% fit" : ""}</small></div>
+      <button type="button" class="chip small" data-hit="${i}">Use this</button></div>`).join("");
+    for (const button of host.querySelectorAll("button[data-hit]"))
+      button.onclick = () => useFixSource(fixHits[+button.dataset.hit]?.url, button);
+  }
+  // The retained previous file is the undo, and it only exists for a completed swap.
+  const replacement = data.replacement;
+  const host2 = $("#fix-restore");
+  host2.innerHTML = "";
+  if (replacement && replacement.status === "completed"){
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "chip small"; button.textContent = "Restore the previous file";
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        await api("/api/decisions/reverse", {id: -replacement.id});
+        showToast("Previous file restored");
+        host2.innerHTML = "";
+        refresh();
+      } catch (e){ button.disabled = false; fixStatus(e.message, true); }
+    };
+    host2.append(button);
+  } else if (replacement && /^(queued|downloading)$/.test(replacement.status)){
+    fixStatus("A replacement is already downloading — the current file keeps playing until it verifies.");
+  }
+}
+async function useFixSource(url, button){
+  url = (url || $("#fix-url").value || "").trim();
+  if (!/^https?:\/\//i.test(url)){ fixStatus("That needs to be an http(s) link.", true); return; }
+  if (!confirm("Download this version and switch to it? The current file keeps playing until the new one verifies, and it is kept so you can undo.")) return;
+  if (button) button.disabled = true;
+  try {
+    const result = await api(`/api/track/${fixTrackId}/source`, {url});
+    fixStatus(result.replacement === "queued"
+      ? "Downloading the replacement. The current file stays playable until it verifies."
+      : "Source changed; back in the queue.");
+    showToast("Finding the chosen version");
+    refresh();
+  } catch (e){
+    if (button) button.disabled = false;
+    fixStatus(e.message, true);
+  }
+}
+$("#fix-search")?.addEventListener("click", () => searchFixSource());
+$("#fix-query")?.addEventListener("keydown", e => {
+  if (e.key === "Enter"){ e.preventDefault(); searchFixSource(); }
+});
+$("#fix-use-url")?.addEventListener("click", () => useFixSource(null, $("#fix-use-url")));
+$("#dlg-fix")?.addEventListener("close", () => { fixTrackId = null; fixHits = []; });
+
 async function retryTrack(id){
   if (busy.has(id)) return;
   busy.add(id); refresh();
@@ -1407,7 +1565,7 @@ function fillSettings(st){
   $("#s-ai-base").value = s.ai_base_url || "https://openrouter.ai/api/v1";
   $("#s-ai-status").textContent = st.stats.ai_key_configured ? "Server credential configured" : "Server credential missing — automatic Apple matches will need review";
   $("#s-root").value = s.root || "";
-  $("#s-format").value = s.audio_format || "mp3";
+  $("#s-format").value = s.audio_format || "best";
   $("#s-pacing").value = Number(s.pacing || 0);
   $("#s-attempts").value = Number(s.max_attempts || 3);
   $("#s-cooldown").value = Math.round(Number(s.cooldown || 900) / 60);
@@ -1615,6 +1773,57 @@ $("#btn-save-settings").onclick = async (e) => {
   refresh();
 };
 
+// -- Deleted songs -------------------------------------------------------------
+// Deleting a song is a tombstone, not a lost row: Settings lists them so the
+// decision is reversible. Opening the list is a read; nothing here changes until
+// Restore is pressed.
+function openDeleted(){
+  const dialog = document.getElementById("dlg-deleted");
+  if (!dialog.open) dialog.showModal();
+  loadDeleted();
+}
+async function loadDeleted(){
+  const host = document.getElementById("deleted-list");
+  host.innerHTML = '<div class="hint">Loading…</div>';
+  try {
+    const response = await fetch("/api/deleted", {cache: "no-store"});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const rows = data.deleted || [];
+    if (!rows.length){
+      host.innerHTML = '<div class="hint">Nothing deleted. Songs you delete from their menu wait here.</div>';
+      return;
+    }
+    host.replaceChildren(...rows.map(row => {
+      const line = document.createElement("div"); line.className = "memrow";
+      const text = document.createElement("div"); text.style.minWidth = "0";
+      const title = document.createElement("b"); title.textContent = row.title || "(untitled)";
+      const meta = document.createElement("small"); meta.className = "hint";
+      meta.style.display = "block";
+      meta.textContent = [
+        row.artist, row.album,
+        row.has_file ? "audio still on disk" : "audio deleted",
+        row.playlists ? `${row.playlists} playlist${row.playlists === 1 ? "" : "s"}` : "",
+        row.deleted ? `deleted ${new Date(row.deleted * 1000).toLocaleDateString()}` : "",
+      ].filter(Boolean).join(" · ");
+      text.append(title, meta);
+      const acts = document.createElement("div"); acts.className = "memacts";
+      const button = document.createElement("button"); button.type = "button"; button.textContent = "Restore";
+      button.onclick = async e => {
+        e.preventDefault(); button.disabled = true;
+        try {
+          const out = await api(`/api/track/${row.id}/restore`, {});
+          if (out.error) throw new Error(out.error);
+          showToast(out.queued ? "Restored — downloading again" : "Restored");
+          await loadDeleted(); loadLibrary(); refresh();
+        } catch (err) { showToast(err.message); button.disabled = false; }
+      };
+      acts.append(button); line.append(text, acts);
+      return line;
+    }));
+  } catch (err) { host.textContent = err.message; }
+}
+
 $("#btn-add").onclick = addUrls;
 $("#url").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addUrls(); }
@@ -1657,7 +1866,15 @@ function fillAccount(a){
   // identifier cannot be changed by accident from here.
   $('#account-emailnew').hidden = a.has_password;
   $('#account-emailnew-label').hidden = a.has_password;
-  const providers = [a.google ? "Google" : "", a.apple ? "Apple" : ""].filter(Boolean);
+  // Google is a real control here; Apple stays a read-only label until it exists.
+  const google = !!a.google;
+  $('#account-google').hidden = !google && !a.google_available;
+  $('#account-google-state').textContent = google
+    ? (a.auth_method === "google" ? "Connected — this browser signed in with it." : "Connected.")
+    : "Not connected. Connecting lets you sign in with Google on any device.";
+  $('#account-google-connect').hidden = google;
+  $('#account-google-disconnect').hidden = !google;
+  const providers = [a.apple ? "Apple" : ""].filter(Boolean);
   $('#account-providers').hidden = !providers.length;
   $('#account-provider-list').textContent = providers.join(" · ");
   $('#account-status').textContent = "";
@@ -1707,6 +1924,31 @@ async function revokeInvite(){
   } catch(e){ $('#invite-state').textContent = e.message; }
 }
 $('#account-save').onclick = changeAccountPassword;
+// The account has to prove it is the account before a new way in is attached, so
+// connecting leaves the page for Google and comes back to the profile.
+$('#account-google-connect').onclick = () => { location.href = "/auth/google"; };
+$('#account-google-disconnect').onclick = async () => {
+  const status = $('#account-status');
+  status.textContent = "";
+  try {
+    await api('/api/account/google/unlink', {});
+    const p = await (await fetch('/api/profile')).json();
+    if (!p.error) fillAccount(p);
+    status.textContent = "Google disconnected. Your login link still works.";
+  } catch(e){ status.textContent = e.message; }
+};
+// The round trip lands back here with a short outcome; say it once, then drop it
+// from the address so a reload does not repeat the message.
+(function(){
+  const params = new URLSearchParams(location.search);
+  const reason = params.get("google");
+  if (!reason) return;
+  const text = {linked: "Google connected.", conflict: "That Google account is already linked to another member."}[reason];
+  if (text) showToast(text);
+  params.delete("google");
+  const q = params.toString();
+  history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash);
+})();
 $('#invite-make').onclick = makeInvite;
 $('#invite-revoke').onclick = revokeInvite;
 $('#invite-copy').onclick = () => navigator.clipboard.writeText($('#invite-url').value)
@@ -2188,9 +2430,26 @@ function loadLibrary(){
   loadLibrary.pending = loadLibrarySnapshot().finally(() => { loadLibrary.pending = null; });
   return loadLibrary.pending;
 }
+// True while a drag-selected run of text lives inside the library pane. The poll must not
+// repaint it: an innerHTML swap takes the anchor and the focus of the selection with it.
+function libraryTextSelected(){
+  try {
+    const selection = window.getSelection && window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return false;
+    const host = $("#liblist") || $("#view-library");
+    return !!host && host.contains(selection.getRangeAt(0).commonAncestorContainer);
+  } catch (_) { return false; }
+}
 async function loadLibrarySnapshot(){
   try {
-    const data = await (await fetch("/api/library")).json();
+    const response = await fetch("/api/library", {cache: 'no-store'});
+    if (response.status === 429){
+      const note = $('#libcooldown');
+      if (note) note.hidden = false;
+      return false;
+    }
+    if (!response.ok) return false;
+    const data = await response.json();
     lib = data.tracks || [];
     libAll = data.all_tracks || lib;
     artistArt = data.artist_art || {};
@@ -2199,12 +2458,19 @@ async function loadLibrarySnapshot(){
     $("#libplaylist").innerHTML = '<option value="">All library</option>' +
       libPlaylists.map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join('');
     $("#libplaylist").value = selected;
+    const note = $('#libcooldown');
+    if (note) note.hidden = true;
     await loadListeningSaves();
     await loadSocialIndex();
-  } catch (e) { lib = []; }
-  renderLibrary();
+  } catch (_) { return false; }
+  // This runs on a three-second poll. Replacing the list under a selection being dragged
+  // out of it destroys the selection mid-gesture, which is what made a title on an album
+  // or song page impossible to select. The data above is still adopted; the paint waits
+  // for the next poll, once nothing is selected — clicking anywhere collapses it.
+  if (!libraryTextSelected()) renderLibrary();
   await applyDeepLink();
   restoreNowState().catch(() => {});
+  return true;
 }
 
 // ---- where you left off -----------------------------------------------------
@@ -2398,16 +2664,29 @@ function hue(text){
 function artHQ(url){
   return String(url || "").replace(/-large(\.[a-z]{3,4})(\?|$)/i, "-t500x500$1$2");
 }
-function artImg(url, cls, lazy){
+function artImg(url, cls, lazy, key){
   const hq = artHQ(url);
-  const fallback = hq === url ? "" : ` data-fallback="${esc(url)}" onerror="this.onerror=null;this.src=this.dataset.fallback"`;
+  const fallback = hq === url ? "" : ` data-fallback="${esc(url)}"`;
   // draggable="false": a long press on the artwork used to start the browser's native
   // image drag, whose ghost is painted above the page and covered the song menu.
-  return `<img${cls ? ` class="${cls}"` : ""} src="${esc(hq)}" alt="" draggable="false"${lazy ? ' loading="lazy"' : ""}${fallback}>`;
+  // `data-artkey` is what the tile shows when the picture cannot be fetched at all.
+  return `<img${cls ? ` class="${cls}"` : ""} src="${esc(hq)}" alt="" draggable="false"${lazy ? ' loading="lazy"' : ""}${fallback} data-artkey="${esc(key || "")}" onerror="artError(this)">`;
+}
+// A cover that fails to load is not a cover: a provider can drop a thumbnail, and a row
+// the extractor already found no picture in has nothing to serve. Either way the tile must
+// read as a release without artwork (the gradient and initials artBox already draws) rather
+// than as a broken-image icon with a torn border.
+function artError(img){
+  if (img.dataset.fallback){ img.src = img.dataset.fallback; delete img.dataset.fallback; return; }
+  const box = img.parentElement;
+  const key = img.dataset.artkey || "";
+  if (!box){ img.remove(); return; }
+  box.style.background = `linear-gradient(140deg,hsl(${hue(key)} 42% 26%),hsl(${(hue(key)+48)%360} 38% 16%))`;
+  box.textContent = initials(key);
 }
 function artBox(art, key, cls){
   const style = art ? "" : `style="background:linear-gradient(140deg,hsl(${hue(key)} 42% 26%),hsl(${(hue(key)+48)%360} 38% 16%))"`;
-  return `<div class="${cls}" ${style}>${art ? artImg(art) : esc(initials(key))}</div>`;
+  return `<div class="${cls}" ${style}>${art ? artImg(art, "", false, key) : esc(initials(key))}</div>`;
 }
 // Liked and pinned, readable at a glance rather than only inside a menu: one small red
 // heart and one small blue pin, stacked when a thing is both. Empty when neither, so a
@@ -2566,15 +2845,18 @@ function showToast(message){
 function albumsOf(rows){
   const map = new Map();
   for (const t of rows){
-    // A single with no album is not an album: it stays in Songs (and under its
-    // artist) instead of inventing a "Singles" shelf or borrowing its playlist's name.
-    if (!(t.album || "").trim()) continue;
-    const key = t.album_id || `${t.artist_name || "Unknown artist"}\u0000${t.album}`;
+    // A song with no release still needs a page to open from its cover and its row; it just
+    // is not an album, so the Album tab filters these out (renderAlbums). One group per
+    // track: two nameless songs by one artist are not "an album" together.
+    const named = (t.album || "").trim();
+    const key = named
+      ? (t.album_id || `${t.artist_name || "Unknown artist"}\u0000${t.album}`)
+      : `single\u0000${t.id}`;
     let album = map.get(key);
     if (!album){
-      album = {key, title: t.album, artist: t.artist_name || "Unknown artist",
+      album = {key, title: named || t.title || "Single", artist: t.artist_name || "Unknown artist",
                tracks: [], art: "", added: 0, duration: 0,
-               albumId: t.album_id ? Number(t.album_id) : 0};
+               albumId: t.album_id ? Number(t.album_id) : 0, single: !named};
       map.set(key, album);
     }
     album.tracks.push(t);
@@ -2601,7 +2883,8 @@ function artistsOf(rows){
   }
   for (const album of albumsOf(rows)){
     const artist = map.get(album.artist);
-    if (artist){ artist.albums.push(album); artist.art = artist.art || album.art; }
+    // Singles stay out of the artist's album count: they are songs, not releases.
+    if (artist && !album.single){ artist.albums.push(album); artist.art = artist.art || album.art; }
   }
   for (const artist of map.values()){
     const key = String(artist.name || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -2745,8 +3028,9 @@ function emptyState(rows, q){
 }
 
 function renderAlbums(rows, q){
-  // A one-song "album" adds nothing to the album list — the song is still in Songs.
-  const albums = albumsOf(rows).filter(a => a.tracks.length > 1);
+  // A one-song "album" adds nothing to the album list — the song is still in Songs — and a
+  // nameless single is not an album at all. Both keep their own page (openAlbumForTrack).
+  const albums = albumsOf(rows).filter(a => !a.single && a.tracks.length > 1);
   if (!albums.length) return emptyState(rows, q);
   renderedAlbums = sortAlbums(albums);
   // Albums read as a grid or as rows, the same switch songs use.
@@ -2774,7 +3058,7 @@ function albumRow(album, index){
   const removed = libraryScope === 'mine' && albumRemoved(album);
   return `<div class="songrow${on ? " playing" : ""}${removed ? " removed" : ""}" data-album="${esc(album.key)}" tabindex="0" aria-label="${esc(album.title)} — album actions available with Shift+F10" onclick="openAlbumByKey('${esc(album.key)}')">
     <div class="idx${on ? " playing" : ""}">${on ? SVG.bars(11) : index + 1}</div>
-    <div class="thumb">${album.art ? artImg(album.art, "", true) : ""}</div>
+    <div class="thumb">${album.art ? artImg(album.art, "", true, album.title) : ""}</div>
     <div class="st"><span class="sttext"><b>${esc(album.title)}</b>${removed ? `<span class="removed-badge">Removed</span>` : ""}</span><div class="rowactions">${albumSaveControl(album)}</div></div>
     <div class="sartist">${esc(albumArtistLine(album))}</div>
     <div class="salbum">${count} song${count === 1 ? "" : "s"}${pending ? ` · ${pending} pending` : ""}</div>
@@ -3366,9 +3650,12 @@ function openAlbumForTrack(id){
   const rows = typeof libAll !== 'undefined' && libAll.length ? libAll : lib;
   const track = rows.find(t => t.id === id) || lib.find(t => t.id === id);
   if (!track) return;
+  // Every song has a page: its release when it has one, otherwise the single group
+  // albumsOf() gives it. The old "no album page" toast was the albumless case only.
   const album = albumsOf(lib.length ? lib : rows).find(a => a.tracks.some(t => t.id === id))
-             || albumsOf(rows).find(a => a.tracks.some(t => t.id === id));
-  if (!album){ showToast('That song has no album page.'); return; }
+             || albumsOf(rows).find(a => a.tracks.some(t => t.id === id))
+             || albumsOf(currentRows || []).find(a => a.tracks.some(t => t.id === id));
+  if (!album){ showToast('That song is not in this scope — switch Repository / Library'); return; }
   detail = {kind: 'album', key: album.key};
   renderLibrary();
   scrollTo({top: 0, behavior: 'instant'});
@@ -3392,12 +3679,12 @@ function songRow(track, index, card = false, opts = {}){
   return `<div class="songrow ${card ? 'songcard' : ''} ${on ? "playing" : ""} ${gone ? "gone" : ""} ${removed ? "removed" : ""} ${track.playable ? "" : "absent"}" data-id="${track.id}" tabindex="0" aria-label="${esc(track.title)}${on ? " — playing" : ""} — song actions available with Shift+F10">
     <div class="idx${on ? " playing" : ""}">${on ? SVG.bars(11) : index + 1}</div>
     ${card ? "" : statusMarks("track", track.id)}
-    <div class="thumb">${track.artwork ? artImg(track.artwork, "", true) : ""}${card ? `<button type="button" class="snext" title="Play next" aria-label="Play next" onclick="event.stopPropagation();queueSong(${track.id}, true)">${SVG.toNext(16)}</button>` : ""}${on && card ? `<span class="nowbars" aria-hidden="true">${SVG.bars(14)}</span>` : ""}</div>
+    <div class="thumb">${track.artwork ? artImg(track.artwork, "", true, track.album || track.title) : ""}${card ? `<button type="button" class="snext" title="Play next" aria-label="Play next" onclick="event.stopPropagation();queueSong(${track.id}, true)">${SVG.toNext(16)}</button>` : ""}${on && card ? `<span class="nowbars" aria-hidden="true">${SVG.bars(14)}</span>` : ""}</div>
     <div class="st"><span class="sttext"><b>${esc(track.title)}</b>${gone ? `<span class="gone-badge" title="Checked ${track.source_checked ? new Date(track.source_checked * 1000).toLocaleString() : "recently"} — the downloaded file still plays">${esc(gone)}</span>` : ""}${removed ? `<span class="removed-badge">Removed</span>` : ""}</span><div class="rowactions">${listeningSaveControl("track", track.id)}</div></div>
     <div class="sartist">${esc(track.artist_name || "—")}</div>
     <div class="listtags">${card ? "" : sourceTag(track)}</div>
     <div class="salbum">${card && setAlbum ? "" : esc(track.album || "")}</div>
-    ${voteRow("track", track.id)}
+    ${opts.quietVotes ? '<div class="votes"></div>' : voteRow("track", track.id)}
     <div class="sdur">${track.playable ? fmtClock(track.duration) : esc(track.status || "missing")}</div>
     <span class="send">
       ${track.playable ? `<a class="sdl" href="/api/track/${track.id}/download" download title="Download" onclick="event.stopPropagation()">↓</a>` : ""}
@@ -3476,7 +3763,7 @@ function renderDetail(rows){
   if (detail.kind === "artist"){
     const artist = artistsOf(rows).find(a => a.name === detail.key);
     if (!artist){ detail = null; return renderArtists(rows, ""); }
-    renderedAlbums = sortAlbums(artist.albums).filter(a => a.tracks.length > 1);
+    renderedAlbums = sortAlbums(artist.albums).filter(a => !a.single && a.tracks.length > 1);
     const artistTracks = artist.tracks;
     renderedArtistSongs = artistTracks;
     const songs = artistTracks.length;
@@ -3529,6 +3816,13 @@ function renderDetail(rows){
     <div class="detaillist tracklist">${songTable(tracks, "Nothing downloaded from this playlist yet.")}</div>`;
 }
 
+// A single has no album discussion target — the server validates a normalized artist+album
+// digest and a nameless release has none — so its talk and votes belong to the song itself,
+// the same thread its row opens. Nothing is removed from the page.
+function socialTarget(album){
+  return album.single && album.tracks[0] ? socialControl("track", album.tracks[0].id)
+                                         : socialControl("album", album.key);
+}
 function albumDetail(album){
   const duration = album.duration;
   const playable = album.tracks.filter(t => t.playable).length;
@@ -3543,7 +3837,7 @@ function albumDetail(album){
       <div style="position:relative;flex:0 0 auto">${artBox(album.art, album.title, "hart")}
         <div class="bubbles" data-bkey="${album.key}"></div></div>
       <div class="hmeta">
-        <div class="kicker">Album</div>
+        <div class="kicker">${album.single ? "Single" : "Album"}</div>
         <h3>${esc(album.title)}</h3>
         <div class="hsub">${who} · ${album.tracks.length} song${album.tracks.length === 1 ? "" : "s"}${duration ? ` · ${fmtLong(duration)}` : ""}${album.tracks.length - playable ? ` · <span style="color:#ffd9a1">${album.tracks.length - playable} not downloaded</span>` : ""}</div>
         <div class="hacts">
@@ -3555,12 +3849,11 @@ function albumDetail(album){
           ${downloadControl(singleDownloadUrl(album.tracks, "/api/library/download?ids=" + album.tracks.map(t => t.id).join(",")), playable > 0, singleDownloadLabel(album.tracks, "Download ZIP"))}
           ${album.albumId && adminUI() ? `<button class="ghost danger" id="delalbum-${album.albumId}"
              onclick="deleteAlbum(${album.albumId}, ${album.tracks.length}, this)">Delete album</button>` : ""}
-          ${socialControl("album", album.key)}
+          ${socialTarget(album)}
         </div>
-        ${voteRow("album", album.key)}
       </div>
     </div>
-    <div class="detaillist tracklist">${songTable(album.tracks, undefined, {grab: true, classes: "grabable"})}</div>`;
+    <div class="detaillist tracklist">${songTable(album.tracks, undefined, {grab: true, classes: "grabable", quietVotes: true})}</div>`;
 }
 
 // Grabbing a whole release is a queue operation the person should agree to; grabbing one
@@ -3623,6 +3916,21 @@ async function deletePlaylistFiles(pid, count, button){
   });
 }
 
+// One song off the shelf: the file goes, the row stays as a tombstone so the next
+// playlist refresh cannot quietly download it back. Settings › Deleted songs is
+// where the decision is reversible.
+async function deleteTrack(id, title){
+  if (!confirm(`Delete “${title || "this song"}” from the library?\n\nIts file is removed. Settings › Deleted songs can put it back.`)) return;
+  try {
+    const res = await api(`/api/track/${Number(id)}/delete`, {delete_file: true});
+    if (res.error) throw new Error(res.error);
+    showToast(res.removed_file ? `Deleted “${res.title || title || "song"}”`
+                               : `Removed “${res.title || title || "song"}” from the library`);
+    await loadLibrarySnapshot();
+    refresh();
+  } catch (e){ showToast(e.message); }
+}
+
 // ------------------------------------------------------------------ artist profile
 // One button per provider: most track artists have no catalog link, so the
 // subscription is sent by name and the server resolves that provider's page.
@@ -3630,6 +3938,10 @@ const FOLLOW_PROVIDERS = [
   {id: "apple", label: "Apple Music", icon: s => SVG.apple(s)},
   {id: "soundcloud", label: "SoundCloud", icon: s => SVG.cloud(s)},
 ];
+
+// How long a successful subscribe keeps the tick on the button before the page redraws
+// into the real "Unsubscribe" state — the same beat the save control uses for its check.
+const SUB_CONFIRM_MS = 1200;
 
 function subscriptionControl(profile, name){
   const watches = profile.watches || [];
@@ -3674,22 +3986,50 @@ function artistProfileBlock(profile){
 }
 
 async function subscribeArtist(name, button, provider){
-  const label = button ? button.textContent : "";
-  if (button){ button.disabled = true; button.textContent = "Subscribing…"; }
+  if (button && button.disabled) return;
+  const original = button ? button.innerHTML : "";
+  const providerLabel = provider === "apple" ? "Apple Music"
+    : provider === "soundcloud" ? "SoundCloud" : "the source";
+  if (button){
+    button.disabled = true;
+    button.classList.remove("subok");
+    button.textContent = "Subscribing…";
+  }
+  let res;
   try {
-    const res = await api("/api/subscriptions", provider ? {name, provider} : {name});
+    // The server resolves the artist's page before it can answer, so a slow provider must
+    // not leave the button saying "Subscribing…" for good.
+    res = await Promise.race([
+      api("/api/subscriptions", provider ? {name, provider} : {name}),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error(`${providerLabel} did not answer in 20 s — try again in a moment.`)),
+        20000)),
+    ]);
+  } catch (err) {
+    showToast(err.message || "Could not subscribe");
+    if (button){ button.disabled = false; button.innerHTML = original; }
+    return;
+  }
+  // Answer the press on the button itself: the list below takes a moment to redraw and a
+  // toast is easy to miss, so the tick stays put as the receipt.
+  if (button){
+    button.innerHTML = `${SVG.check(13)} Subscribed`;
+    button.classList.add("subok");
+    button.title = `Subscribed on ${providerLabel}`;
+  }
+  const listed = Number((res && res.listed) || 0);
+  showToast(listed
+    ? `Subscribed — ${listed} latest release${listed === 1 ? "" : "s"} listed`
+    : "Subscribed — their next upload appears here");
+  // Everything below only repaints; a failure there must not undo the confirmation. The
+  // tick holds for a beat first, so the receipt is seen before it becomes "Unsubscribe".
+  await new Promise(r => setTimeout(r, SUB_CONFIRM_MS));
+  try {
     artistProfiles.clear();
     await loadArtistProfile(name);
     renderLibrary();
     refresh();
-    const listed = Number(res.listed || 0);
-    showToast(listed
-      ? `Subscribed — ${listed} latest release${listed === 1 ? "" : "s"} listed`
-      : "Subscribed — their next upload appears here");
-  } catch (err) {
-    showToast(err.message || "Could not subscribe");
-    if (button){ button.disabled = false; button.textContent = label; }
-  }
+  } catch (_) {}
 }
 async function queueFeedItem(id){
   try {
@@ -3740,10 +4080,13 @@ function openAlbumAt(index){ const album = renderedAlbums[index]; if (album){ de
 // from every row so the cover works from Songs as well as from the album wall.
 function openTrackAlbum(track){
   if (!track) return;
-  const key = track.album_id || `${track.artist_name || "Unknown artist"}\u0000${track.album || "Singles"}`;
-  renderedAlbums = sortAlbums(albumsOf(libAll));
+  // Same key albumsOf() builds, so a single resolves instead of silently doing nothing.
+  const key = (track.album || "").trim()
+    ? (track.album_id || `${track.artist_name || "Unknown artist"}\u0000${track.album}`)
+    : `single\u0000${track.id}`;
+  renderedAlbums = sortAlbums(albumsOf(libAll && libAll.length ? libAll : lib));
   const at = renderedAlbums.findIndex(a => a.key === key);
-  if (at < 0) return;
+  if (at < 0) return openAlbumForTrack(track.id);
   openAlbumAt(at);
   setTimeout(() => focusSongRow(track.id), 60);
 }
@@ -3804,7 +4147,6 @@ let deepLinkDone = false;
 function showLibraryTab(){
   for (const tab of document.querySelectorAll(".tab[data-view]"))
     tab.classList.toggle("on", tab.dataset.view === "library" && tab.dataset.scope === libraryScope);
-  paintNavQuick();
   $("#view-queue").hidden = true;
   $("#view-feed").hidden = true;
   $("#view-library").hidden = false;
@@ -3864,7 +4206,13 @@ function warmArtwork(row){
 }
 function mediaArtwork(row){
   if (!row || !row.artwork) return [];
-  return [{src: new URL(artHQ(row.artwork), location.href).href}];
+  const src = new URL(artHQ(row.artwork), location.href).href;
+  // WebKit draws NO artwork entry that has no declared type — a width/size hint alone
+  // still leaves an empty square on the lock screen and in the car. Say what the bytes
+  // are, from the URL the artwork route actually served.
+  const ext = (src.match(/\.([a-z]{3,4})(?:\?|$)/i) || [, ""])[1].toLowerCase();
+  const type = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  return [{src, sizes: "512x512", type}];
 }
 // `tracks.album` holds only the release a song came out on, and 410 of 937 rows in a real
 // library have no release at all. Those rows name the set they were pulled from on the
@@ -3968,6 +4316,14 @@ playerAudio.addEventListener("play", republishMediaSession);
 // and costs one assignment. (Measured here; the head unit itself cannot be tested.)
 playerAudio.addEventListener("loadedmetadata", republishMediaSession);
 playerAudio.addEventListener("playing", republishMediaSession);
+// A skip detaches the old resource before the new one is attached, and WebKit answers that
+// with `emptied` — the same event it uses to drop the now-playing tag. Re-publishing on it
+// puts the tag back on the session the saloon is still holding, and `canplay` covers the
+// car that asks again once it has bytes. Both are one assignment, and both only fire while
+// a row is loaded.
+playerAudio.addEventListener("emptied", republishMediaSession);
+playerAudio.addEventListener("canplay", republishMediaSession);
+playerAudio.addEventListener("error", republishMediaSession);
 
 // Playback of the next queued song should not wait for the network. The audio
 // route is no-store (a Range stream for seeking), so the only way to start
@@ -4102,6 +4458,8 @@ function activateSongRow(event){
 let songRowTap = null;
 function touchSongRow(event){
   if (event.pointerType !== 'touch') return;
+  // A long press that started a text selection is a copy, not a tap.
+  if (window.getSelection && String(window.getSelection())) return;
   const row = event.target.closest('.songrow');
   if (!row || event.target.closest('button,a,details,input,textarea,select,label')) return;
   if (row.dataset.album) return;
@@ -4184,7 +4542,11 @@ function playFromLibrary(id){
   // sees the stream, and assigning it afterwards left the old song on the screen.
   warmArtwork(row);
   publishMediaSession(row);
-  playerAudio.play().catch(() => {});
+  // A skip that lands while the previous play() is still pending rejects it. Swallowing
+  // that left the session published as "playing" with no `playing` milestone to follow,
+  // so a head unit that latched nothing kept a blank block until a reload. Re-claim the
+  // tag on the failure too — the row is still the one loaded on the element.
+  playerAudio.play().catch(() => republishMediaSession());
   publishPlaybackState();
   paintTransport(wasPlaying);
   // The compact add/remove follows the track: without this it only painted when the
@@ -4542,7 +4904,8 @@ function hlSwipeBind(el, handler, { blockScroll = false, hold = false, allow = n
     if(start && start.axis === "y") event.preventDefault();
   }, {passive: false});
   el.addEventListener("pointerdown", event => {
-    // Touch and pen only: a mouse drag across the popup is a slip, not a gesture.
+    // Touch and pen only: a mouse drag across the popup is a slip, not a gesture. The two
+    // player surfaces bind their own pointer handlers below, and those take a mouse.
     const allowed = allow && event.target.closest && event.target.closest(allow);
     if(!event.isPrimary || event.button > 0 || event.pointerType === "mouse"
        || (hlSwipeBlocked(event.target) && !allowed)){ start = null; return; }
@@ -4935,7 +5298,6 @@ $("#qgrip").onclick = event => {
   event.stopPropagation();
   if (typeof togglePlaybackPanel === "function") togglePlaybackPanel();
 };
-$("#plfull").onclick = openFullPlayer;
 $("#plmeta").onclick = openFullPlayer;
 $("#pfqueue").onclick = event => {
   event.stopPropagation();
@@ -5109,11 +5471,9 @@ $("#pflike").onclick = toggleLike;
   if (!full) return;
   let startY = null, dy = 0, dragging = false, ignore = false;
   full.addEventListener("pointerdown", event => {
-    // Touch and pen only, the same rule the swipe bindings keep: a mouse drag across the
-    // pane is a slip, and it used to shrink and dismiss the player.
-    if (event.pointerType === "mouse" || !event.isPrimary || event.button > 0){
-      ignore = true; startY = null; return;
-    }
+    // Any primary pointer, mouse included: a desktop has no other way to put the pane away,
+    // and this was blocked for the mouse on the assumption that a drag across it was a slip.
+    if (!event.isPrimary || event.button > 0){ ignore = true; startY = null; return; }
     if (typeof fullPlayerOpen === "function" && !fullPlayerOpen()) { ignore = true; return; }
     ignore = !!event.target.closest("input,button,#pf-disc,.pf-queue-slot,#playback-panel,details,summary,a");
     startY = ignore ? null : event.clientY;
@@ -5181,9 +5541,9 @@ function retreatFullPull(){
   if (!bar) return;
   let startY = null, delta = 0, pulling = false, pointer = null;
   bar.addEventListener("pointerdown", event => {
-    // Touch and pen only: a mouse drag along the bar is a slip, not a pull. The bar's own
-    // buttons are how a desktop opens the player.
-    if (event.pointerType === "mouse" || !event.isPrimary || event.button > 0) return;
+    // Any primary pointer, mouse included: on a desktop this pull is the same gesture as on a
+    // phone. The 8 px travel threshold below is what keeps an ordinary click a click.
+    if (!event.isPrimary || event.button > 0) return;
     // A pull can start anywhere on the bar, including over a control: nothing is captured
     // on the press, so a tap still lands on its button. The pointer is only taken once the
     // finger has actually travelled, and from then on the release is ours, not the button's.
@@ -5252,14 +5612,26 @@ document.addEventListener("keydown", e => {
   closeFullPlayer();
 });
 
-// A song card's cover opens the album it came from, on a click or a tap, on both the
-// song wall and the table. Controls printed over the artwork keep their own action, and
-// the rest of the card keeps its compact/play behaviour. Capture, so the card's own
-// click handlers never fire for a tap that landed on the cover.
+// Copying a title must not also do whatever the click would have done. A click that
+// arrives while text is still selected ends a drag, so it is swallowed here before it can
+// reach a card, a row or the code that redraws the list (which would drop the selection).
 $("#liblist").addEventListener("click", event => {
-  const thumb = event.target.closest?.('.songrow .thumb');
-  if (!thumb || event.target.closest('button,a,details,input,textarea,select,label')) return;
-  const row = thumb.closest('.songrow');
+  if (!String(window.getSelection())) return;
+  // Immediate: the handlers below are capture listeners on this same node, which
+  // stopPropagation would not have stopped.
+  event.preventDefault(); event.stopImmediatePropagation();
+}, true);
+
+// A song card's cover opens the album it came from, on a click or a tap, on both the
+// song wall and the table. So does the title written under a card: in card view it was
+// the one part of the card a click did nothing with, while the same title in a list plays.
+// Controls printed over the artwork keep their own action, and the rest of the card keeps
+// its compact/play behaviour. Capture, so the card's own click handlers never fire for a
+// tap that landed on either.
+$("#liblist").addEventListener("click", event => {
+  const hit = event.target.closest?.('.songrow .thumb, .songgrid .songcard .st b');
+  if (!hit || event.target.closest('button,a,details,input,textarea,select,label')) return;
+  const row = hit.closest('.songrow');
   if (row.classList.contains('acard') || !row.dataset.id) return;
   const id = Number(row.dataset.id);
   const track = (currentRows || []).find(t => t.id === id) || (libAll || []).find(t => t.id === id);
@@ -6478,7 +6850,7 @@ function artistAlbumPage(album, tracks){
   const when = album.release_date ? ` · ${escapeHtml(album.release_date)}` : "";
   const rows = tracks.map(t => `
     <div class="songrow">
-      <div class="thumb">${album.artwork ? artImg(album.artwork, "", true) : ""}</div>
+      <div class="thumb">${album.artwork ? artImg(album.artwork, "", true, album.title) : ""}</div>
       <div class="st"><span class="sttext"><b>${escapeHtml(t.title)}</b></span></div>
       <div class="sartist">${escapeHtml(t.artist || artist)}</div>
       <div class="sdur">${t.duration ? fmtClock(t.duration) : ""}</div>
@@ -7117,14 +7489,6 @@ function positionMoreMenu(){
   panel.style.left = Math.max(8, Math.min(b.right - width, innerWidth - width - 8)) + "px";
   panel.style.top = (b.bottom + 6) + "px";
 }
-function paintNavQuick(){
-  const quick = $("#navquick");
-  if (!quick) return;
-  // Only a wide row has room for it next to the centred tabs (the CSS says the same at
-  // 1180 px); a phone never shows it at all.
-  const on = document.querySelector('.tab[data-view="library"][data-scope="mine"].on');
-  quick.hidden = !on || innerWidth < 1180;
-}
 $("#btn-more").onclick = (event) => {
   event.stopPropagation();
   const open = !$("#appnav").classList.contains("more-open");
@@ -7133,7 +7497,6 @@ $("#btn-more").onclick = (event) => {
   if (open) positionMoreMenu();
 };
 window.addEventListener("resize", () => {
-  paintNavQuick();
   if ($("#appnav").classList.contains("more-open")) positionMoreMenu();
 });
 document.addEventListener("click", (event) => {
@@ -7154,7 +7517,6 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => {
     closeMore();
     document.querySelectorAll(".tab[data-view]").forEach(t =>
       t.classList.toggle("on", t === tab));
-    paintNavQuick();
     $("#view-queue").hidden = view !== "queue";
     $("#view-feed").hidden = view !== "feed";
     $("#view-library").hidden = view !== "library";
@@ -7488,19 +7850,25 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
       const track = (currentRows || []).find(t => t.id === id) || (libAll || []).find(t => t.id === id) || {};
       const playable = !!track.playable;
       const saved = (listeningSaves?.tracks || []).includes(id);
-      // The queue actions lead; Discuss sits second to last, just above the save control,
-      // so the one entry that leaves the library is never the first thing under a tap.
-      if (options.tile){
-        entry("Play", () => playTrackNow(id), !playable);
-        entry("Download", () => download(`/api/track/${id}/download`), !playable);
-      }
+      // The queue actions lead and Download closes the menu, so the entry that takes the
+      // file away is never the first thing under a tap and never sits mid-list.
+      if (options.tile) entry("Play", () => playTrackNow(id), !playable);
       entry("Play next", () => queueSong(id, true), !playable);
       entry("Add to queue", () => queueSong(id), !playable);
-      entry("Boost to top of Feed (24h)", () => boostTrack(id));
       entry("Add to playlist…", () => openPlaylistEditor(id));
-      if (!options.tile) entry("Download", () => download(`/api/track/${id}/download`), !playable);
-      entry("Discuss", () => openDiscussion("track", id));
+      entry("Boost to top of Feed (24h)", () => boostTrack(id));
       entry(saved ? "Remove from library" : "Add to library", () => toggleListeningSave("track", id), !listeningSaves);
+      // A wrong file is fixed where the file is used: Repository/Library rows, cover tiles
+      // and the queue all reach the same dialog. Local imports have no download job, so
+      // there is no source to change for them.
+      entry("Wrong song? Change source…", () => openFixSource(id),
+        !playable || track.provider === "local" || (typeof isAdmin === "function" && !isAdmin()));
+      entry("Discuss", () => openDiscussion("track", id));
+      entry("Download", () => download(`/api/track/${id}/download`), !playable);
+      // Last, because it is the only entry that takes the audio away. The row is
+      // kept as a tombstone, so Settings can put it back.
+      if (typeof isAdmin === "function" && isAdmin())
+        entry("Delete from library", () => deleteTrack(id, track.title));
     } else if (kind === "album"){
       const albums = typeof renderedAlbums !== "undefined" ? renderedAlbums : [];
       const index = albums.findIndex(a => a.key === id);
@@ -7548,6 +7916,10 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     menu.querySelector('button:not(:disabled)')?.focus();
   };
   document.addEventListener('dragstart', e => {
+    // Selected text keeps its drag: cancelling that one clears the selection in Chrome,
+    // which made copying a title in a card impossible. An image or a bare card still
+    // must not be dragged away as a ghost.
+    if (String(window.getSelection())) return;
     if (e.target.closest?.('.songcard,.acard,.plcard,.covercell,#playback-item,img')) e.preventDefault();
   });
   document.addEventListener('contextmenu', e => {
@@ -7626,6 +7998,14 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     const first = span.querySelector(".mt1");
     b.replaceChildren(document.createTextNode(first ? first.textContent : span.textContent));
   };
+  // Is this title (or part of it) in the reader's selection? wrap()/unwrap() swap the <b>'s
+  // text nodes, and that invalidates any range anchored inside them without a
+  // selectionchange, which is why a copied title vanished a moment after the drag.
+  const selectedIn = b => {
+    const s = window.getSelection && window.getSelection();
+    return !!(s && !s.isCollapsed && s.rangeCount &&
+      b.contains(s.getRangeAt(0).commonAncestorContainer));
+  };
   const stop = b => {
     clearTimeout(timers.get(b));
     timers.delete(b);
@@ -7637,9 +8017,14 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
       span.classList.remove("rolling");
       span.style.transform = "";
     }
-    unwrap(b);
+    // Rewriting the text nodes under a live selection drops it, so a title being copied
+    // keeps its markup even when its marquee stops — the words are the same either way.
+    if (!selectedIn(b)) unwrap(b);
   };
   const play = b => {
+    // Same reason: wrapping replaces the text nodes, which is what silently wiped a
+    // selection about half a second after the drag that made it. Wait for the copy to end.
+    if (selectedIn(b)){ later(b, DELAY); return; }
     const span = wrap(b);
     if (!span || started.has(b) || !b.clientWidth) return;
     const first = span.querySelector(".mt1");
@@ -8109,11 +8494,19 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     // the canvas widens (890 px at the bar's widest gives 469), so a desktop wave stays as
     // fine as the phone's. 512 is a guard, not a design ceiling.
     const PHONE_W = 182;
-    const n = Math.max(12, Math.min(512, Math.round(n0 * w / PHONE_W)));
+    // ...but never more bars than leave real air between them. The ratio above (96 bars per
+    // 182 px) puts a bar and its gap in a 1.9 px step: a 1.5 px bar leaves 0.4 px of gap,
+    // which the canvas' 2x backing store blurs into one solid block once the browser
+    // upscales it to a 3x phone screen. Thin the count until a full CSS pixel of gap fits,
+    // then let the bar take the remainder — a visible gap always wins over one more bar.
+    const MIN_GAP = 1;                       // the tiny gap the wave always keeps
+    const MIN_STEP = 2.5;                    // bar + gap: keeps the 1.5 px bar, adds the air
+    let n = Math.max(12, Math.min(512, Math.round(n0 * w / PHONE_W)));
+    if (w / n < MIN_STEP) n = Math.max(12, Math.floor(w / MIN_STEP));
     const amp = barsFor(n);
     if (window.__wavedbg) console.log('AMP', JSON.stringify(Array.from(amp).slice(0,10).map(v=>+v.toFixed(3))), 'n', n);
     const step = w / n;
-    const bw = Math.max(1.5, step * 0.62);
+    const bw = Math.min(step * 0.62, Math.max(1, step - MIN_GAP));
     // The bars stand on the bar's bottom edge (the canvas is flush with it) and grow up
     // through the scrub's line, which sits 27 px up, so a full bar crosses the slider. The
     // 27 is the CSS geometry: `#plseek` bottom 19 + half of its 16 px height.
@@ -8129,7 +8522,10 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
       g.globalAlpha = 1;
       return;
     }
-    const barH = (i) => 1 + (amp[i] || 0) * (h - 2);
+    // Just over half the full-canvas height (0.5 x 1.15), still standing on the bar's bottom
+    // edge: the wave is a backdrop for the scrub, not a chart that fills the bar.
+    const WAVE_SCALE = 0.575;
+    const barH = (i) => 1 + (amp[i] || 0) * (h - 2) * WAVE_SCALE;
     g.globalAlpha = 0.55; g.fillStyle = '#4a4e58';   // dim bars behind the playhead
     for (let i = 0; i < n; i++){
       const bh = barH(i);

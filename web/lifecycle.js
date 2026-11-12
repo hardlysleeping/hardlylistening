@@ -36,14 +36,27 @@ function syncBubbleVisibility(){
   }
 }
 // A completion-driven timeout means slow requests never accumulate a backlog.
+function nextPollDelay(previous, healthy, base = 3000){
+  if (healthy) return base;
+  if (previous >= 12000) return 30000;
+  return Math.max(base, previous * 2);
+}
 let statePoll = 0, libraryPoll = 0, lifecycleGeneration = 0;
+let stateDelay = 1500, libraryDelay = 3000;
 async function pollState(generation){
-  try { await refresh(); } catch (_) { /* next foreground poll retries */ }
-  if (!document.hidden && generation === lifecycleGeneration) statePoll = setTimeout(() => pollState(generation),1500);
+  let healthy = false;
+  try { healthy = (await refresh()) === true; } catch (_) { /* next foreground poll retries */ }
+  stateDelay = nextPollDelay(stateDelay, healthy, 1500);
+  if (!document.hidden && generation === lifecycleGeneration) statePoll = setTimeout(() => pollState(generation), stateDelay);
 }
 async function pollLibrary(generation, initial = false){
-  try { if (initial || !document.querySelector('#view-library').hidden) await loadLibrary(); } catch (_) {}
-  if (!document.hidden && generation === lifecycleGeneration) libraryPoll = setTimeout(() => pollLibrary(generation),3000);
+  let healthy = true;
+  try {
+    if (initial || !document.querySelector('#view-library').hidden)
+      healthy = (await loadLibrary()) === true;
+  } catch (_) { healthy = false; }
+  libraryDelay = nextPollDelay(libraryDelay, healthy);
+  if (!document.hidden && generation === lifecycleGeneration) libraryPoll = setTimeout(() => pollLibrary(generation), libraryDelay);
 }
 function foregroundLifecycle(){
   clearTimeout(statePoll);clearTimeout(libraryPoll);

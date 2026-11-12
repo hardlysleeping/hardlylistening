@@ -11,7 +11,7 @@ nothing here can see another member's rows.
 from security import Denied
 
 # The union that defines "my library". Order matters for display, not for membership.
-SCOPE = '''SELECT DISTINCT t.* FROM tracks t WHERE t.id IN
+SCOPE = '''SELECT DISTINCT t.* FROM tracks t WHERE t.deleted=0 AND t.id IN
   (SELECT track_id FROM listening_tracks WHERE member_id=? UNION
    SELECT track_id FROM listening_playlist_tracks WHERE member_id=? UNION
    SELECT track_id FROM listening_folder_tracks WHERE member_id=? UNION

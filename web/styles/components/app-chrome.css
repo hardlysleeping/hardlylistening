@@ -87,13 +87,10 @@ header{position:relative;top:auto;z-index:26}
 .navpanel{display:none}
 
 /* Desktop: the five destinations are centred on the row and the secondary pages live in a
-   menu below More. On the Library page itself those pages also stay right-aligned in the
-   row (`#navquick`) — that is the one place they are always on screen. */
+   menu below More. The row carries no second copy of them at any width. */
 @media (min-width:761px) and (hover:hover){
   .tabs{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
   .tabs .navmain{display:flex;align-items:center;gap:4px;grid-column:2;justify-self:center}
-  #navquick{grid-column:3;justify-self:end;display:flex;align-items:center;gap:4px;min-width:0}
-  #navquick[hidden]{display:none!important}
   /* Fixed, not absolute: an absolutely-positioned grid child is laid out inside its grid
      area, and the menu must hang off the button wherever the row's columns land. */
   .tabs.more-open #navpanel{display:flex;flex-direction:column;gap:2px;position:fixed;
@@ -105,10 +102,6 @@ header{position:relative;top:auto;z-index:26}
   .tabs.more-open #btn-more{color:var(--text);background:var(--panel2);border-color:#3a3a48}
 }
 
-/* The right-hand cluster only fits next to the centred tabs on a wide row; below this the
-   same pages are one click away in the More menu. */
-@media (max-width:1179px){#navquick{display:none!important}}
-
 @media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
   .tabs{position:fixed;inset:auto 0 0 0;top:auto;left:0;right:0;width:auto;max-width:none;
     transform:none;margin:0;gap:2px;height:calc(var(--nav-h) + var(--safe-b));
@@ -117,7 +110,6 @@ header{position:relative;top:auto;z-index:26}
     background:#101014;backdrop-filter:none;box-shadow:none;z-index:80}
   .tabs .grow{display:none}
   .tabs .navmain{display:contents}
-  .tabs .navquick{display:none!important}
   /* Long labels shrink to fit their slot instead of clipping or pushing the bar. */
   .tabs .tab{flex:1 1 0;min-width:0;height:auto;min-height:0;margin:4px 0;padding:0 4px;
     border-radius:9px;font-size:11px;letter-spacing:-.2px;border-color:transparent;

@@ -139,7 +139,7 @@ class SearchApi(unittest.TestCase):
             self.store.conn.execute(
                 "INSERT INTO members(id,email,role,display_name) VALUES(?,?,?,?)",
                 ("member1", "", "member", "member1"))
-            self.store.conn.execute("INSERT INTO browser_sessions VALUES(?,?,?)",
+            self.store.conn.execute("INSERT INTO browser_sessions(digest,member_id,expires) VALUES(?,?,?)",
                                     (self.sec.digest("sid-1"), "member1", 4102444800))
             self.store.conn.commit()
         self.queue = mock.Mock()

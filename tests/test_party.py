@@ -60,7 +60,7 @@ class PartyHTTP(unittest.TestCase):
     def session(self, uid):
         sid=secrets.token_urlsafe(32)
         with self.store.lock:
-            self.store.conn.execute('INSERT INTO browser_sessions VALUES(?,?,?)',(self.sec.digest(sid),uid,time.time()+3600));self.store.conn.commit()
+            self.store.conn.execute('INSERT INTO browser_sessions(digest,member_id,expires) VALUES(?,?,?)',(self.sec.digest(sid),uid,time.time()+3600));self.store.conn.commit()
         return '__Host-hl_session='+sid
 
     def req(self,path,method='GET',body=None,cookie='',origin='https://music.example'):

@@ -62,7 +62,7 @@ One square button per song, per album card and per album row: `+` when the item 
 | --- | --- |
 | Button markup and states | `listeningSaveControl()`, `albumSaveControl()` in `web/index.html` |
 | Click routing | `saveControlClick()` → `toggleListeningSave()` / `toggleAlbumSave()` |
-| Styling | `.ghost.lsave` in `styles/components/base.css` (shared control) with per-surface geometry in `library-cards.css` / `library-row.css` |
+| Styling | `.ghost.lsave` in `styles/components/library-row.css` (the row is the base surface) with card-specific geometry in `library-cards.css` |
 | Player surfaces | `#pfsave` (fullscreen foot, 44 px, 12 px radius) and `#plsave` (compact bar, 34 px, 9 px radius), both painted by `paintPlayerSave()`; box, `.on` green and the red `.armed` border live in `styles/components/player.css` |
 | Removed-but-visible state | `.acard.removed`, `.songcard.removed`, `.songrow.removed`, `.covercell.removed` |
 | Album card layout | `.songcard` grid in `styles/components/library-cards.css`; album cards override it to `"art art" / "title album" / "artist artist" / "votes save"` so the song count sits on the title line, top-right, instead of sharing the artist line with the taller save button (the count's `justify-self:end` keeps it flush with the button's right edge in the equal-column tiers) |

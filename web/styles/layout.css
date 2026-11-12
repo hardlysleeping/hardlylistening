@@ -32,6 +32,18 @@ body{
   text-rendering:optimizeLegibility
 }
 
+/* A song's title, its artist and its album are text he may want to copy — a track name
+   searched elsewhere, an artist pasted into a message. The blanket ban above is there so a
+   drag across a card is still a tap, so it stays for the chrome and is lifted only for the
+   words themselves. A click that ends with a selection is treated as a selection, not a
+   play or a navigation (see the title handler in index.html). */
+#liblist .st b, #liblist .covername b, #liblist .fatitle, #liblist .fametas,
+#liblist .hero h3, #liblist .hero .kicker, #liblist .songtable th{
+  -webkit-user-select:text;
+  user-select:text;
+  -webkit-touch-callout:default
+}
+
 main{
   max-width:1120px;
   padding:24px

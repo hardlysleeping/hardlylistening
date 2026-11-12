@@ -205,3 +205,42 @@ dialog.smallconfirm .dlg-foot{display:flex;gap:8px;justify-content:flex-end;marg
 /* The toolbar "+" only creates: hide the existing-playlist picker in that mode. Editing
    an existing playlist starts from the playlist page's own Edit button. */
 #playlist-editor.create-only #playlist-choice-label{display:none}
+
+/* ---- Wrong song? (change a track's source) -------------------------------- */
+
+#dlg-fix{width:min(560px,94vw)}
+
+#dlg-fix .dlg-body{gap:10px}
+
+#dlg-fix .fixnow{margin:0;font-size:13px;overflow-wrap:anywhere}
+
+/* A search box and its button stay on one line; the input owns the free width. */
+#dlg-fix .fixrow{display:flex;gap:8px;align-items:center}
+
+#dlg-fix .fixrow input{flex:1 1 auto;min-width:0}
+
+#dlg-fix .fixrow button{flex:0 0 auto}
+
+/* The list scrolls inside the dialog rather than growing it past the viewport. */
+#fix-results{display:grid;gap:6px;max-height:min(46vh,340px);overflow:auto}
+
+#dlg-fix .fixhit{display:flex;gap:10px;align-items:center;justify-content:space-between;
+  background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+
+#dlg-fix .fixhit-main{display:grid;gap:2px;min-width:0}
+
+#dlg-fix .fixhit-main b{font-size:13px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#dlg-fix .fixhit-main small{font-size:11.5px;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#dlg-fix .fixhit button{flex:0 0 auto}
+
+#dlg-fix .fixpaste summary{cursor:pointer;font-size:12.5px;color:var(--dim)}
+
+#dlg-fix .fixpaste .fixrow{margin-top:8px}
+
+#fix-restore:empty{display:none}
+
+#fix-restore{margin-top:2px}

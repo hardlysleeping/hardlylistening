@@ -31,6 +31,10 @@
   .msg.err{color:var(--err)}
   .fine{margin-top:18px;color:var(--dim);font-size:11.5px}
   .sep{margin:20px 0 0;border-top:1px solid var(--line);padding-top:14px}
+  .altbtn{display:block;text-align:center;margin-top:16px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--text);border-radius:10px;padding:11px 12px;
+    font-weight:600;text-decoration:none}
+  .altbtn:hover{border-color:var(--accent)}
   html,body{touch-action:manipulation}
   @media (max-width:760px){html,body{touch-action:pan-x pan-y}}
   input,select,textarea{font-size:16px}
@@ -49,6 +53,9 @@
     <button type="submit" id="go">Sign in</button>
   </form>
   <div id="msg" class="msg" role="status" aria-live="polite"></div>
+  <div id="google-row" hidden>
+    <a id="google-go" class="altbtn" href="/auth/google">Continue with Google</a>
+  </div>
   <div class="sep">
     <h1>Have a personal login link?</h1>
     <p>Open it from the message that carried it — it signs you in and stays yours. There is no
@@ -59,12 +66,52 @@
 const msg = document.getElementById("msg");
 const go = document.getElementById("go");
 const form = document.getElementById("signin");
+let retryTimer = 0;
+function waitToRetry(seconds){
+  clearInterval(retryTimer);
+  let remaining = Math.max(1, Math.ceil(seconds || 60));
+  go.disabled = true;
+  const update = () => {
+    msg.className = "msg err";
+    msg.textContent = `Too many attempts — try again in ${remaining} s`;
+    go.textContent = `Wait ${remaining}s`;
+    if (remaining-- <= 0){
+      clearInterval(retryTimer); retryTimer = 0;
+      go.disabled = false; go.textContent = "Sign in"; msg.textContent = "";
+    }
+  };
+  update();
+  retryTimer = setInterval(update, 1000);
+}
 
 // A same-site request from here carries the session cookie, so somebody who is already signed in
 // gets sent straight in instead of being asked again.
 fetch("/api/state", {headers: {"Accept": "application/json"}})
   .then(r => r.ok ? r.json() : null)
   .then(d => { if (d && d.viewer && d.viewer.display_name) location.replace("/"); })
+  .catch(() => {});
+
+// Why the round trip came back empty-handed. Each code is a different fix, so
+// saying "something went wrong" would hide the one thing the person needs.
+const GOOGLE_REASON = {
+  unknown: "That Google account is not linked to a member here. This library is invite-only — sign in first, then connect Google from your profile.",
+  conflict: "That Google account is already connected to another member.",
+  expired: "The Google sign-in took too long. Try again.",
+  state: "That sign-in could not be verified. Start again from this page.",
+  denied: "Google sign-in was cancelled.",
+  blocked: "That membership is not active.",
+  "signin-first": "Your session ended mid-way. Sign in, then connect Google from your profile.",
+  unavailable: "Google sign-in is not configured on this server.",
+  error: "Google sign-in failed. Try again or use your password.",
+  linked: "",
+};
+const reason = new URLSearchParams(location.search).get("google");
+if (reason && GOOGLE_REASON[reason]){
+  msg.className = "msg err";
+  msg.textContent = GOOGLE_REASON[reason];
+}
+fetch("/api/auth/providers").then(r => r.ok ? r.json() : null)
+  .then(d => { if (d && d.google) document.getElementById("google-row").hidden = false; })
   .catch(() => {});
 
 form.onsubmit = event => {
@@ -82,11 +129,17 @@ form.onsubmit = event => {
   }).then(async response => {
     const data = await response.json().catch(() => ({}));
     if (response.ok) { location.replace("/"); return; }
+    if (response.status === 429){
+      waitToRetry(data.retry_after || response.headers.get('Retry-After'));
+      return;
+    }
     go.disabled = false;
+    go.textContent = "Sign in";
     msg.className = "msg err";
     msg.textContent = data.error || "Sign-in failed";
   }).catch(() => {
     go.disabled = false;
+    go.textContent = "Sign in";
     msg.className = "msg err";
     msg.textContent = "Could not reach the server";
   });

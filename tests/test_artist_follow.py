@@ -17,7 +17,7 @@ class ArtistProfileUrl(unittest.TestCase):
         row = data['providers'][0]
         self.assertEqual(row['url'], 'https://soundcloud.com/someone')
         self.assertIn('feeds.soundcloud.com/users/soundcloud:users:4242', row['rss'])
-        self.assertFalse(data['following'])
+        self.assertFalse(data['subscribed'])
 
     def test_unsafe_urls_are_dropped(self):
         self.store.artist('generic', 'x1', 'Sneaky', 'javascript:alert(1)')

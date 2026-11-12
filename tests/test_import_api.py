@@ -35,7 +35,7 @@ class ImportAndMove(unittest.TestCase):
             sid = "session-" + uid
             self.sessions[uid] = sid
             with self.store.lock:
-                self.store.conn.execute("INSERT INTO browser_sessions VALUES(?,?,?)",
+                self.store.conn.execute("INSERT INTO browser_sessions(digest,member_id,expires) VALUES(?,?,?)",
                     (self.sec.digest(sid), uid, 4102444800))
                 self.store.conn.commit()
         self.old_boot = server.boot

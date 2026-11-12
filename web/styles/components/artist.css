@@ -20,6 +20,12 @@ display:grid;place-items:center;font-weight:700;color:#cfd3e1;font-size:26px}
 
 .artistprofile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:18px;display:grid;gap:10px}
 
+/* A subscribe that worked keeps its tick on the button itself. The release list below it
+   takes a moment to redraw and the toast is easy to miss on a phone, so the tick is the
+   receipt — and it has to win over the dimmed look of a disabled button. */
+.ghost.subok,
+.ghost.subok:disabled{color:var(--ok);border-color:#2c6b57;opacity:1;cursor:default}
+
 .aprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
 
 .aprow b{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);min-width:96px}

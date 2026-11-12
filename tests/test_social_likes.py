@@ -11,6 +11,8 @@ class CommentLikes(unittest.TestCase):
     # otherwise run twice under this class.
     tearDown = security_tests.SecurityHTTP.tearDown
     request = security_tests.SecurityHTTP.request
+    token = security_tests.SecurityHTTP.token
+    user = security_tests.SecurityHTTP.user
 
     def setUp(self):
         security_tests.SecurityHTTP.setUp(self)
@@ -46,7 +48,7 @@ class CommentLikes(unittest.TestCase):
 
     def test_like_needs_an_existing_comment(self):
         self.assertEqual(self.call('/like/999', {})[0], 404)
-        self.assertEqual(self.call('/like', {})[0], 404)
+        self.assertEqual(self.call('/like', {})[0], 400)
 
 
 if __name__ == '__main__':
