@@ -825,11 +825,12 @@ body #player.on #pldur{right:50px}
 /* Lyrics is dead markup app-wide; the volume control lives in the top bar now. */
 body #player.on .pvol{display:none}
 
-@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
-  body #player.on.has-art{background:rgba(18,19,25,.72);box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
-  body #player.on.has-art::before{opacity:.34;filter:blur(22px) saturate(1.25) brightness(.62)}
-  body #player.on.has-art::after{filter:blur(14px);transform:scale(1.12);opacity:.18}
-}
+/* The art-tinted glass is the bar's look, not a phone refinement: this block used to sit in a
+   max-width:760px query, so the same bar was glass on a phone and an opaque gradient on a
+   desktop. It is the last has-art rule in the sheet, so it owns the surface at every width. */
+body #player.on.has-art{background:rgba(18,19,25,.72);box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
+body #player.on.has-art::before{opacity:.34;filter:blur(22px) saturate(1.25) brightness(.62)}
+body #player.on.has-art::after{filter:blur(14px);transform:scale(1.12);opacity:.18}
 
 @media (min-width:761px){
   body #player,body #player.on{
@@ -926,3 +927,8 @@ body #player.on .qgrip span{pointer-events:none}
    is nudged 3 px right to sit on the play button, which is centred on that pair. */
 body #player.on .qgrip{min-height:0;min-width:0;width:114px;height:18px;top:-18px;font-size:9px;
   left:calc(50% + 3px);opacity:1;transform:translate(-50%,0)}
+
+/* Open: the triangle points into the panel it opened, so the same tab reads "close". The
+   glyph is a grid item, so the transform applies; only the arrow turns, the tab stays put. */
+body #player.on .qgrip span{display:block;transition:transform .16s ease}
+body #player.on.queue-shown .qgrip span{transform:rotate(180deg)}

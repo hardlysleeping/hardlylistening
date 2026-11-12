@@ -3866,9 +3866,10 @@ function mediaArtwork(row){
   if (!row || !row.artwork) return [];
   return [{src: new URL(artHQ(row.artwork), location.href).href}];
 }
-// `tracks.album` now holds only the release a song came out on — the importer no longer
-// stamps a playlist's name there — so the car can publish it as-is. A single with no
-// release leaves it blank rather than naming an album that does not exist.
+// `tracks.album` holds only the release a song came out on, and 410 of 937 rows in a real
+// library have no release at all. Those rows name the set they were pulled from on the
+// player's own line, so the lock screen publishes the same string: album when there is one,
+// otherwise the set. A row with neither still publishes no album.
 function realAlbum(row){
   return String((row && row.album) || "").trim();
 }
@@ -3881,12 +3882,16 @@ function albumFor(row){
 function playerSub(row){
   return [row && row.artist_name, albumFor(row)].filter(Boolean).join(" · ");
 }
+// iOS's Now Playing sheet draws the title and the artist string only: it never renders the
+// album field, even though WebKit forwards it. The car does have an album spot, so folding it
+// into the artist put the album on screen twice there. The artist line stays the artist; the
+// album field carries the album (or the set) for the platforms that draw it.
 function publishMediaSession(row){
   if (!("mediaSession" in navigator) || !row) return;
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: row.title || "Untitled", artist: row.artist_name || "",
-      album: realAlbum(row), artwork: mediaArtwork(row)
+      album: albumFor(row), artwork: mediaArtwork(row)
     });
   } catch (_) { /* older browser: the car just keeps the previous tag */ }
   // Assigning metadata is what activates the session. Claim the transport actions
@@ -4150,6 +4155,17 @@ function playFromLibrary(id){
   playingId = id;
   rememberPlayed(id);
   if (typeof commitPlaybackQueue === 'function') commitPlaybackQueue();
+  // A track that ends on its own tears the audio element down, so the phone opens a fresh
+  // now-playing item and the next song's artwork, title and album land. A manual skip (lock
+  // screen, car, or our own next button) used to reuse the live element: iOS kept the item it
+  // had already latched and dropped the tag handed to it, so every skipped song froze on the
+  // previous cover and title. Reset the element the way an ended track does before the new
+  // source is attached.
+  if (wasPlaying != null && wasPlaying !== id && playerAudio.src){
+    playerAudio.pause();
+    playerAudio.removeAttribute("src");
+    playerAudio.load();
+  }
   // A prefetched track starts instantly; anything else streams as before.
   const cached = aheadAudio.get(id);
   playerAudio.src = cached || `/api/track/${id}/audio`;
@@ -4950,7 +4966,7 @@ function showFullQueue(open){
     if (items) items.style.maxHeight = "";
     panel.classList.remove("in-full");
     if (panel._home && panel._home.parent) panel._home.parent.insertBefore(panel, panel._home.next || null);
-    togglePlaybackPanel(false);
+    togglePlaybackPanel(false, true);
   };
   if (open){
     if (!panel._home) panel._home = {parent: panel.parentElement, next: panel.nextElementSibling};
@@ -5002,7 +5018,10 @@ function showFullQueue(open){
   const text = document.querySelector("#player-full .pf-text");
   if (text) text.style.transform = "";
   const done = event => {
-    if (event && event.target !== slot) return;
+    // The slot rides two transitions, and opacity finishes in 200 ms against the move's
+    // 440 ms. Unmounting on the first one cut the sheet off two thirds of the way down and
+    // dropped it out of sight mid-travel; only the transform ends the close.
+    if (event && (event.target !== slot || event.propertyName !== "transform")) return;
     slot.removeEventListener("transitionend", done);
     clearTimeout(guard);
     finish();
@@ -7905,7 +7924,7 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
       if (!specCtx) specCtx = new Ctx();
       const an = specCtx.createAnalyser();
       an.fftSize = 2048;
-      an.smoothingTimeConstant = 0.7;
+      an.smoothingTimeConstant = 0.5;
       an.minDecibels = -88;
       an.maxDecibels = -22;
       // The analyser reaches the speakers first: if taking the element over fails, the
@@ -7944,14 +7963,17 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     specRanges = {n, list};
     return list;
   }
-  // One read per frame, with an attack/release on each band so the bars follow the beat
+  // One read per frame, with an attack/release on each band so the wave follows the beat
   // instead of flickering on every FFT.
+  let specRaw = null, specRef = 0;
   function spectrumAt(an, n){
     if (!specData || specData.length !== an.frequencyBinCount)
       specData = new Uint8Array(an.frequencyBinCount);
     an.getByteFrequencyData(specData);
     const ranges = bandRanges(n);
-    if (!specLevels || specLevels.length !== n) specLevels = new Float32Array(n);
+    if (!specLevels || specLevels.length !== n){ specLevels = new Float32Array(n); specRef = 0; }
+    if (!specRaw || specRaw.length !== n) specRaw = new Float32Array(n);
+    let frameTop = 0;
     for (let i = 0; i < n; i++){
       const a = ranges[i][0], b = ranges[i][1];
       let peak = 0;
@@ -7959,9 +7981,27 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
       // The spectrum rolls off about 1/f. Without the tilt the kick owns the left half and
       // everything above 2 kHz sits on the floor.
       const tilt = 1 + 0.9 * Math.pow(i / n, 1.15);
-      const v = Math.pow(Math.min(1, (peak / 255) * tilt * 1.35), 0.8);
+      const v = Math.min(1, (peak / 255) * tilt * 1.5);
+      specRaw[i] = v;
+      if (v > frameTop) frameTop = v;
+    }
+    // Rolling headroom. A fixed gain cannot serve both a quiet verse and a mastered
+    // chorus: low enough to leave headroom and the wave sat at a third of the canvas (which
+    // is what "barely moves" was), high enough to fill it and every band pinned at the
+    // ceiling and the shape stopped reading as a shape. The frame is measured against its
+    // own loudest band, which falls back slowly, so the line keeps the full height across
+    // sections while the relative peaks still draw the motion.
+    specRef = Math.max(frameTop, specRef * 0.9);
+    const gain = 1 / Math.max(0.4, specRef);
+    for (let i = 0; i < n; i++){
+      // Expanded after the normalisation, not before: the curve belongs to the shape, so a
+      // loud band keeps its height while the band next to it drops back toward the resting
+      // line. A compressed curve here rounded the lobes into one smooth lozenge.
+      const target = Math.pow(Math.min(1, specRaw[i] * gain), 1.35);
       const old = specLevels[i];
-      specLevels[i] = v > old ? old + (v - old) * 0.55 : old + (v - old) * 0.16;
+      // Attack nearly instant, release quick: the wave has to hit on the beat and be gone
+      // before the next one, or it looks like a still image that occasionally twitches.
+      specLevels[i] = target > old ? old + (target - old) * 0.92 : old + (target - old) * 0.42;
     }
     return specLevels;
   }
@@ -8005,33 +8045,58 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     const p = progress();
 
     // The header's waveform is a live spectrum, not the track's loudness curve: the
-    // envelope above has no frequency, so it can only say "louder here". These bars are
-    // log-spaced bands read from the playing stream, mirrored around the bar's centre, so
-    // the kick, the bass line and the hats sit in different bars and move on their own.
+    // envelope above has no frequency, so it can only say "louder here". These bands are
+    // log-spaced readings of the playing stream, mirrored about the bar's centre, so the
+    // kick, the bass line and the hats sit in different parts of the line and move on their
+    // own.
     if (s.mode === 'header'){
       const cy = h / 2;
       // A touch device draws nothing at all: its header has no graph to read (see
       // `headerOnScreen`), and a lone grey line there would just be a stray rule.
       const an = spectrum();
       if (!an) return;
-      // The resting line stays under the bars, so a quiet passage reads as a pulse rather
+      // The resting line stays under the wave, so a quiet passage reads as a pulse rather
       // than as a broken canvas.
       g.globalAlpha = 0.28; g.fillStyle = '#4a4e58';
       g.fillRect(0, cy - 1, w, 2);
       g.globalAlpha = 1;
-      const n = Math.max(16, Math.min(64, Math.round(w / 7)));
+      // Bands set how quickly the line turns, not how many columns it has: the outline is
+      // subdivided between them (SUB samples per band, cosine-eased), so a loud band pulls
+      // one smooth lobe out of a continuous line instead of standing as its own bar.
+      const n = Math.max(20, Math.min(72, Math.round(w / 5)));
       const amp = spectrumAt(an, n);
       // Silence (paused, or before the first buffer) keeps the resting line above and no
-      // bars: one-pixel accent bars would read as a dashed progress bar instead.
+      // wave: a flat accent line would read as a stopped progress bar.
       let top = 0;
       for (let i = 0; i < n; i++) if (amp[i] > top) top = amp[i];
       if (top < 0.02) return;
-      const step = w / n, bw = Math.max(1.5, step * 0.58), half = h / 2 - 1;
-      g.fillStyle = accent;
-      for (let i = 0; i < n; i++){
-        const bh = Math.max(0.5, (amp[i] || 0) * half);
-        g.fillRect(i * step + (step - bw) / 2, cy - bh, bw, bh * 2);
+      const level = u => {                       // u in bands, 0..n-1
+        const a = Math.max(0, Math.min(n - 2, Math.floor(u)));
+        const f = Math.max(0, Math.min(1, u - a));
+        return (amp[a] || 0) + ((amp[a + 1] || 0) - (amp[a] || 0)) * ((1 - Math.cos(f * Math.PI)) / 2);
+      };
+      const half = cy - 1, SUB = 5, total = (n - 1) * SUB;
+      const pts = [];
+      for (let k = 0; k <= total; k++){
+        // The ends taper to nothing, so the wave enters and leaves on the resting line
+        // rather than starting as a cut-off cliff at the edge of the header.
+        const edge = Math.min(1, Math.min(k, total - k) / (SUB * 1.5));
+        pts.push([(k / total) * w, level((k / total) * (n - 1)) * half * (0.3 + 0.7 * edge)]);
       }
+      // Mirrored about the centre: the top contour out, the bottom one back, filled as one
+      // shape. A filled wave reads at this height where hairline bars barely registered.
+      g.beginPath();
+      g.moveTo(pts[0][0], cy - pts[0][1]);
+      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], cy - pts[i][1]);
+      for (let i = pts.length - 1; i >= 0; i--) g.lineTo(pts[i][0], cy + pts[i][1]);
+      g.closePath();
+      g.fillStyle = accent;
+      g.globalAlpha = 0.85;
+      g.fill();
+      g.globalAlpha = 1;
+      g.lineWidth = 1;
+      g.strokeStyle = accent;
+      g.stroke();
       return;
     }
 
@@ -8105,13 +8170,13 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
   function paint(){ drawAll(); }
 
   // ~11 fps for the envelope (it does not change between frames, only the playhead does),
-  // and ~18 fps when the header's spectrum is on screen, where the bars are the point.
+  // and ~30 fps when the header's spectrum is on screen, where the wave is the point.
   // Nothing runs while paused or hidden.
   let raf = 0, lastAt = 0;
   function tick(){
     raf = 0;
     const now = performance.now();
-    if (now - lastAt > (headerOnScreen() ? 55 : 90)){ lastAt = now; keepGraphAwake(); drawAll(); }
+    if (now - lastAt > (headerOnScreen() ? 32 : 90)){ lastAt = now; keepGraphAwake(); drawAll(); }
     if (!audio.paused && !document.hidden) raf = requestAnimationFrame(tick);
   }
   function run(){

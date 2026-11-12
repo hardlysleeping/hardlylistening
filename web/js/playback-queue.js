@@ -104,20 +104,36 @@ $("#history-items").addEventListener("click", event => {
   }, {passive: false});
 })();
 
-function togglePlaybackPanel(force){
+function togglePlaybackPanel(force, instant){
   const panel = document.querySelector('#playback-panel');
   if (!panel) return;
   const open = force === undefined ? !panel.classList.contains('open') : !!force;
+  // Inside the fullscreen column the panel rides the slot down, so that slide is the whole
+  // close. Running this function's own exit here instead started a 160 ms panel-out next to
+  // the slot's 440 ms travel, dropped `queue-open` at once, and re-showed the panel at
+  // opacity 1 the moment `.closing` was cleared — a pop about 170 ms into the slide, with the
+  // panel still parked in the slot afterwards. The × and Escape now take the same path as
+  // the footer's queue button.
+  if (!open && panel.classList.contains('in-full') && typeof showFullQueue === 'function'){
+    showFullQueue(false);
+    return;
+  }
   // The panel slides out before it hides: `.closing` keeps it on screen for the exit
-  // animation, then the class is dropped. Opening is immediate.
+  // animation, then the class is dropped. Opening is immediate. `instant` is for a close
+  // that already happened on screen — the fullscreen queue's slide — where fading the panel
+  // out again would paint it a second time, at its home spot, after it left.
   clearTimeout(panel._closeTimer);
   if (open){
     panel.classList.remove('closing');
     panel.classList.add('open');
   } else if (panel.classList.contains('open')){
     panel.classList.remove('open');
-    panel.classList.add('closing');
-    panel._closeTimer = setTimeout(() => panel.classList.remove('closing'), 170);
+    if (instant){
+      panel.classList.remove('closing');
+    } else {
+      panel.classList.add('closing');
+      panel._closeTimer = setTimeout(() => panel.classList.remove('closing'), 170);
+    }
   }
   const bar = document.getElementById('player');
   if (bar) bar.classList.toggle('queue-shown', open);
