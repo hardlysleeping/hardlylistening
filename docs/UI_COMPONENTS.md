@@ -12,6 +12,7 @@ Read this before changing the player, the queue, or anything they share.
 | `web/styles/components/*.css` | — | One file per surface; the ownership contract is `docs/frontend-css.md` |
 | `web/preferences.js` | small | Likes/pins wrappers around the cards' controls |
 | `web/genres.js`, `web/lyrics.js`, `web/lifecycle.js` | small | Genre chips, lyrics, reload-on-new-version |
+| `web/js/repo-discovery.js` | ~30 KB | Releases, the follows and the artist/release pages (`JS-030`). A plain classic script loaded before the inline one; every name stays global, so nothing else had to change |
 
 There is no build step: the files above are what the server serves. A change is live on
 reload; there is nothing to compile. Components read the entry point's imports; never add a
@@ -108,7 +109,7 @@ is Activity only — what people did — because a release is catalogue, not act
 
 | Piece | Owner |
 | --- | --- |
-| Section row `#repotabs` | `setRepoTab()`, `paintRepoTab()` in `web/index.html`; it is a plain `.seg`, styled with the other library controls (`#repotabs` in `components/library-controls.css`); state in `hl.repoTab` |
+| Section row `#repotabs` | `setRepoTab()`, `paintRepoTab()` in `web/js/repo-discovery.js`; it is a plain `.seg`, styled with the other library controls (`#repotabs` in `components/library-controls.css`); state in `hl.repoTab` |
 | Panes `#repopane-browse` / `-releases` / `-subscribed` | `paintRepoTab()` hides the two that are not on screen; `renderLibrary()` paints Browse, `renderFeed()` Releases, `renderSubscriptions()` Subscribed |
 | Heading, song count, import target | `paintRepoTab()` sets `#libtitle` to the section and hides `#libcount` and `#dropzone` outside Browse |
 | The personal Library | one list, so the row and the two extra panes do not exist there (`activeRepoTab()` answers `browse`) |
@@ -124,7 +125,7 @@ to both, and both sit on one row above the pane.
 
 | Piece | Owner |
 | --- | --- |
-| Page shell, tabs, panes, filter | `openArtistPage()`, `artistTabsHtml()`, `setArtistTab()`, `paintArtistPanes()` in `web/index.html`; tab state in `hl.artistTab` |
+| Page shell, tabs, panes, filter | `openArtistPage()`, `artistTabsHtml()`, `setArtistTab()`, `paintArtistPanes()` in `web/js/repo-discovery.js`; tab state in `hl.artistTab` |
 | Album pane (cards / covers / rows) | `artistAlbumsHtml()`, `artistAlbumCard/Tile/Row()`, `renderedArtistAlbums` |
 | Song pane (cards / covers / rows) | `paintArtistSongs()`, `artistSongsHtml()`; layout state in `hl.artistLayout` |
 | Song count and paging | `#fap-song-meter`, `#fap-foot`, `paintArtistFooter()`, `loadMoreArtistSongs()` (Songs tab only) |
@@ -252,8 +253,11 @@ Changed states write `<state>.actual.png` next to the baseline for inspection.
 
 ## Known debt
 
-- **`index.html` is one ~352 KB inline script.** Markup, styling and behaviour can be
-  reviewed independently now that the CSS has left, but the script itself is still one block.
+- **`index.html` is still a large inline script.** Markup, styling and behaviour can be
+  reviewed independently now that the CSS has left, and the release/follow/artist half has
+  moved to `web/js/repo-discovery.js`; the rest is one block. A further split is a separate
+  change: a classic script cannot use a `const` from a later script at load time, so
+  load-time wiring stays in `index.html` after `const SVG`.
 - **Semantic class names.** `.st`, `.sartist`, `.salbum`, `.sdur`, `.send` and `.idx` are
   generated and queried by that inline script. Renaming them is a separate pass: search the
   CSS, the script's template strings and the tests before touching one.
