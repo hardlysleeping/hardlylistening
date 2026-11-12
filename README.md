@@ -257,6 +257,8 @@ web/dj.html            the mixer board
 web/party.js           the room client (queue, votes, chat, host lease)
 web/swipe.js           one Repository card at a time
 subsonic.py            Subsonic / OpenSubsonic surface for phone players
+docs/server-domains.md who owns which module, table and route (Core/Repo/Library/Playback/Social)
+docs/server-packaging.md  headless VPS layout, systemd unit, Docker image, backup boundary
 ```
 
 `download_jobs` holds the state of every track: `queued`, `resolving`,

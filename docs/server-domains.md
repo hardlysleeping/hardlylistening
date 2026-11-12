@@ -1,0 +1,263 @@
+# Server domains — who owns what
+
+Purpose: give every feature, table and route **exactly one owner** before the cross-platform
+player is built, so the player-facing surface (Library + Playback) can be trusted not to depend
+on Repo, acquisition or Social.
+
+This document is the authority for *placement*. Behaviour is unchanged by it. Nothing here moves
+in the database; ownership is declared and the code is moved behind service facades one card at a
+time (`PLAN.md` § Platform separation).
+
+Measured 2026-11-11 against the live tree (excluding `backups/`): **26 top-level modules, 6
+packages, 63 tables created by code (56 exist in the live database, 7 are created on first use),
+56 distinct route literals plus 10 prefix-dispatched subtrees.**
+
+---
+
+## 1. The rule
+
+The player must talk to HardlyListening *and* to any other OpenSubsonic server. Therefore:
+
+> **Library and Playback may not depend on Repo, acquisition, Party or Social.**
+> HardlyListening-only features are optional capabilities on top.
+
+Allowed edges: `Library → Repo` (resolve playable media), `Playback → Repo` (resolve a file),
+`Social → Repo` (track metadata), `Social → Library` (what a member did), `Party → Library`.
+
+Forbidden: `Repo → Social`, `Repo → personal Library state`, `Library → Social`, and
+`Playback` depending on anything except Repo + Library + Core.
+
+---
+
+## 2. Domains
+
+| domain | answers | contract it must honour |
+| --- | --- | --- |
+| **Core** | who is asking, and may they | knows nothing about music, discovery, Activity or Subsonic |
+| **Repo** | what music this server has, or could acquire | serves the shared pool; never reads a member's personal state |
+| **Library** | what *this member* chose to keep | per-member only; no acquisition; no social signal |
+| **Playback** | give me the bytes, remember where I am | member scope + Range; never needs Social or Party |
+| **Social** | what people are doing | may read Repo/Library; nothing depends on it |
+| **Party** | who is listening together, right now | may use Library/Playback; nothing depends on Party |
+| **Adapter** | Subsonic/OpenSubsonic protocol | translates; owns no rules, reads Library + Playback only |
+
+---
+
+## 3. Module ownership
+
+Top-level modules (26):
+
+| module | owner | owns |
+| --- | --- | --- |
+| `server.py` | Core | HTTP dispatch, static, boot — the composition root. It legitimately imports every domain; nothing imports it. |
+| `security.py` | Core | members, credentials, identities, sessions, invites, rate limits, Origin/CSRF |
+| `auth_admin.py` | Core | local admin bootstrap/recovery |
+| `db.py` | Core **+ Repo** | connection and schema migration (Core); `Store`'s repository accessors over tracks/playlists/downloads (Repo). The split is ARCH-002; the file does not move. |
+| `user_playlists.py` | Repo | shared playlists over canonical ids (`playlists`, `playlist_tracks`) |
+| `search.py` | Repo | provider search; one result into the acquisition queue |
+| `deletion.py` | Repo | deleting a shared playlist/album, and the files only it needed |
+| `genres.py` | Repo | shared EDM taxonomy (`genre_labels`) + its admin endpoints |
+| `ranking.py` | Repo | source-pick learning (`source_picks`) |
+| `decisions.py` | Repo | metadata decision audit (`match_decisions`) |
+| `replacements.py` | Repo | staged source replacements (`source_replacements`) |
+| `podcasts.py` | Repo | podcast feeds and episode acquisition (`listening_podcast_*`) |
+| `listening.py` | Library | devices, saves, folders, personal preferences routes — **and today the Subsonic entry point (`rest`, `envelope`)**, which is Adapter code living in the wrong file until SUB-010 |
+| `nowplaying.py` | Library | resume state (`listening_now`) |
+| `preferences.py` | Library | favourites, pins, album likes, theme, UI snapshot |
+| `zip_export.py` | Library | a member's own library as a ZIP |
+| `radio.py` | Library | member-scoped radio stations |
+| `shares.py` | Library | capability share links + the no-login player |
+| `swipe.py` | Library | a member's triage of Repo songs |
+| `lyrics.py` | Playback | lyrics cache and playback metadata |
+| `mixer_room.py` | Playback | mixer audio streams |
+| `activity.py` | Social | the Activity log (`activity`) |
+| `social.py` | Social | discussions, votes, boosts validation (`social_*`, `song_boosts`) |
+| `profiles.py` | Social | the member profile page (reads Library and Repo) |
+| `party.py` | Party | rooms, guests, sessions, presence, votes, skips, chat |
+| `subsonic.py` | Adapter | OpenSubsonic surface; creates `listening_plays`, `listening_ratings` |
+
+Packages:
+
+| package | owner | owns |
+| --- | --- | --- |
+| `engine/` | Repo | acquisition queue and scheduler |
+| `downloaders/` | Repo | yt-dlp invocation and AI match helpers |
+| `providers/` | Repo | provider adapters (SoundCloud, Apple Music, generic) |
+| `discovery/` | Repo | artist profile, subscriptions, tracklist |
+| `library/` | **Repo today, Library tomorrow** | artwork, art store, id3 art, imports, import rules, metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser export, playlist views — see §7 |
+| `tools/` | none | operator scripts, not imported by the server |
+| `edge-fallback/` | infrastructure | Cloudflare Worker, no Python domain |
+
+---
+
+## 4. Table ownership
+
+Declared only. Access from another domain goes through the owner's service, never by opening a
+second connection or writing the table directly.
+
+**Core (9)** — `members`, `member_credentials`, `member_identities`, `browser_sessions`,
+`browser_invites`, `signup_invites`, `member_requests`, `settings`, `logs`
+
+**Repo (21)** — `artists`, `artist_art`, `artist_releases`, `artist_tracks`, `releases`, `tracks`,
+`playlists`, `playlist_tracks`, `member_items` (who added a shared item), `member_playlists` (who
+owns a shared playlist), `download_jobs`, `watches`, `watch_items`, `feed_items`, `provider_state`,
+`genre_labels`, `source_picks`, `source_replacements`, `match_decisions`,
+`listening_podcast_channels`, `listening_podcast_episodes`
+
+**Library (19)** — `listening_tracks`, `listening_playlists`, `listening_playlist_tracks`,
+`listening_folders`, `listening_folder_tracks`, `listening_favorites`, `listening_album_likes`,
+`listening_pins`, `listening_theme`, `listening_ui`, `listening_bookmarks`, `listening_plays`,
+`listening_ratings`, `listening_now`, `listening_devices`, `library_intents`,
+`listening_radio_stations`, `listening_shares`, `swipe_swipes`
+
+**Playback (1)** — `lyrics_cache`
+
+**Social (5)** — `activity`, `social_comments`, `social_comment_likes`, `social_votes`,
+`song_boosts`
+
+**Party (8)** — `party_rooms`, `party_entries`, `party_sessions`, `party_guests`, `party_presence`,
+`party_votes`, `party_skips`, `party_chat`
+
+Created lazily on first use, so absent from a quiet database: `listening_plays`,
+`listening_ratings`, `listening_radio_stations`, `listening_podcast_channels`,
+`listening_podcast_episodes`, `listening_ui`, `swipe_swipes`.
+
+### Schema-creation sites do not match ownership yet
+
+`db.py` creates `listening_bookmarks`, `listening_shares` (Library), `activity` and `song_boosts`
+(Social). `security.py` creates `member_items` and `member_playlists` (Repo). `shares.py` also
+creates `listening_bookmarks`/`listening_shares` defensively. All of it is `CREATE TABLE IF NOT
+EXISTS`, so moving the statements is a code move, not a migration — do it when the owning service
+is created, not as a sweep.
+
+### Two pairs that look alike and are not
+
+| personal (Library) | public/social |
+| --- | --- |
+| `listening_favorites` — my star | `social_votes`, `song_boosts` — what others see |
+| `listening_album_likes` — my saved album | `party_votes` — the room's decision |
+| `playlists`, `playlist_tracks` — the shared pool (Repo) | `listening_playlists`, `listening_playlist_tracks` — my copy (Library) |
+
+Never merge these, in schema, in queries or in UI copy.
+
+---
+
+## 5. Route ownership
+
+`server.py` holds 56 distinct literal patterns plus prefix subtrees. Prefixes are assigned here;
+a new route takes its owner from this table rather than from the module that happens to handle it.
+
+| owner | routes |
+| --- | --- |
+| **Core** | `/api/health`, `/api/state`, `/api/settings`, `/api/members*`, `/api/member/*`, `/api/auth/*`, `/api/account*`, `/api/signup*`, `/api/signup-invite`, `/api/admin/signup-invite` |
+| **Repo** | `/api/tracks`, `/api/add`, `/api/pause`, `/api/cooldown/clear`, `/api/failed/retry`, `/api/queue/*`, `/api/import`, `/api/import/upload`, `/api/artist`, `/api/artist/art*`, `/api/catalogue`, `/api/feed*`, `/api/subscriptions*`, `/api/search`, `/api/playlist/(id)/{apple-backup,requeue,remove,verify}`, `/api/release/(id)/remove`, `/api/track/(id)/{artwork,bpm,move,retry,skip,source,unpick}`, `/api/track/queue`, `/api/library` (shared snapshot), `/api/library/{grab,move,verify,tempo,titles}`, `/api/genres*`, `/api/decisions*`, `/api/tempo/status`, `/api/titles/status` |
+| **Library** | `/api/listening/*`, `/api/shares*`, `/api/swipe*`, `/api/library/export`, `/api/library/download`, `/api/track/(id)/download`, `/api/playlist/(id)/download` |
+| **Playback** | `/api/track/(id)/audio`, `/api/mixer`, `/api/mixer/stream` |
+| **Social** | `/api/activity`, `/api/activity/listen`, `/api/social*`, `/api/boost`, `/api/profile` |
+| **Party** | `/api/party*` |
+| **Adapter** | `/rest/*.view` (every Subsonic endpoint) |
+
+### The `/api/library` trap
+
+`/api/library` is the **shared Repo snapshot**, while `/api/listening/*` is the **personal
+Library**. The words are inverted at the HTTP layer. Do not "fix" the URLs — clients and the web
+UI depend on them; treat this table as the mapping. The versioned APIs (`/api/v1/repo/*`,
+`/api/v1/library/*`) exist precisely so a new client is not forced to learn the inversion.
+
+Existing routes stay as compatibility adapters when a service facade lands. No frontend contract
+changes in this refactor.
+
+---
+
+## 6. Known inversions (measured, not suspected)
+
+| edge | where | why it is wrong | fix |
+| --- | --- | --- | --- |
+| Core → Social | `security.py` calls `activity.record` on session, join and member events | Core must not know Social exists; a Social bug would break sign-in | Core emits a domain event; the composition root subscribes Activity to it (ARCH-005/006) |
+| Library → Social | `preferences.py` uses `social.album_id` and `social.validate_target` | album identity is metadata, not a social concept | move both to a Core/Library metadata helper (ARCH-003) |
+| Library → Adapter | `shares.py` imports `subsonic.BLANK_PNG` | a domain reaching into the protocol adapter for a constant | move the constant to a shared asset module (SUB-010) |
+| Library → Adapter | `listening.py` contains `rest()`/`envelope()` and imports `subsonic` | the adapter lives in a Library file | move Subsonic dispatch into `subsonic.py` (SUB-010/011) |
+| Core+Repo in one file | `db.py` creates schema for every domain and holds repository accessors | ownership is unclear at the point of change | schema stays (it is the migration point); accessors move behind `repo/service.py` (ARCH-002) |
+
+Everything else in the import graph already points the allowed way. `server.py` importing every
+domain is correct: it is the composition root.
+
+---
+
+## 7. The `library/` package name
+
+`library/` currently holds **Repo-side** code: artwork, art store, id3 art, imports, import rules,
+metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser exports,
+playlist views. The personal-Library facades (`library/service.py`, `library/playback.py`) will
+join that package because the plan names them there.
+
+That is a deliberate compromise, and the debt is the name: files in `library/` that are not the
+personal library. Rule: **do not mass-rename**. As each helper is touched, it moves behind
+`repo/service.py` (or into `repo/`) — one file at a time, with its tests.
+
+---
+
+## 8. Decisions this document makes (confirm or overrule)
+
+1. **Party is its own domain**, a sibling of Social, not a part of it. It owns realtime room state
+   and will own the jukebox deck (HL-204); folding it into Social would make the player's
+   dependency graph lie.
+2. **`shares.py` is Library**, not Social. A public capability link to my own tracks is personal
+   media exposure; "social shares" in the plan means ActivityPub-style, which does not exist yet.
+3. **Podcasts are Repo.** Feed subscription is discovery, episode storage is acquisition with a
+   cap (HL-209). The Subsonic podcast endpoints read them through Repo.
+4. **Radio is Library.** Stations are per-member listening state, not shared pool content.
+5. **Swipe is Library**, reading Repo. It is per-member triage, which fits the allowed
+   `Library → Repo` edge; putting it in Repo would create forbidden `Repo → Library` writes.
+6. **`search.py` is Repo.** Provider search and "download this result" are acquisition.
+7. **`zip_export.py` is Library**, `browser_downloads.py` is Repo (it resolves shared media
+   paths), and playback resolves files *through* Repo — `Playback → Repo` is the allowed edge.
+
+---
+
+## 9. Review checklist
+
+Apply to any change that adds a module, table or route:
+
+- [ ] It appears in exactly one row of §3, §4 and §5.
+- [ ] Its imports obey §1 — no `Repo → Social`, no `Library → Social`, no `Playback → Social`.
+- [ ] It opens no connection of its own and writes no other domain's table directly.
+- [ ] A new route's owner is taken from §5, not from the file that was convenient.
+- [ ] If it is a player-facing capability, it works with Social and Party absent.
+- [ ] Personal state (favourites, pins, plays) and social signal (votes, boosts) are not merged.
+
+## 10. Re-measuring this document
+
+```
+ls *.py | wc -l                                             # top-level modules
+sqlite3 hardlylistening.db "select count(*) from sqlite_master where type='table' and name not like 'sqlite_%';"
+grep -rh "CREATE TABLE IF NOT EXISTS" --include=*.py . | grep -v backups | wc -l
+grep -rhoE '"/api/[^"]*"' server.py | sort -u | wc -l        # route literals
+```
+
+If those numbers move, update §3–§5 in the same commit.
+
+---
+
+## 11. Runtime boundary — the server is the application
+
+The Python core is the **canonical runtime**. Everything else is a client of it.
+
+| artefact | what it is | may depend on | must never contain |
+| --- | --- | --- | --- |
+| `server` (this repo's Python core) | the application. Runs directly, under systemd, or in Docker | Python + the OS | a GUI toolkit, a WebView, a desktop shell, a window |
+| `web` (`web/`) | the full frontend served by the server | HTTP only | server internals |
+| Desktop shell | an optional GUI controller **and** client | the server, its HTTP API, and the `web/` it serves | server-domain rules, a second implementation of anything in §3–§5 |
+| Player | an independent OpenSubsonic client | `/rest/*` + `/api/v1/capabilities` | any Repo acquisition code |
+
+Rules that follow:
+
+* **Desktop depends on Server; Server never depends on Desktop.** No import, no shared module, no
+  build step in either direction that makes the core need a GUI to start.
+* The core must start and serve with no display, no session, no Tauri, no Node toolchain.
+  A headless host runs the core alone and still exposes the web UI, OpenSubsonic and the API.
+* The GUI adds its own memory and CPU while it is open. Closing it must not be what stops the
+  server, and starting it must not be the only way to start the server.
+* Packaging (`server/`, `web/`, `desktop/`, `player/`) is a **layout target for the builds**, not a
+  repo reorganisation demanded today. The hard part is the dependency direction above, which is
+  testable without moving a single file.

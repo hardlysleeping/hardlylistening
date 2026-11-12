@@ -1,0 +1,361 @@
+# Headless server packaging — canonical runtime, VPS layout, Docker
+
+Status: **specification and board, nothing built.** Owner decisions are recorded in
+`PLAN.md` § Platform separation → *Runtime boundary*; this document is the operational
+detail for the `SERVER-PKG-###` cards.
+
+The rule everything else follows from:
+
+> `hardlylistening-server` is the canonical runtime. systemd, Docker and the Desktop GUI all
+> launch that same backend. **No GUI dependency may exist inside the server package.**
+
+```
+                    hardlylistening-server
+                             │
+             ┌───────────────┼───────────────┐
+             │               │               │
+          systemd          Docker        Desktop GUI
+            VPS             VPS           launches it
+```
+
+Zero functional difference between native, Docker and Desktop-hosted instances. Only process
+management and filesystem paths differ.
+
+---
+
+## 1. What the runtime already is, and stays
+
+One OS process, Python standard library HTTP server, SQLite, a queue worker thread, a scheduler
+thread, `yt-dlp`, `ffmpeg`, the `web/` frontend and the OpenSubsonic surface. It already accepts
+`--host` and `--port` (defaults `127.0.0.1:8470`) and already reads `HARDLYLISTENING_DB`,
+`HARDLYLISTENING_AUTH_REQUIRED`, `HARDLYLISTENING_PUBLIC_ORIGIN` and `HARDLYLISTENING_AI_API_KEY`.
+
+Measured 2026-11-11: that is what the live instance runs. Packaging **wraps** it.
+
+Do not add Electron, Tauri, a Node runtime, Redis, Postgres, Celery or a separate worker daemon to
+the headless server. Do not split workers into separate services before there is a measured reason.
+
+```
+hardlylistening-server
+├── HTTP server threads
+├── download Queue worker
+├── Scheduler
+├── Repo services
+├── Library / Playback
+├── Social
+├── OpenSubsonic
+└── Federation worker (only when enabled)
+```
+
+---
+
+## 2. Filesystem boundaries
+
+### Application (read-only at runtime)
+
+```
+/opt/hardlylistening/
+├── server.py  db.py  security.py  subsonic.py  listening.py  …
+├── core/  repo/  library/  social/  federation/  engine/  providers/
+├── web/                     index.html, js/, styles/, …
+├── bin/hardlylistening-server
+└── VERSION
+```
+
+Application code is treated as read-only. **Never store user data inside it.**
+
+### Mutable state
+
+```
+/var/lib/hardlylistening/
+├── hardlylistening.db
+├── identity/                node-id, private-key, public-key
+├── cache/                   artwork/, metadata/, federation/
+├── tmp/
+└── state/
+```
+
+Owner `hardlylistening:hardlylistening`. Directories `750`, secrets and private keys `600`,
+database `640` where appropriate.
+
+### Media (never inside either of the above)
+
+```
+/srv/hardlylistening/music/
+├── Artist A/Album/01 - Song.opus
+└── Artist B/…
+```
+
+Separating it keeps the FHS meaning intact (`/opt` application, `/etc` configuration, `/var/lib`
+state, `/srv` served media), and makes both Docker volumes and VPS migration honest.
+
+### Configuration
+
+```
+/etc/hardlylistening/hardlylistening.env      root:hardlylistening 640
+```
+
+```bash
+HARDLYLISTENING_HOST=127.0.0.1
+HARDLYLISTENING_PORT=8470
+
+HARDLYLISTENING_DATA_DIR=/var/lib/hardlylistening
+HARDLYLISTENING_DB=/var/lib/hardlylistening/hardlylistening.db
+HARDLYLISTENING_MUSIC_DIR=/srv/hardlylistening/music
+
+HARDLYLISTENING_AUTH_REQUIRED=1
+HARDLYLISTENING_PUBLIC_ORIGIN=https://music.example.com
+
+HARDLYLISTENING_FEDERATION_ENABLED=0
+# HARDLYLISTENING_AI_API_KEY=…
+```
+
+New variables: `HARDLYLISTENING_DATA_DIR`, `HARDLYLISTENING_MUSIC_DIR`, `HARDLYLISTENING_HOST`,
+`HARDLYLISTENING_PORT`.
+
+* `DATA_DIR` — default keeps today's behaviour for existing installs; the packaged default is
+  `/var/lib/hardlylistening`.
+* `MUSIC_DIR` — on a **new database**, the initial `root` setting. Once an admin changes the
+  Repository location in the UI, the database setting wins; never override a chosen root at every
+  start.
+
+---
+
+## 3. What must change in the code (measured, not guessed)
+
+Today the process writes into its own source tree, which is exactly what a read-only `/opt`
+forbids:
+
+| write site | today | target |
+| --- | --- | --- |
+| database | `HARDLYLISTENING_DB` else `<app>/hardlylistening.db` | `DATA_DIR/hardlylistening.db` |
+| artwork cache | `<app>/.cache/artwork` (`library/art_store.py`) | `DATA_DIR/cache/artwork` |
+| browser-download cache | `<app>/.cache/browser-downloads` | `DATA_DIR/cache/` |
+| artist pictures | `<app>/artist-art/` (`server.py`) | `DATA_DIR/cache/artist-art` |
+
+Acceptance is literal: **`/opt/hardlylistening` can be mounted read-only and the server still runs.**
+
+Also required before the system service ships:
+
+* **SIGTERM / SIGINT handling.** No signal handler exists today. Order: stop accepting HTTP work →
+  stop the scheduler → stop/pause the queue worker cleanly → finish or roll back the database
+  transaction → close SQLite → exit. systemd and Docker both rely on this path; a bare kill is not
+  acceptable.
+* **`check` and `backup` subcommands** (see §5), and the migrations stay automatic and idempotent at
+  startup as they are now.
+
+---
+
+## 4. Launcher, process model, users
+
+`/opt/hardlylistening/bin/hardlylistening-server` does almost nothing: read the environment,
+validate directories and tools, `exec` the Python entry point. No daemonisation, no PID files —
+one external supervisor owns the process.
+
+```bash
+exec /usr/bin/python3 /opt/hardlylistening/server.py \
+    --host "$HARDLYLISTENING_HOST" --port "$HARDLYLISTENING_PORT"
+```
+
+Dedicated account `hardlylistening:hardlylistening`, no interactive login, home
+`/var/lib/hardlylistening`. It owns the data and media trees, **not** `/opt` or `/etc`.
+
+Supervision is never nested: `systemd → hardlylistening-server`, or `Docker → hardlylistening-server`,
+or `Desktop → hardlylistening-server`. Never systemd → Docker → another supervisor → server.
+
+---
+
+## 5. CLI contract
+
+```
+hardlylistening-server run                 # default
+hardlylistening-server check               # config, DB read/write, music dir, free disk, yt-dlp, ffmpeg, port
+hardlylistening-server migrate             # explicit upgrade path
+hardlylistening-server backup <path>       # SQLite online-backup API, consistent snapshot
+hardlylistening-server version
+```
+
+`check` is used by the installer and by `ExecStartPre`. Never put destructive work in `ExecStartPre`.
+
+**Backup boundary.** Required: the database, `/srv/hardlylistening/music/`, and `identity/`.
+Optional and rebuildable: `cache/`. Do not copy a live SQLite file by hand — `backup` uses the
+backup API. Media is rsynced or snapshotted separately.
+
+**Update boundary.** Replacing `/opt/hardlylistening` must never touch `/etc`, `/var/lib` or `/srv`;
+then migrations run and the service restarts.
+
+---
+
+## 6. systemd (native VPS)
+
+```ini
+[Unit]
+Description=HardlyListening Server
+Documentation=https://github.com/hardlysleeping/hardlylistening
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hardlylistening
+Group=hardlylistening
+WorkingDirectory=/opt/hardlylistening
+EnvironmentFile=/etc/hardlylistening/hardlylistening.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStartPre=/opt/hardlylistening/bin/hardlylistening-server check
+ExecStart=/opt/hardlylistening/bin/hardlylistening-server
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hardlylistening
+ReadWritePaths=/srv/hardlylistening/music
+PrivateDevices=false
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`PrivateDevices=false` on purpose: FFmpeg and media tooling may need normal device access, and
+sandboxing that before it is tested is how a working install becomes a puzzle. The protection that
+matters is `ProtectSystem=strict` plus exactly two writable paths.
+
+```
+daemon-reload → enable --now → status → journalctl -u hardlylistening -f
+```
+
+Logs go to journald. No second application log file by default.
+
+---
+
+## 7. Reverse proxy
+
+Bind `127.0.0.1:8470`, put Caddy or nginx in front, set
+`HARDLYLISTENING_PUBLIC_ORIGIN=https://music.example.com`. Do not expose 8470 publicly when a proxy
+is used.
+
+Tailnet/LAN-only installs instead bind the private interface (or `0.0.0.0` with a firewall) — no
+architectural difference.
+
+---
+
+## 8. Docker
+
+Same runtime, no special build. Non-root (`uid 10001`), small Python base plus `ffmpeg`/`yt-dlp`.
+
+```
+/config   optional config/secrets
+/data     database, identity, cache, state, tmp
+/music    Repository media
+```
+
+```dockerfile
+FROM python:3.13-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg yt-dlp \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY . /app
+RUN useradd --system --uid 10001 --home /data hardlylistening
+USER 10001
+ENV HARDLYLISTENING_DATA_DIR=/data \
+    HARDLYLISTENING_DB=/data/hardlylistening.db \
+    HARDLYLISTENING_MUSIC_DIR=/music \
+    HARDLYLISTENING_HOST=0.0.0.0 \
+    HARDLYLISTENING_PORT=8470 \
+    PYTHONUNBUFFERED=1
+EXPOSE 8470
+ENTRYPOINT ["/app/bin/hardlylistening-server"]
+```
+
+```yaml
+services:
+  hardlylistening:
+    image: ghcr.io/hardlysleeping/hardlylistening:latest
+    container_name: hardlylistening
+    restart: unless-stopped
+    environment:
+      HARDLYLISTENING_HOST: 0.0.0.0
+      HARDLYLISTENING_PORT: 8470
+      HARDLYLISTENING_AUTH_REQUIRED: 1
+      HARDLYLISTENING_PUBLIC_ORIGIN: https://music.example.com
+    volumes:
+      - ./data:/data
+      - /srv/hardlylistening/music:/music
+    ports:
+      - "127.0.0.1:8470:8470"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8470/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+```
+
+Keep media outside the Compose project directory so replacing the deployment folder cannot delete
+the library. `chown 10001:10001` the data and music trees; `PUID`/`PGID` only if a NAS forces it.
+
+Persistent: `/data/hardlylistening.db`, `/data/identity`, `/music`. Recreatable: `/data/cache`,
+`/data/tmp`. The container filesystem itself holds no unique state — destroying and recreating the
+container must not lose the server.
+
+**Health means the process is alive**, never "the provider is reachable" and never "peers respond".
+
+---
+
+## 9. Identity and federation
+
+Node identity lives in `IDENTITY_DIR` (`/var/lib/hardlylistening/identity` or `/data/identity`) and
+is never baked into the image. A rebuilt container that keeps `/data` remains the same federated
+node. This is why identity is in the backup boundary even though federation is not implemented.
+
+---
+
+## 10. Desktop compatibility
+
+The Desktop shell launches the same executable with its own environment (data folder, music folder,
+port, bind address). An instance created by Desktop can later move to a VPS by copying the database,
+the music tree and `identity/` — no architecture conversion.
+
+---
+
+## 11. Grading a move to a VPS
+
+Generic shape of a migration from an existing install:
+
+1. `check` on the old host, then `backup <path>`.
+2. Copy the database to `DATA_DIR/`, the media to `/srv/hardlylistening/music`, `identity/` if present.
+3. Point the Repository root at the new music path (the `root` setting, once — not every boot).
+4. Start under systemd or Docker, verify `/api/health`, the web UI, `/rest/ping.view`.
+5. Verify a download, a playback with Range, and one Subsonic client.
+
+The database schema is unchanged by any of this: packaging moves files, it does not reshape data.
+
+---
+
+## 12. Release gate
+
+Not "VPS packaging complete" until all hold:
+
+```
+✓ runs with no graphical environment
+✓ no Tauri/Electron/Node dependency required
+✓ /opt can be read-only
+✓ database lives outside the source tree
+✓ music lives outside the source tree
+✓ identity survives application updates
+✓ SIGTERM exits cleanly
+✓ systemd restart preserves queue and database state
+✓ Docker restart preserves queue and database state
+✓ container recreation preserves all persistent state
+✓ full web UI, Repo/downloads, Library, Social and OpenSubsonic all work
+✓ node identity has persistent storage for future federation
+✓ native and Docker use the same server code
+✓ the current lightweight foreground mode still works
+```
