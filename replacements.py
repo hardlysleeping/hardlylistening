@@ -1,5 +1,6 @@
 """Explicit staged replacements. Retained media is never removed by this module."""
 import json
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -43,6 +44,11 @@ def stage(store, tid, url):
 
 
 def terminate(store, row, status, error=''):
+    # A swap that never switched must leave the library exactly as it was: the
+    # media parked under `.replacements/retained/` goes back to its own path.
+    track = store.track_by_id(row['track_id'])
+    if track and track.get('file') == row['old_file']:
+        _restore_retained(store, row)
     with store.lock:
         store.conn.execute('UPDATE source_replacements SET status=?,error=? WHERE id=?', (status,error,row['id']))
         store.conn.execute("UPDATE download_jobs SET status='completed',error_message=?,speed=0,eta=0 WHERE id=?", (error,row['job_id']))
@@ -57,7 +63,63 @@ def recover(store):
             terminate(store, row, 'interrupted', 'Replacement interrupted; original retained. Change source to try again.')
 
 
-def run(queue, job, row):
+def _taken(store, exclude: int = 0) -> set[str]:
+    """Files other rows own. The row being replaced is not competition for its
+    own canonical name: it is about to point somewhere else."""
+    with store.lock:
+        rows = store.conn.execute(
+            "SELECT file FROM tracks WHERE file<>'' AND id<>?", (exclude,)).fetchall()
+    return {str(Path(r[0])) for r in rows}
+
+
+def _unique(target: Path, store, exclude: int = 0) -> Path:
+    from library import store as library_store
+    return library_store.unique(target, _taken(store, exclude))
+
+
+def _relocate(queue, store, row, written: Path) -> Path:
+    """Put the verified file where a download would have put it.
+
+    Staging keeps a swap isolated, but a library that lives in uuid folders is not
+    browsable. When the new file's proper name is the one the old file already
+    occupies, the old media is moved aside rather than overwritten, and the
+    replacement record follows it so `reverse` still has its original.
+    """
+    from library import store as library_store
+    root = Path(store.setting('root')).expanduser()
+    track = store.track_by_id(row['track_id'])
+    if not track:
+        raise OSError('track disappeared')
+    target = library_store.path_for(
+        root, artist=track.get('artist_name') or '', album=track.get('album') or '',
+        playlist_title=queue._collection(track) if queue else '',
+        number=track.get('track_number') or 0,
+        title=track.get('title') or written.stem,
+        extension=written.suffix.lstrip('.'))
+    old_file = Path(row['old_file'])
+    if target.resolve() == written.resolve():
+        return written
+    # Retained media must leave the library tree. A file no row points at looks
+    # exactly like an orphan to the adoption sweep, which would re-add the song
+    # we just replaced at source quality. Keeping it under `.replacements/` (a
+    # path the sweep skips) makes "no row, still in the tree" mean one thing:
+    # a download that died before it could be recorded.
+    with store.lock:
+        shared = store.conn.execute(
+            "SELECT COUNT(*) FROM tracks WHERE file=? AND id<>?",
+            (str(old_file), row['track_id'])).fetchone()[0]
+    if not shared and old_file.is_file():
+        retained = root / '.replacements' / 'retained' / str(row['id'])
+        retained.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(old_file), str(retained / old_file.name))
+    if target.exists() or str(target) in _taken(store, row['track_id']):
+        target = _unique(target, store, row['track_id'])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(written), str(target))
+    return target
+
+
+def run(queue, job, row, expected_seconds: float = 0):
     store = queue.store
     target = Path(row['new_file'])
     fmt = target.suffix[1:]
@@ -79,9 +141,14 @@ def run(queue, job, row):
             terminate(store, row, 'cancelled', 'Replacement cancelled; original retained')
             return
         written = ytdlp.find_output(tmpl, fmt) if rc == 0 else None
-        ok, why = ytdlp.verify_audio(written)
+        ok, why = ytdlp.verify_audio(written, expected_seconds=expected_seconds)
         if not ok:
             terminate(store, row, 'failed', why if rc == 0 else ytdlp.error_line(output) or 'Replacement download failed')
+            return
+        try:
+            written = _relocate(queue, store, row, written)
+        except OSError as error:
+            terminate(store, row, 'failed', f'could not place the new file: {error}')
             return
         with store.lock, store.conn:
             # Skip/cancel and switch serialize on the same lock; SQL errors roll back before unlocking.
@@ -90,8 +157,8 @@ def run(queue, job, row):
             if queue._cancel.is_set() or current['status'] == 'cancelled' or not latest or latest['id'] != row['id']:
                 terminate(store, row, 'cancelled', 'Replacement cancelled; original retained')
                 return
-            changed = store.conn.execute('UPDATE tracks SET file=?,size=? WHERE id=? AND file=?',
-                (str(written), written.stat().st_size, row['track_id'], row['old_file'])).rowcount
+            changed = store.conn.execute('UPDATE tracks SET file=?,size=?,art_hash=?,art_checked=0 WHERE id=? AND file=?',
+                (str(written), written.stat().st_size, '', row['track_id'], row['old_file'])).rowcount
             if not changed:
                 terminate(store, row, 'failed', 'Canonical file changed; original retained')
                 return
@@ -108,16 +175,52 @@ def run(queue, job, row):
         # Failed staged files remain isolated; never glob/delete canonical media.
 
 
+def _restore_retained(store, row) -> None:
+    """Move media out of `.replacements/retained/<id>/` back where it came from.
+
+    A swap parks the old file outside the library tree so the adoption sweep
+    cannot mistake it for an orphan. Reversing puts it back at its own path, so
+    the library keeps naming media the way it always did.
+    """
+    old = Path(row['old_file'])
+    if old.is_file():
+        return
+    retained = Path(store.setting('root')).expanduser() / '.replacements' / 'retained' / str(row['id'])
+    if not retained.is_dir():
+        return
+    media = [p for p in retained.iterdir() if p.is_file()]
+    if not media:
+        return
+    old.parent.mkdir(parents=True, exist_ok=True)
+    if not old.exists():
+        shutil.move(str(sorted(media)[0]), str(old))
+        try:
+            retained.rmdir()
+        except OSError:
+            pass
+
+
 def reverse(store, rid):
     with store.lock:
         schema(store)
         row = store.conn.execute('SELECT * FROM source_replacements WHERE id=?', (rid,)).fetchone()
         if not row or row['status'] != 'completed':
             raise ValueError('Only a completed replacement can be reversed')
+        _restore_retained(store, row)
         track, job = store.track_by_id(row['track_id']), store.job(row['job_id'])
         if not job or job['status'] != 'completed' or pending(store, row['job_id']):
             raise ValueError('Stop the active job before reversing')
-        if track['file'] != row['new_file'] or job['resolved_url'] != row['new_url']:
+        # Two swaps of one track can share a canonical path, so the file name alone
+        # no longer says which one is current. The newest completed swap does.
+        newer = store.conn.execute(
+            "SELECT 1 FROM source_replacements WHERE track_id=? AND id>?"
+            " AND status IN ('completed','downloading') LIMIT 1",
+            (row['track_id'], row['id'])).fetchone()
+        # After a swap is relocated, the file this replacement installed may have
+        # been moved again by a later one; the job's source still identifies it,
+        # and `old_file` is held explicitly, so a reverse restores the media and
+        # only leaves the newer copy unreferenced.
+        if newer or job['resolved_url'] != row['new_url']:
             raise ValueError('Source/file changed; reverse the latest replacement first')
         from library.browser_downloads import local_path
         if local_path(store, {'file': row['old_file']}) is None:
@@ -125,10 +228,20 @@ def reverse(store, rid):
         ok, why = ytdlp.verify_audio(Path(row['old_file']))
         if not ok:
             raise ValueError('Retained previous file is not valid: ' + why)
-        store.conn.execute('UPDATE tracks SET file=?,size=? WHERE id=?', (row['old_file'],Path(row['old_file']).stat().st_size,row['track_id']))
+        store.conn.execute('UPDATE tracks SET file=?,size=?,art_hash=?,art_checked=0 WHERE id=?', (row['old_file'],Path(row['old_file']).stat().st_size,'',row['track_id']))
         store.conn.execute('UPDATE download_jobs SET resolved_url=?,pinned=? WHERE id=?', (row['old_url'],row['old_pinned'],row['job_id']))
         store.conn.execute("UPDATE source_replacements SET status='reversed' WHERE id=?", (rid,))
         store.conn.commit()
+
+
+def latest(store, tid):
+    """The most recent staged swap for a track, whatever its state — the dialog's undo."""
+    with store.lock:
+        schema(store)
+        row = store.conn.execute(
+            "SELECT * FROM source_replacements WHERE track_id=? AND hidden=0 ORDER BY id DESC LIMIT 1",
+            (tid,)).fetchone()
+        return dict(row) if row else None
 
 
 def entries(store):

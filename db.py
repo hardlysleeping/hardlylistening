@@ -1167,7 +1167,8 @@ class Store:
             # SoundCloud imports carry no artwork URL, but the mp3 has the cover
             # embedded — the local extractor has it. point at it so the grid and
             # the rows are not full of empty tiles.
-            elif not row.get('artwork') and row['playable']:
+            elif not row.get('artwork') and row['playable'] and (
+                    row.get('art_hash') or not row.get('art_checked')):
                 row['artwork'] = f"/api/track/{row['id']}/artwork"
             row['status'] = row['status'] or ('completed' if row['playable'] else 'missing')
             if not row['playable'] and (row['file'] or row['status'] == 'completed'):
@@ -1240,9 +1241,13 @@ class Store:
                         "file": track["file"],
                         "size": track["size"],
                         # Same rule as the library grid: no provider artwork URL
-                        # means the cover from the downloaded file.
+                        # means the cover from the downloaded file — and a row the
+                        # sweep found no picture in is left empty rather than given
+                        # a URL that can only 404.
                         "artwork": track.get("artwork") or (
-                            f"/api/track/{track['id']}/artwork" if track["file"] else ""),
+                            f"/api/track/{track['id']}/artwork"
+                            if track["file"] and (track.get("art_hash")
+                                                  or not track.get("art_checked")) else ""),
                         "match": job.get("match", 0),
                         "candidates": candidates,
                         "priority": job.get("priority", 0),

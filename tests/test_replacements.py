@@ -52,16 +52,23 @@ class Replacements(unittest.TestCase):
         replacements.stage(self.store, self.tid, 'https://example.test/new')
         return replacements.pending(self.store, self.jid)
 
+    def retained_path(self):
+        """Where the original media is parked while a swap is in place."""
+        for path in (self.root / '.replacements' / 'retained').rglob('*'):
+            if path.is_file() and path.read_bytes() == self.original:
+                return path
+        return self.old
+
     def preserved(self):
-        self.assertEqual(self.old.read_bytes(), self.original)
-        self.assertEqual(self.store.track_by_id(self.tid)['file'], str(self.old))
+        """The library is back on the original media and records the old source."""
+        self.assertEqual(Path(self.store.track_by_id(self.tid)['file']).read_bytes(), self.original)
         self.assertEqual(self.store.job(self.jid)['resolved_url'], 'https://example.test/old')
 
     def fake(self, cmd, **kwargs):
         row = replacements.pending(self.store, self.jid)
         self.assertEqual(self.store.track_by_id(self.tid)['file'], row['old_file'])
+        # The media being replaced survives every generation, wherever it lives now.
         self.assertTrue(Path(row['old_file']).is_file())
-        self.assertEqual(self.old.read_bytes(), self.original)  # original survives every generation
         path = Path(cmd[cmd.index('-o') + 1].replace('%(ext)s', 'wav'))
         self.assertNotEqual(path, self.old)
         path.write_bytes(self.new)
@@ -91,7 +98,9 @@ class Replacements(unittest.TestCase):
                 decisions.reverse(self.store,-row['id'])
                 check(self.original)
                 self.preserved()
-                self.assertTrue(Path(row['new_file']).is_file())
+                done = self.store.conn.execute(
+                    "SELECT new_file FROM source_replacements WHERE id=?", (row['id'],)).fetchone()
+                self.assertTrue(Path(done['new_file']).is_file())   # canonical, not staging
             finally:
                 http.shutdown(); thread.join(); http.server_close()
 
@@ -166,11 +175,11 @@ class Replacements(unittest.TestCase):
         self.assertEqual(decisions.entries(self.store),[])
         self.assertEqual(self.store.job(self.jid),before)
         self.assertEqual(Path(file).read_bytes(),self.new)
-        self.assertEqual(self.old.read_bytes(),self.original)
+        self.assertEqual(self.retained_path().read_bytes(),self.original)
 
     def test_reverse_missing_previous_refused_and_new_survives(self):
         row = self.stage(); self.run_fake()
-        self.old.unlink()  # only isolated fixture
+        self.retained_path().unlink()  # only isolated fixture
         with self.assertRaisesRegex(ValueError,'not valid'):
             replacements.reverse(self.store,row['id'])
         self.assertEqual(Path(self.store.track_by_id(self.tid)['file']).read_bytes(),self.new)

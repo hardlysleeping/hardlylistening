@@ -20,6 +20,7 @@ import threading
 import time
 from pathlib import Path
 
+import replacements
 from db import Store
 from downloaders import ai_match, ytdlp
 import ranking
@@ -49,6 +50,16 @@ class Queue:
         self._disk_log = 0.0
         self._cancel = threading.Event()      # set to kill the running download
         self._active_job = 0
+        # The back-catalogue pass runs on this worker when nothing else is queued,
+        # so the UI stays up and nothing races it for the same job.
+        self._reacquire_work: list[dict] | None = None
+        self._reacquire_failures = 0
+        self._reacquire_lock = threading.Lock()
+        self._reacquire_started = False
+        self._reacquire_stopped = False
+        # A swap is staged as a queued job for a moment; this lock keeps the
+        # normal worker from picking it up in that window.
+        self._pick_lock = threading.Lock()
         self.thread: threading.Thread | None = None
         import replacements
         replacements.recover(store)
@@ -625,6 +636,97 @@ class Queue:
                 pass
         threading.Thread(target=run, daemon=True).start()
 
+    def _start_reacquire(self) -> None:
+        """Bring up the back-catalogue workers once; the queue stays responsive."""
+        with self._reacquire_lock:
+            if self._reacquire_started:
+                return
+            self._reacquire_started = True
+        workers = max(1, int(self.store.setting_float("reacquire_workers", 3)))
+        for number in range(workers):
+            threading.Thread(target=self._reacquire_worker, name=f"reacquire-{number}",
+                             daemon=True).start()
+
+    def _reacquire_worker(self) -> None:
+        import reacquire
+        while not self._stop.is_set():
+            if self._reacquire_stopped:
+                return
+            # A person waiting for a song outranks the back catalogue.
+            if self.paused or self.store.next_job():
+                time.sleep(2)
+                continue
+            if self.store.stats()["disk_blocked"]:
+                time.sleep(15)
+                continue
+            if not self._reacquire_one():
+                return
+
+    def _reacquire_one(self) -> bool:
+        """Pop and run one swap. False means the work list is exhausted.
+
+        The list is built once per process from the audit report; `plan` drops
+        whatever is already swapped, so a restart resumes instead of repeating.
+        """
+        import reacquire
+        with self._reacquire_lock:
+            if self._reacquire_work is None:
+                self._reacquire_work = reacquire.plan(self.store, reacquire.candidates())
+            item = self._reacquire_work.pop(0) if self._reacquire_work else None
+        if item is None:
+            return False
+        if self._reacquire_failures >= reacquire.MAX_FAILURES:
+            self._reacquire_stopped = True
+            return False
+        track = self.store.track_by_id(item["track_id"])
+        if not track or not Path(track.get("file") or "").is_file():
+            return True
+        if reacquire.done(self.store, item["track_id"], item["origin"]):
+            return True
+        job = self.store.job_for_track(item["track_id"])
+        if not job:
+            return True
+        try:
+            with self._pick_lock:
+                replacements.stage(self.store, item["track_id"], item["origin"])
+                staged = replacements.pending(self.store, job["id"])
+                if not staged:
+                    raise ValueError("could not stage the replacement")
+                # Out of the queued state before the lock is released, so the
+                # normal worker cannot start the same track.
+                self.store.update_job(job["id"], status="downloading")
+            replacements.run(self, self.store.job(job["id"]), staged,
+                             expected_seconds=item["duration"])
+            with self.store.lock:
+                status = self.store.conn.execute(
+                    "SELECT status, error FROM source_replacements WHERE id=?",
+                    (staged["id"],)).fetchone()
+        except Exception as error:                     # noqa: BLE001 - one track
+            self.store.log(f"re-acquire failed for “{item['title'][:60]}”: {error}",
+                           "warn", "reacquire")
+            self._reacquire_failed()
+            return True
+        if status["status"] == "completed":
+            self._reacquire_failures = 0
+            self.store.log(f"re-acquired “{item['title'][:60]}” at source quality",
+                           "ok", "reacquire")
+        else:
+            self.store.log(f"re-acquire failed for “{item['title'][:60]}”: "
+                           f"{status['error'] or status['status']}", "warn", "reacquire")
+            self._reacquire_failed()
+        time.sleep(reacquire.PAUSE)                    # polite between origins
+        return True
+
+    def _reacquire_failed(self) -> None:
+        import reacquire
+        with self._reacquire_lock:
+            self._reacquire_failures += 1
+            if self._reacquire_failures >= reacquire.MAX_FAILURES:
+                self._reacquire_stopped = True
+                self.store.log(
+                    f"re-acquire paused after {self._reacquire_failures} failures in a row — "
+                    "the source looks down; restart or resume later", "warn", "reacquire")
+
     # -- loop --
     def _loop(self) -> None:
         while not self._stop.is_set():
@@ -654,8 +756,10 @@ class Queue:
                 self._wake.wait(15)
                 self._wake.clear()
                 continue
-            job = self.store.next_job()
+            with self._pick_lock:
+                job = self.store.next_job()
             if not job:
+                self._start_reacquire()
                 self.current = None
                 self._wake.wait(1.5)
                 self._wake.clear()
