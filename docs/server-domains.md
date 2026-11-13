@@ -175,6 +175,11 @@ UI depend on them; treat this table as the mapping. The versioned APIs (`/api/v1
 Existing routes stay as compatibility adapters when a service facade lands. No frontend contract
 changes in this refactor.
 
+The versioned surface is documented separately in [`docs/api-v1.md`](api-v1.md): the envelope,
+every route, the service function it delegates to, and the auth rule each one follows.
+`api/v1.py` is the adapter; `README`-style route lists should point there rather than duplicating
+it.
+
 **Built so far (ARCH-002, ARCH-005, ARCH-006).** `repo/service.py` and `social/service.py` are
 delegating facades, and `server.py` now reaches Repo and Social only through them:
 `/api/state`, `/api/artist`, `/api/tracks`, `/api/catalogue`, `/api/subscriptions` and every

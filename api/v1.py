@@ -239,6 +239,39 @@ def playback_stream(handler, store, security, query, track_id):
     })
 
 
+# -- Social: what people are doing ----------------------------------------------------------------
+
+def social_activity(handler, store, security, query):
+    from social import service
+    _reader(handler, store, security)
+    limit = _integer(query, 'limit', 80, low=1, high=200)
+    rows = service.feed(store, limit)
+    envelope(handler, 'social.activity', rows, len(rows))
+
+
+def social_thread(handler, store, security, query):
+    from social import service
+    member = _member(handler, store, security)
+    kind = _text(query, 'kind', limit=20)
+    target = _text(query, 'target', limit=64)
+    after = _integer(query, 'after', 0)
+    page = service.comments(store, kind, target, member, after)
+    envelope(handler, 'social.comments', page)
+
+
+def social_summary(handler, store, security, query):
+    from social import service
+    member = _member(handler, store, security)
+    kind = _text(query, 'kind', limit=20)
+    targets = _text(query, 'targets', limit=4096)
+    if targets:
+        rows = service.batch(store, kind, [t for t in targets.split(',') if t], member)
+        envelope(handler, 'social.summary', rows, len(rows))
+        return
+    target = _text(query, 'target', limit=64)
+    envelope(handler, 'social.summary', service.summary(store, kind, target, member))
+
+
 # -- the table ------------------------------------------------------------------------------------
 
 ROUTES = (
@@ -259,6 +292,9 @@ ROUTES = (
     ('GET', r'/api/v1/playback/queue', playback_queue),
     ('GET', r'/api/v1/playback/now', playback_now),
     ('GET', r'/api/v1/playback/stream/([1-9][0-9]*)', playback_stream),
+    ('GET', r'/api/v1/social/activity', social_activity),
+    ('GET', r'/api/v1/social/comments', social_thread),
+    ('GET', r'/api/v1/social/summary', social_summary),
 )
 
 

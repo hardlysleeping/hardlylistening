@@ -47,6 +47,7 @@ class ApiV1(unittest.TestCase):
         self.assertEqual(body['resource'], resource)
         self.assertEqual(body['data'], data)
 
+    # -- Repo ------------------------------------------------------------------------------------
 
     def test_repo_routes_call_the_repo_service(self):
         from repo import service as repo_service
@@ -230,10 +231,47 @@ class ApiV1(unittest.TestCase):
 
     # -- Social ----------------------------------------------------------------------------------
 
-    def test_an_unknown_v1_path_is_a_clean_404(self):
-        code, body = self.get('/api/v1/nope')
-        self.assertEqual(code, 404)
-        self.assertEqual(body, {'error': 'Unknown /api/v1 endpoint'})
+    def test_social_routes_call_the_social_service(self):
+        from social import service as social_service
+        asked = []
+
+        def record(name, answer):
+            def wrapper(*args, **kwargs):
+                asked.append(name)
+                return answer
+            return wrapper
+
+        page = {'score': 0, 'items': [], 'next_after': None}
+        rows = {'7': {'score': 1}}
+        answers = {'feed': [{'kind': 'boost'}], 'comments': page,
+                   'batch': rows, 'summary': {'score': 2}}
+        patches = [patch.object(social_service, name, record(name, answer))
+                   for name, answer in answers.items()]
+        for p in patches:
+            p.start()
+        try:
+            code, body = self.get('/api/v1/social/activity?limit=5')
+            self.assertEnvelope(body, 'social.activity', answers['feed'])
+            self.assertEqual(body['count'], 1)
+            code, body = self.get('/api/v1/social/comments?kind=track&target=7')
+            self.assertEnvelope(body, 'social.comments', page)
+            code, body = self.get('/api/v1/social/summary?kind=track&targets=7,8')
+            self.assertEnvelope(body, 'social.summary', rows)
+            self.assertEqual(body['count'], 1)
+            code, body = self.get('/api/v1/social/summary?kind=track&target=7')
+            self.assertEnvelope(body, 'social.summary', answers['summary'])
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(sorted(set(asked)), ['batch', 'comments', 'feed', 'summary'])
+
+    # -- Auth, 404 and the adapter's own shape ----------------------------------------------------
+
+    def test_a_session_is_required_when_accounts_are_on(self):
+        for path in ('/api/v1/repo/subscriptions', '/api/v1/library/songs',
+                     '/api/v1/playback/state', '/api/v1/social/activity'):
+            code, _, _ = self.request(path)
+            self.assertEqual(code, 401, path)
 
     def test_local_mode_serves_shared_reads_without_a_session(self):
         """Auth off means no member, not an invented one: the shared pool stays readable."""
@@ -245,16 +283,29 @@ class ApiV1(unittest.TestCase):
         body = json.loads(raw)
         self.assertEqual((body['data'], body['count']), ([], 0))
 
+    def test_an_unknown_v1_path_is_a_clean_404(self):
+        code, body = self.get('/api/v1/nope')
+        self.assertEqual(code, 404)
+        self.assertEqual(body, {'error': 'Unknown /api/v1 endpoint'})
+
     def test_a_wrong_method_says_what_is_allowed(self):
         code, body = self.post('/api/v1/library/songs', {})
         self.assertEqual(code, 405)
         self.assertIn('GET', body['error'])
 
-    def test_a_session_is_required_when_accounts_are_on(self):
-        for path in ('/api/v1/repo/subscriptions', '/api/v1/library/songs',
-                     '/api/v1/playback/state'):
-            code, _, _ = self.request(path)
-            self.assertEqual(code, 401, path)
+    def test_the_adapter_owns_no_queries(self):
+        """A route that starts reading tables has become the second implementation."""
+        text = (Path(__file__).resolve().parent.parent / 'api' / 'v1.py').read_text()
+        for query in ('store.conn', 'SELECT ', 'INSERT ', 'UPDATE ', 'DELETE FROM'):
+            self.assertNotIn(query, text, 'api/v1.py owns a query; it belongs to a service')
+        for table in ('listening_favorites', 'listening_now', 'listening_playlists',
+                      'playlist_tracks', 'social_comments', 'song_boosts'):
+            self.assertNotIn(table, text)
+        # ... and it still answers: delegating to nothing would pass the check above.
+        with patch.object(service, 'catalog', return_value=[]) as catalog:
+            code, body = self.get('/api/v1/library/songs')
+        self.assertEqual(code, 200)
+        catalog.assert_called_once()
 
 
 if __name__ == '__main__':
