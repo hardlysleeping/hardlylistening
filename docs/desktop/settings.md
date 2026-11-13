@@ -1,17 +1,16 @@
 # Desktop settings (HOST-005)
 
-The window's settings panel, the rules behind it, and — stated as plainly as the README states
-what a bundle still needs — **the two settings this card cannot honestly offer**.
+The window's settings panel, the rules behind it, and — since SERVER-006 — the two switches that
+used to be rows with a reason attached. Every setting in the panel is now real.
 
-The panel is four questions. Two of them are real settings the server acts on, one is a desktop
-entry, and two are facts with a reason attached:
+The panel is four questions plus the port:
 
 | setting | control | server-side reality | effect |
 | --- | --- | --- | --- |
 | Local only vs the LAN | two buttons | `--host` / `HARDLYLISTENING_HOST` | the address the server binds |
 | Port | shown, not edited here | `--port` / `HARDLYLISTENING_PORT` | the port the server binds |
-| Web UI on/off | **unsupported** | none exists | nothing; the UI is always served |
-| OpenSubsonic on/off | **unsupported** | none exists | nothing; `/rest/` is always routed |
+| Web UI on/off | two buttons | `--no-web-ui` / `HARDLYLISTENING_WEB_UI` | off: every page and asset in `web/` is a 404 with a sentence |
+| OpenSubsonic on/off | two buttons | `--no-subsonic` / `HARDLYLISTENING_SUBSONIC` | off: `/rest/*` answers the protocol's own error envelope |
 | Start at sign-in | two buttons | XDG autostart entry | runs the server launcher at login |
 
 `desktop/host/settings.py` is the specification and the tested copy. `desktop/ui/settings.js` is
@@ -46,28 +45,36 @@ Two limits worth naming:
   (`HARDLYLISTENING_AUTH_REQUIRED`) before leaving it open. The panel says that in the exposure
   hint rather than implying the bind is a security boundary.
 
-## The web UI: no switch exists
+## The web UI switch
 
-`server.py` serves `web/` on every start: `static()` reads from `WEB_DIR`, `/` maps to
-`index.html`, and no variable turns it off. There is no `HARDLYLISTENING_WEB_UI` and inventing one
-would mean editing the server — which this card does not.
+The server used to serve `web/` on every start. Since SERVER-006 it serves it unless told not to:
 
-So the setting is **marked unsupported**, with that reason in the panel, and a patch that asks for
-it is refused rather than stored. Hiding the UI is a reverse-proxy rule (`deny /` in Caddy or
-nginx), not a server setting; the panel says so instead of pretending.
+* `config.web_ui()` reads `HARDLYLISTENING_WEB_UI` (on unless `0`/`false`/`off`/`no`), and
+  `server.py --no-web-ui` overrides it. `main()` writes the answer into `server.FEATURES` before
+  it binds, so a running server is never half-gated.
+* **Off gates the directory, not the API.** `Handler.static()` is the one function that serves
+  pages, scripts, styles and PWA assets from `web/`; it answers `404` with
+  `The web UI is disabled on this server.` The `/api/*` routes, `/rest/*`, `/api/health` and the
+  rendered `/s/<token>` share pages do not pass through it and keep working.
+* Off also skips the sign-in redirect for `/`: sending a person to `/login` would only land them
+  on a 404, so they get the sentence directly.
 
-## OpenSubsonic: same shape
+The panel's row is a real two-state control, painted from `resolve.features()`. A stored value is
+`true` or `false` — a string such as `"false"` is refused rather than guessed, because string
+truthiness is how a `"false"` becomes on.
 
-`server.py` dispatches every `/rest/` request to `listening.rest()` unconditionally, and
-`/api/v1/capabilities` answers `subsonic.enabled: true` as a constant. Nothing gates it: no
-variable, no flag, no database setting.
+## The OpenSubsonic switch
 
-`subsonic.py` is a protocol adapter, not a feature-flagged surface, so there is nowhere to put a
-switch. Marked unsupported, refused rather than stored — a stored `subsonic: false` would be a
-promise the next start breaks.
+`/rest/*` was dispatched unconditionally. Now:
 
-If a switch is ever added server-side, this module is the one place to change: add the variable to
-`config.py`, remove the entry from `UNSUPPORTED`, and give the row a control.
+* `config.subsonic()` reads `HARDLYLISTENING_SUBSONIC`, and `server.py --no-subsonic` overrides it.
+* Off answers the **protocol's** error shape — `subsonic-response` with `status: failed`, error
+  code `0`, and "OpenSubsonic is disabled on this server" — in the format the request asked for
+  (`f=json` or XML). A plain Subsonic client gets a refusal it can report, not a bare 404 it would
+  read as a broken network.
+* `/api/v1/capabilities` now reports `subsonic.enabled` from `FEATURES` instead of the constant
+  it used to send, and publishes the web UI's state beside it as `web_ui.enabled`. The endpoint
+  cannot claim more than the server does, which is what makes the document worth trusting.
 
 ## Autostart: the server, at sign-in, only when chosen
 
@@ -90,14 +97,15 @@ Type=Application
 Version=1.0
 Name=HardlyListening server
 Comment=Starts the HardlyListening server at sign-in, not the desktop window
-Exec="/path/to/bin/hardlylistening-server" run --host 127.0.0.1 --port 8470
+Exec="/path/to/bin/hardlylistening-server" run --host 127.0.0.1 --port 8470 --no-subsonic
 Terminal=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 ```
 
-* `Exec` is the same `argv()` the window spawns with, so an autostarted server binds the address
-  the window polls. The path is quoted for the `Desktop Entry` spec when it contains spaces, and
+* `Exec` is the same `argv()` the window spawns with — the address, plus `--no-web-ui` /
+  `--no-subsonic` when a switch is off — so an autostarted server binds the address the window
+  polls and serves what the panel shows. (The example above shows one switch off.) The path is quoted for the `Desktop Entry` spec when it contains spaces, and
   `%` is escaped as `%%` (it is a field code there).
 * `Terminal=false` is honest about the cost: an autostarted server has no journal, no terminal and
   therefore **no visible log**. If logs matter, run it under systemd (`docs/server-packaging.md`)
@@ -123,37 +131,43 @@ Turning it off removes only `hardlylistening-server.desktop`; any other file in
 the card that writes it. The shape stays the one the resolver understands:
 
 ```json
-{ "host": "0.0.0.0", "port": 8470 }
+{ "host": "0.0.0.0", "port": 8470, "web_ui": true, "subsonic": false }
 ```
 
 Rules:
 
-* **Only what the server understands is stored.** No `web_ui`, no `subsonic`, no `autostart` —
-  keys the server would ignore are not written, and keys the shell does not own are preserved.
+* **Only what the server understands is stored.** All four keys are read at boot (`--host`,
+  `--port`, `--no-web-ui`, `--no-subsonic`); `autostart` is never written, because the server has
+  no autostart flag — that one is the desktop entry. Keys the shell does not own are preserved.
 * **Written atomically** (temp file beside it, then rename): a window that dies mid-write must not
   leave half a JSON file where the next start reads its address.
 * **An unparsable file is kept, not destroyed.** `resolve.read_config` reports and ignores a
   malformed file, which is right for opening a window and wrong for overwriting one; the old
   bytes are copied to `host.json.bak` first.
 * **Precedence is unchanged**: environment → this file → the server's defaults, via
-  `resolve.address()`. Nothing here re-implements that.
+  `resolve.address()` and `resolve.features()`. Nothing here re-implements either.
 
 ### The environment wins, and the panel says so
 
-If `HARDLYLISTENING_HOST` or `HARDLYLISTENING_PORT` is set for the window, the file is inert for
-that field. Writing it would change nothing, so the write is **refused with the variable named**
-rather than performed and silently ignored, and the panel's buttons for that field are disabled
-with the same sentence. The other field still saves.
+If `HARDLYLISTENING_HOST`, `_PORT`, `_WEB_UI` or `_SUBSONIC` is set for the window, the file is
+inert for that field. Writing it would change nothing, so the write is **refused with the variable
+named** rather than performed and silently ignored, and the panel's control for that field is
+disabled with the same sentence. The other fields still save.
 
 ## Restart semantics
 
-The server reads `--host`/`--port` once, in `main()`. A saved address is therefore true for the
-*next* start: the window's polling address changes immediately, the running server does not.
+The server reads `--host`, `--port` and both switches once, in `main()`. A saved change is
+therefore true for the *next* start: the window's polling address changes immediately, the running
+server does not.
 
 So every address change is reported as a restart:
 
 > Saved. Restart the server to listen on 0.0.0.0:8470 — it keeps answering on 127.0.0.1:8470
 > until then.
+
+A switch alone gets its own sentence, because there is no address to name:
+
+> Saved. Restart the server for the new switches to take effect.
 
 The panel does not restart anything itself: HOST-001 made stopping an owned server a button, and
 a save is not a stop. The diff (`restart`, `restart_required`, `summary`) is what lets the window
@@ -183,113 +197,17 @@ node tests/test_host_settings.cjs                # the panel's decisions
 rustfmt --check desktop/src-tauri/src/*.rs       # parses; formatting only
 ```
 
-## WIRING
+## Wiring (in place)
 
-Nothing in this card edits the shared files; these are the exact additions that turn the delivered
-files into a working panel. Each is an insertion, not a rewrite.
+HOST-005 delivered the panel as files and spelled out how to attach it; that wiring has since been
+applied, so these are facts about the tree rather than instructions:
 
-### 1. `desktop/ui/index.html` — load the panel
-
-Anchor (the end of the file, lines 60–61):
-
-```html
-<script src="state.js"></script>
-<script src="app.js"></script>
-```
-
-becomes:
-
-```html
-<script src="state.js"></script>
-<script src="app.js"></script>
-<script src="settings.js"></script>
-```
-
-`settings.js` mounts itself: on load it finds `.shell`, builds its card in the shell's own classes
-(`card`, `eyebrow`, `facts`, `actions`, `button.primary`, `hint`, `foot`, `notice`), and inserts
-it directly after the `.card.server` section. No other HTML change is needed, and removing the
-script removes the panel cleanly.
-
-### 2. `desktop/src-tauri/src/lib.rs` — register the two commands
-
-Anchor, below the crate doc comment:
-
-```rust
-mod host;
-mod probe;
-```
-
-becomes:
-
-```rust
-mod host;
-mod probe;
-mod settings;
-```
-
-Anchor, in `run()`:
-
-```rust
-        .invoke_handler(tauri::generate_handler![
-            host_env,
-            server_status,
-            server_start,
-            server_stop,
-            open_web_ui,
-            quit
-        ])
-```
-
-becomes:
-
-```rust
-        .invoke_handler(tauri::generate_handler![
-            host_env,
-            server_status,
-            server_start,
-            server_stop,
-            open_web_ui,
-            settings::settings_read,
-            settings::settings_write,
-            quit
-        ])
-```
-
-Both are Rust functions, so `capabilities/default.json` needs no change: capabilities gate plugin
-commands, and the shell calls neither plugin.
-
-### 3. `desktop/README.md` — stop saying the window does not write settings
-
-Anchor (in *What is deliberately not here*):
-
-```markdown
-* **Settings** — HOST-005. The window shows the address and the config path; it does not write
-  them.
-```
-
-becomes:
-
-```markdown
-* **Settings** — HOST-005 wrote `desktop/host/settings.py`, the panel in `desktop/ui/settings.js`
-  and the two commands in `src-tauri/src/settings.rs`. The window edits the exposure
-  (local vs LAN) and the autostart entry; the web UI and OpenSubsonic are reported as having no
-  server-side switch, because they have none. See `docs/desktop/settings.md`.
-```
-
-Also anchor (the address table):
-
-```markdown
-| `<XDG_STATE_HOME>/hardlylistening-desktop/host.json` | a person chose an address in the window (HOST-005 writes it) |
-```
-
-becomes:
-
-```markdown
-| `<XDG_STATE_HOME>/hardlylistening-desktop/host.json` | a person chose an address in the window (HOST-005 writes it) |
-```
-
-### 4. Nothing else
-
-`tauri.conf.json` already embeds `desktop/ui` (`frontendDist`), so `settings.js` ships without a
-config change; `web/`, `config.py` and every core module are untouched, and the headless install
-is unaffected.
+* `desktop/ui/index.html` loads `settings.js` after `app.js`. The panel mounts itself into
+  `.shell`, directly after the `.card.server` section.
+* `desktop/src-tauri/src/lib.rs` declares `mod settings;` and registers `settings::settings_read`
+  and `settings::settings_write` in `invoke_handler`.
+* Both are Rust functions the crate defines, so `capabilities/default.json` needs no entry:
+  capabilities gate plugin commands.
+* `tauri.conf.json` embeds `desktop/ui` as `frontendDist`, so the panel ships without a config
+  change. `web/`, `config.py` and every core module are untouched by the panel itself; the server
+  half of the two switches lives in `server.py` and `config.py`.

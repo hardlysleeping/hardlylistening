@@ -30,6 +30,16 @@ APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
 ARTIST_ART_DIR = paths.ARTIST_ART_DIR
 
+#: What this process actually serves. Decided once, in `main()`, from `config` and the flags —
+#: never inside a request, so a running server cannot end up half-gated. Tests set it directly;
+#: nothing else writes it after boot.
+FEATURES = {"web_ui": True, "subsonic": True}
+
+#: The one reply for a browser surface that was switched off at boot. A sentence, not an empty
+#: 404: a person who reaches a headless server from a browser should be able to tell a disabled
+#: UI from a typo in the URL.
+UI_OFF = b"The web UI is disabled on this server.\n"
+
 STORE: db.Store | None = None
 QUEUE: Queue | None = None
 SCHEDULER = None
@@ -177,6 +187,12 @@ class Handler(BaseHTTPRequestHandler):
             # Device auth is independent of browser/email login, never the local bypass.
             if path.startswith('/rest/'):
                 import listening
+                if not FEATURES.get('subsonic', True):
+                    # The Subsonic error envelope, not a bare 404: a client that speaks the
+                    # protocol should get an answer in the protocol's own shape.
+                    listening.envelope(self, {},
+                                       error=(0, 'OpenSubsonic is disabled on this server'))
+                    return False
                 listening.rest(self, boot()[0], SECURITY)
                 return False
             if path == '/api/playlists' or path.startswith('/api/playlists/'):
@@ -383,7 +399,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.json({
                     'server': {'name': subsonic.SERVER_TYPE, 'version': db.VERSION,
                                'api': 'v1', 'requires_members': bool(SECURITY.required)},
-                    'subsonic': {'enabled': True, 'version': subsonic.PROTOCOL_VERSION,
+                    'web_ui': {'enabled': bool(FEATURES.get('web_ui', True))},
+                    'subsonic': {'enabled': bool(FEATURES.get('subsonic', True)),
+                                 'version': subsonic.PROTOCOL_VERSION,
                                  'server_version': subsonic.SERVER_VERSION,
                                  'open_subsonic': True,
                                  'extensions': subsonic.EXTENSIONS,
@@ -679,6 +697,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.boundary(path):
             return
         if SECURITY.required and path in ('/', '/index.html', '/dj', '/dj.html'):
+            if self.web_ui_off():
+                return      # no page to send them to: the UI was switched off at boot
             try:
                 self.member = SECURITY.authenticate(self, boot()[0])
             except Denied as exc:
@@ -1178,7 +1198,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', '0')
         self.end_headers()
 
+    def web_ui_off(self) -> bool:
+        """Answer 404 for the browser app when `--no-web-ui` was used, and say why.
+
+        The switch covers `web/` — the pages, scripts, styles and PWA assets served from that
+        directory. The API, `/rest/`, the health probe and rendered share links are not the web
+        UI and keep answering.
+        """
+        if FEATURES.get("web_ui", True):
+            return False
+        self._send(404, UI_OFF, "text/plain; charset=utf-8")
+        return True
+
     def static(self, name: str) -> None:
+        if self.web_ui_off():
+            return
         bases = (WEB_DIR, APP_DIR) if name in ('app.webmanifest', 'icon-192.png', 'icon-512.png') else (WEB_DIR,)
         for base in bases:
             target = (base / name).resolve()
@@ -1978,27 +2012,52 @@ def shutdown(httpd: ThreadingHTTPServer) -> None:
         STORE.close()
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Serve until a signal arrives.
+def argument_parser(default_host: str, default_port: int, web_ui: bool = True,
+                    subsonic: bool = True) -> argparse.ArgumentParser:
+    """The `run` flags, with the environment's answers as their defaults.
 
-    `--host`/`--port` beat the environment, which beats today's defaults, so a unit file can
-    set both and a one-off run can still override either.
+    `--no-web-ui` and `--no-subsonic` are spelled as the *off* switch because on is the default
+    everywhere: a unit file or a window says nothing and gets today's behaviour. `dest` is the
+    positive name, so the parser itself returns what the server should serve — no second
+    negation in `main()` to get wrong.
     """
-    try:
-        default_host, default_port = config.host(), config.port()
-    except ValueError as exc:
-        print(f"config: {exc}", flush=True)
-        return 2
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=default_port)
     parser.add_argument("--host", default=default_host)
-    args = parser.parse_args(argv)
+    parser.add_argument("--no-web-ui", dest="web_ui", action="store_false", default=web_ui,
+                        help="serve the API, not the pages in web/")
+    parser.add_argument("--no-subsonic", dest="subsonic", action="store_false", default=subsonic,
+                        help="answer /api, not /rest/*")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Serve until a signal arrives.
+
+    `--host`/`--port`/`--no-web-ui`/`--no-subsonic` beat the environment, which beats today's
+    defaults, so a unit file can set all four and a one-off run can still override any of them.
+    """
+    try:
+        default_host, default_port = config.host(), config.port()
+        default_web_ui, default_subsonic = config.web_ui(), config.subsonic()
+    except ValueError as exc:
+        print(f"config: {exc}", flush=True)
+        return 2
+    args = argument_parser(default_host, default_port, default_web_ui,
+                           default_subsonic).parse_args(argv)
+    # Decided once, before anything can be served: a running server is never half-gated.
+    FEATURES.update(web_ui=args.web_ui, subsonic=args.subsonic)
 
     boot()      # fail fast if the DB or yt-dlp is broken
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     httpd.daemon_threads = True
     print(f"HardlyListening on http://{args.host}:{args.port}  (db: {db.DB_PATH})",
           flush=True)
+    if not (args.web_ui and args.subsonic):
+        # Say it once, in the journal: "the page 404s" is a confusing way to learn a switch is on.
+        off = [name for name, on in (("web UI", args.web_ui), ("OpenSubsonic", args.subsonic))
+               if not on]
+        print(f"not served: {', '.join(off)}", flush=True)
 
     # `serve_forever` blocks, and `shutdown()` must be called from another thread, so the
     # signal handler's only job is to set a flag and the main thread does the stopping.

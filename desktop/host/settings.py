@@ -5,18 +5,19 @@ settings.rs` is its thin Rust rendering — a file read, a file write and one de
 `ui/settings.js` is the panel that paints what this module describes. The crate cannot be
 compiled on a machine without `webkit2gtk-4.1`, so the rules live here and the tests drive them.
 
-Four questions, and the truth about each one:
+Five questions, and the truth about each one:
 
   * **Local only, or the LAN?** The server has exactly one bind control: the address it is given.
     `config.host()` reads `HARDLYLISTENING_HOST`, `server.py --host` beats it, and `main()` builds
     `ThreadingHTTPServer((args.host, args.port))` from it. So "local only" is `127.0.0.1` and
     "the LAN" is `0.0.0.0`, and nothing else is invented here.
-  * **The web UI.** The server serves `web/` on every start and reads no variable that turns it
-    off. There is no switch, so this module does not pretend to have one: the setting is marked
-    unsupported with the reason, and a patch that asks for it is refused rather than stored.
-  * **OpenSubsonic.** Same shape: `server.py` dispatches every `/rest/` request to
-    `listening.rest()` unconditionally, and `/api/v1/capabilities` reports `subsonic.enabled` as
-    a constant `true`. Unsupported, and said so.
+  * **The web UI.** `server.py` serves `web/` unless it is started with `--no-web-ui`;
+    `config.web_ui()` reads `HARDLYLISTENING_WEB_UI` as the default. The setting is real: off
+    means every page and asset from `web/` answers 404 with a sentence, while the API keeps
+    working. It is read at boot, so a change needs a restart.
+  * **OpenSubsonic.** `--no-subsonic` makes `/rest/*` answer the Subsonic error envelope instead
+    of dispatching to `listening.rest()`, and `/api/v1/capabilities` reports the real state.
+    Also read at boot.
   * **Autostart.** The one thing here that is not the server's: an XDG autostart entry that runs
     the *launcher* (`hardlylistening-server run --host … --port …`), never the desktop window.
     It is written only when the choice is made explicitly — `save(..., autostart=True|False)` —
@@ -25,17 +26,18 @@ Four questions, and the truth about each one:
 
 Two rules make the model honest rather than convenient:
 
-  * **The file holds only what the server understands.** `save()` writes `host` and `port` into
-    the shell's `host.json` (the file `resolve.py` already reads) and preserves keys it does not
-    own. It never writes a flag the server would ignore — a stored `web_ui: false` would be a
-    promise the next start breaks.
-  * **The environment wins, and the window says so.** `resolve.address()` gives
-    `HARDLYLISTENING_HOST`/`_PORT` precedence over the file, so writing `host` while the variable
-    is declared would change nothing. That write is refused with the variable named, not
-    performed and silently ignored.
+  * **The file holds only what the server understands.** `save()` writes `host`, `port`, `web_ui`
+    and `subsonic` into the shell's `host.json` (the file `resolve.py` already reads) and
+    preserves keys it does not own. Every key it writes is one the server reads — a stored value
+    the next start ignored would be a promise the server breaks.
+  * **The environment wins, and the window says so.** `resolve.address()` and
+    `resolve.features()` give `HARDLYLISTENING_HOST`/`_PORT`/`_WEB_UI`/`_SUBSONIC` precedence
+    over the file, so writing one of those keys while its variable is declared would change
+    nothing. That write is refused with the variable named, not performed and silently ignored.
 
 `changed()` is the diff the panel shows before and after saving; `restart_required` is its
-answer to "do I need to restart the server for this to be true".
+answer to "do I need to restart the server for this to be true". All four stored settings are
+read once, at boot, so all four are restarts.
 """
 from __future__ import annotations
 
@@ -68,18 +70,17 @@ SCOPES: dict[str, dict[str, str]] = {
     },
 }
 
-#: Settings the server has no switch for. Each reason names the code that would have to change,
-#: because "not supported" without a why is indistinguishable from a missing feature.
-UNSUPPORTED: dict[str, str] = {
+#: What each switch means, in the panel's words. Both are read once at boot, so both are a
+#: restart — and both keep the API working, which is the part a person needs to know.
+SWITCHES: dict[str, str] = {
     'web_ui': (
-        'The server always serves web/: server.py answers / from WEB_DIR and reads no variable '
-        'that turns it off. Hiding it would be a reverse-proxy rule, not a server setting, so '
-        'this window does not offer it.'
+        'On: every page and asset in web/ is served, and the window opens it. Off: those '
+        'requests answer 404 with a sentence; /api, /rest/ and the health probe keep working, '
+        'so a headless server stays usable. Read at boot.'
     ),
     'subsonic': (
-        'OpenSubsonic is always on: server.py dispatches every /rest/ request to '
-        'listening.rest() and /api/v1/capabilities reports subsonic.enabled as a constant true. '
-        'No variable, flag or setting gates it, so a toggle here would be a lie.'
+        'On: /rest/* answers the Subsonic protocol. Off: it answers a Subsonic error envelope '
+        'and nothing else changes — the web UI and /api are unaffected. Read at boot.'
     ),
 }
 
@@ -93,7 +94,7 @@ AUTOSTART_ENV = 'HARDLYLISTENING_DESKTOP_AUTOSTART'
 
 #: Fields a patch may carry. `scope` is accepted so the panel can post what it shows; it is
 #: translated to `host` before anything is written.
-_PATCHABLE = ('host', 'port', 'scope')
+_PATCHABLE = ('host', 'port', 'scope', 'web_ui', 'subsonic')
 
 #: What each field is called in the window.
 LABELS = {
@@ -107,10 +108,17 @@ LABELS = {
 
 @dataclass(frozen=True)
 class Settings:
-    """The address the server will be started on — the only thing this shell stores."""
+    """Everything the shell stores about the server it starts.
+
+    The four values are the four things `server.py` reads at boot: the address it binds and the
+    two surfaces it serves. Nothing here is a copy of a server rule — `resolve` is still the
+    resolver, and this is the shape a diff and a file write need.
+    """
 
     host: str = resolve.DEFAULT_HOST
     port: int = resolve.DEFAULT_PORT
+    web_ui: bool = True
+    subsonic: bool = True
 
     @property
     def scope(self) -> str:
@@ -119,6 +127,13 @@ class Settings:
 
     def address(self) -> resolve.Address:
         return resolve.Address(host=self.host, port=self.port)
+
+    def features(self) -> resolve.Features:
+        return resolve.Features(web_ui=self.web_ui, subsonic=self.subsonic)
+
+    def flags(self) -> list[str]:
+        """The `--no-…` flags for what is off: the same argv the window spawns with."""
+        return self.features().argv()
 
 
 @dataclass(frozen=True)
@@ -158,7 +173,9 @@ class Saved:
         return {
             'saved': self.saved,
             'settings': {'host': self.settings.host, 'port': self.settings.port,
-                         'scope': self.settings.scope},
+                         'scope': self.settings.scope,
+                         'web_ui': self.settings.web_ui,
+                         'subsonic': self.settings.subsonic},
             'written': list(self.written),
             'refused': [{'field': field, 'reason': reason} for field, reason in self.refused],
             'autostart': self.autostart,
@@ -193,7 +210,8 @@ def autostart_path(env: Mapping[str, str] | None = None) -> Path:
 
 def _locked(env: Mapping[str, str]) -> tuple[str, ...]:
     """Fields an environment variable pins. Those writes cannot take effect, so they are refused."""
-    pairs = (('host', 'HARDLYLISTENING_HOST'), ('port', 'HARDLYLISTENING_PORT'))
+    pairs = (('host', 'HARDLYLISTENING_HOST'), ('port', 'HARDLYLISTENING_PORT'),
+             ('web_ui', 'HARDLYLISTENING_WEB_UI'), ('subsonic', 'HARDLYLISTENING_SUBSONIC'))
     return tuple(field for field, name in pairs if (env.get(name) or '').strip())
 
 
@@ -214,6 +232,11 @@ def load(env: Mapping[str, str] | None = None, path: Path | None = None,
     except ValueError as error:
         address = resolve.Address()
         problems.append(f'{error} — showing the defaults instead.')
+    try:
+        switches = resolve.features(env, config_path)
+    except ValueError as error:
+        switches = resolve.Features()
+        problems.append(f'{error} — showing the defaults instead.')
     _, config_problem = resolve.read_config(config_path)
     if config_problem:
         problems.append(config_problem)
@@ -221,11 +244,12 @@ def load(env: Mapping[str, str] | None = None, path: Path | None = None,
     if locked:
         variables = ', '.join('HARDLYLISTENING_' + field.upper() for field in locked)
         problems.append(
-            f'{variables} is set for this window and wins over the config file, so the '
-            'exposure and port are fixed for this session.'
+            f'{variables} is set for this window and wins over the config file, so '
+            'those settings are fixed for this session.'
         )
     return Loaded(
-        settings=Settings(host=address.host, port=address.port),
+        settings=Settings(host=address.host, port=address.port,
+                          web_ui=switches.web_ui, subsonic=switches.subsonic),
         autostart=entry.is_file(),
         locked=locked,
         problems=tuple(problems),
@@ -252,12 +276,14 @@ def _clean_port(value) -> int:
 def changed(before: Settings, after: Settings) -> dict:
     """What a save would change, and whether the running server has to be restarted for it.
 
-    The address is read by the server once, at `main()`, and handed to
-    `ThreadingHTTPServer`. A window that saved a new bind and said nothing would leave a person
-    polling an address nothing listens on — so every address change is a restart.
+    All four stored settings are read once, in `main()`, and used for the life of the process:
+    the address is handed to `ThreadingHTTPServer` and the two switches become the `FEATURES`
+    it serves from. A window that saved a change and said nothing would leave a person polling
+    an address nothing listens on, or looking for pages that now 404 — so every change here is
+    a restart.
     """
     changes = []
-    for field in ('host', 'port'):
+    for field in ('host', 'port', 'web_ui', 'subsonic'):
         old, new = getattr(before, field), getattr(after, field)
         if old != new:
             changes.append({'field': field, 'label': LABELS[field], 'from': old, 'to': new,
@@ -265,12 +291,12 @@ def changed(before: Settings, after: Settings) -> dict:
     restart = tuple(change['field'] for change in changes if change['restart'])
     if not changes:
         summary = 'Nothing to apply.'
-    elif restart:
+    elif 'host' in restart or 'port' in restart:
         summary = (f'Saved. Restart the server to listen on '
                    f'{after.address().listen()} — it keeps answering on '
                    f'{before.address().listen()} until then.')
     else:
-        summary = 'Saved.'
+        summary = 'Saved. Restart the server for the new switches to take effect.'
     return {
         'changes': changes,
         'restart': list(restart),
@@ -281,11 +307,27 @@ def changed(before: Settings, after: Settings) -> dict:
     }
 
 
+def switch_row(settings: Settings, loaded: Loaded, key: str) -> dict:
+    """One real on/off switch, painted from the model rather than from a fixed sentence."""
+    on = getattr(settings, key)
+    return {
+        'key': key,
+        'label': LABELS[key],
+        'value': 'On' if on else 'Off',
+        'detail': SWITCHES[key],
+        'editable': True,
+        'supported': True,
+        'locked': key in loaded.locked,
+        'options': [{'value': False, 'label': 'Off'}, {'value': True, 'label': 'On'}],
+    }
+
+
 def describe(loaded: Loaded) -> dict:
     """The panel's content as rows, so the window paints a model instead of inventing copy.
 
-    `supported: False` rows exist to be explained, not toggled. A disabled switch with no reason
-    reads as broken; a row that says which code would need to change reads as a fact.
+    Every row here is a real control. `supported` stays in the shape because the panel and its
+    tests read it, but nothing is `False` any more: the card that added this model's two
+    unsupported rows was closed by giving the server the switches, not by softening the copy.
     """
     settings = loaded.settings
     rows = [
@@ -308,24 +350,8 @@ def describe(loaded: Loaded) -> dict:
             'supported': True,
             'locked': 'port' in loaded.locked,
         },
-        {
-            'key': 'web_ui',
-            'label': LABELS['web_ui'],
-            'value': 'Always served',
-            'detail': UNSUPPORTED['web_ui'],
-            'editable': False,
-            'supported': False,
-            'locked': True,
-        },
-        {
-            'key': 'subsonic',
-            'label': LABELS['subsonic'],
-            'value': 'Always on',
-            'detail': UNSUPPORTED['subsonic'],
-            'editable': False,
-            'supported': False,
-            'locked': True,
-        },
+        switch_row(settings, loaded, 'web_ui'),
+        switch_row(settings, loaded, 'subsonic'),
         {
             'key': 'autostart',
             'label': LABELS['autostart'],
@@ -346,10 +372,19 @@ def describe(loaded: Loaded) -> dict:
     }
 
 
+def _clean_flag(value, field: str) -> bool:
+    """A switch is a JSON boolean. `"false"` is refused rather than guessed: string truthiness
+    is how a "false" ends up stored as on."""
+    if not isinstance(value, bool):
+        raise ValueError(f'{field} is true or false, not {value!r}')
+    return value
+
+
 def save(loaded: Loaded, patch: Mapping | None = None, *, autostart: bool | None = None,
          launcher: str | Path | None = None, path: Path | None = None,
          env: Mapping[str, str] | None = None) -> Saved:
-    """Apply a patch of `host`/`port`/`scope`, and write the autostart entry only if asked.
+    """Apply a patch of `host`/`port`/`scope`/`web_ui`/`subsonic`, and the autostart entry only
+    when it is asked for explicitly.
 
     `autostart=None` — the default — is "no choice was made": the entry is neither written nor
     removed, whatever the file currently says. A patch cannot carry `autostart` at all, so no
@@ -363,9 +398,7 @@ def save(loaded: Loaded, patch: Mapping | None = None, *, autostart: bool | None
     wanted = loaded.settings
 
     for field in patch:
-        if field in ('web_ui', 'subsonic'):
-            refused.append((field, UNSUPPORTED[field]))
-        elif field == 'autostart':
+        if field == 'autostart':
             refused.append((field, 'autostart is only changed by an explicit choice, '
                                    'never by a patch'))
         elif field not in _PATCHABLE:
@@ -377,8 +410,11 @@ def save(loaded: Loaded, patch: Mapping | None = None, *, autostart: bool | None
         wanted = replace(wanted, host=_clean_host(patch['host']))
     if 'port' in patch:
         wanted = replace(wanted, port=_clean_port(patch['port']))
+    for field in ('web_ui', 'subsonic'):
+        if field in patch:
+            wanted = replace(wanted, **{field: _clean_flag(patch[field], field)})
 
-    for field in ('host', 'port'):
+    for field in ('host', 'port', 'web_ui', 'subsonic'):
         value = getattr(wanted, field)
         if value != getattr(loaded.settings, field) and field in loaded.locked:
             variable = 'HARDLYLISTENING_' + field.upper()
@@ -391,7 +427,7 @@ def save(loaded: Loaded, patch: Mapping | None = None, *, autostart: bool | None
     if wanted != loaded.settings:
         stored, _ = resolve.read_config(config_path)
         backup = _backup_unreadable(config_path)
-        written = tuple(field for field in ('host', 'port')
+        written = tuple(field for field in ('host', 'port', 'web_ui', 'subsonic')
                         if getattr(wanted, field) != getattr(loaded.settings, field))
         _write_config(config_path, stored, wanted)
 
@@ -428,10 +464,12 @@ def _backup_unreadable(path: Path) -> Path | None:
 
 
 def _write_config(path: Path, stored: Mapping, settings: Settings) -> None:
-    """Write `host`/`port`, preserving every key this shell does not own."""
+    """Write the four settings, preserving every key this shell does not own."""
     data = dict(stored) if isinstance(stored, Mapping) else {}
     data['host'] = settings.host
     data['port'] = settings.port
+    data['web_ui'] = settings.web_ui
+    data['subsonic'] = settings.subsonic
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(data, indent=2, sort_keys=True) + '\n'
     temp = path.with_name(path.name + '.tmp')
@@ -446,13 +484,15 @@ def _write_config(path: Path, stored: Mapping, settings: Settings) -> None:
 def autostart_entry(settings: Settings, launcher: str | Path) -> str:
     """The `.desktop` file: the *server* launcher, with the address as explicit flags.
 
-    The flags are the same `argv()` the window spawns with, so an autostarted server binds the
-    address the window polls. `Terminal=false` is honest about the cost: an autostarted server
-    has no journal, no terminal and therefore no visible log.
+    The flags are the same `argv()` the window spawns with — the address it binds and the
+    `--no-…` switches for what is off — so an autostarted server serves what the window shows.
+    `Terminal=false` is honest about the cost: an autostarted server has no journal, no terminal
+    and therefore no visible log.
     """
     if launcher is None or not str(launcher).strip():
         raise ValueError('an autostart entry needs the server launcher path')
-    command = ' '.join([_exec_quote(str(launcher)), 'run'] + settings.address().argv())
+    command = ' '.join([_exec_quote(str(launcher)), 'run'] + settings.address().argv()
+                       + settings.flags())
     return (
         '[Desktop Entry]\n'
         'Type=Application\n'

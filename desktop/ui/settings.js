@@ -7,9 +7,10 @@
  *
  * Two rules this file exists to keep:
  *
- *   * **No setting without a server-side meaning.** The web UI and OpenSubsonic have no switch
- *     in the server, so they are facts with a reason, never toggles. A stored flag the server
- *     ignores is a promise the next start breaks.
+ *   * **No setting without a server-side meaning.** Every switch here is read by the server at
+ *     boot: `--no-web-ui` turns the pages in web/ into a 404, `--no-subsonic` turns /rest/*
+ *     into a Subsonic error envelope, and `/api/v1/capabilities` reports both. A stored flag the
+ *     server ignored would be a promise the next start breaks.
  *   * **Autostart is an explicit choice.** `dirty()` only sees it once `autostartTouched` is
  *     set by a click, and `save()` sends `null` for "no choice" — the entry is never installed
  *     as a side effect of changing the address.
@@ -24,11 +25,11 @@
   var DEFAULT_PORT = 8470;
 
   /* Short copy for the panel; the full reasoning is in settings.py and docs/desktop/settings.md. */
-  var UNSUPPORTED = {
-    web_ui: 'The server always serves web/: it reads no variable that turns the web UI off. ' +
-      'Hiding it is a reverse-proxy rule, not a server setting.',
-    subsonic: 'OpenSubsonic is always on: every /rest/ request is dispatched to the Subsonic ' +
-      'adapter and /api/v1/capabilities reports it enabled as a constant. No switch exists.'
+  var SWITCHES = {
+    web_ui: 'On: every page and asset in web/ is served. Off: those requests answer 404 with a ' +
+      'sentence; /api, /rest/ and the health probe keep working. Read at boot.',
+    subsonic: 'On: /rest/* answers the Subsonic protocol. Off: it answers a Subsonic error ' +
+      'envelope and nothing else changes. Read at boot.'
   };
 
   var SCOPES = {
@@ -77,6 +78,7 @@
     if (source.problem) { problems.push(String(source.problem)); }
     if (source.configProblem) { problems.push(String(source.configProblem)); }
     (source.problems || []).forEach(function (text) { if (text) { problems.push(String(text)); } });
+    var features = source.features || {};
     return {
       host: host,
       port: port,
@@ -84,6 +86,8 @@
       source: address.source || 'default',
       listen: listen(host, port),
       locked: (source.locked || []).slice(),
+      webUi: features.web_ui !== false,
+      subsonic: features.subsonic !== false,
       autostart: source.autostart === true,
       autostartSupported: source.autostartSupported !== false,
       configPath: source.configPath || '',
@@ -119,22 +123,28 @@
       {
         key: 'web_ui',
         label: 'Web UI',
-        value: 'Always served',
-        detail: UNSUPPORTED.web_ui,
-        editable: false,
-        supported: false,
-        locked: true,
-        options: []
+        value: m.webUi ? 'On' : 'Off',
+        detail: SWITCHES.web_ui,
+        editable: true,
+        supported: true,
+        locked: m.locked.indexOf('web_ui') !== -1,
+        options: [
+          { value: false, label: 'Off' },
+          { value: true, label: 'On' }
+        ]
       },
       {
         key: 'subsonic',
         label: 'OpenSubsonic',
-        value: 'Always on',
-        detail: UNSUPPORTED.subsonic,
-        editable: false,
-        supported: false,
-        locked: true,
-        options: []
+        value: m.subsonic ? 'On' : 'Off',
+        detail: SWITCHES.subsonic,
+        editable: true,
+        supported: true,
+        locked: m.locked.indexOf('subsonic') !== -1,
+        options: [
+          { value: false, label: 'Off' },
+          { value: true, label: 'On' }
+        ]
       },
       {
         key: 'autostart',
@@ -159,7 +169,19 @@
   /* The edited copy. `autostartTouched` is the whole explicit-choice rule: without a click, the
    * draft's autostart value is not a decision and must not become one. */
   function draft(m) {
-    return { scope: m.scope, port: m.port, autostart: m.autostart, autostartTouched: false };
+    return {
+      scope: m.scope,
+      port: m.port,
+      webUi: m.webUi,
+      subsonic: m.subsonic,
+      autostart: m.autostart,
+      autostartTouched: false
+    };
+  }
+
+  function setSwitch(d, key, on) {
+    if (key !== 'web_ui' && key !== 'subsonic') { throw new Error('unknown switch: ' + key); }
+    return Object.assign({}, d, key === 'web_ui' ? { webUi: on === true } : { subsonic: on === true });
   }
 
   function setScope(d, scope) {
@@ -178,12 +200,15 @@
   function dirty(m, d) {
     var scopeChanged = d.scope !== m.scope && m.locked.indexOf('host') === -1;
     var portChanged = Number(d.port) !== m.port && m.locked.indexOf('port') === -1;
+    var webChanged = d.webUi !== m.webUi && m.locked.indexOf('web_ui') === -1;
+    var subsonicChanged = d.subsonic !== m.subsonic && m.locked.indexOf('subsonic') === -1;
     var autostartChanged = d.autostartTouched === true && d.autostart !== m.autostart;
-    return scopeChanged || portChanged || autostartChanged;
+    return scopeChanged || portChanged || webChanged || subsonicChanged || autostartChanged;
   }
 
   /* The same diff settings.py's `changed()` returns, for the panel's "a restart is needed" line.
-   * Every address change is a restart: the server reads `--host`/`--port` once, in `main()`. */
+   * All four stored settings are read once, in `main()`: the address binds the socket and the two
+   * switches decide what is served, so every change here is a restart. */
   function diff(m, d) {
     var changes = [];
     var host = hostForScope(d.scope);
@@ -194,6 +219,24 @@
     }
     if (port !== m.port) {
       changes.push({ field: 'port', label: 'Port', from: m.port, to: port, restart: true });
+    }
+    if (d.webUi !== m.webUi) {
+      changes.push({
+        field: 'web_ui',
+        label: 'Web UI',
+        from: m.webUi ? 'On' : 'Off',
+        to: d.webUi ? 'On' : 'Off',
+        restart: true
+      });
+    }
+    if (d.subsonic !== m.subsonic) {
+      changes.push({
+        field: 'subsonic',
+        label: 'OpenSubsonic',
+        from: m.subsonic ? 'On' : 'Off',
+        to: d.subsonic ? 'On' : 'Off',
+        restart: true
+      });
     }
     var restart = changes.filter(function (c) { return c.restart; }).map(function (c) { return c.field; });
     if (d.autostartTouched === true && d.autostart !== m.autostart) {
@@ -211,9 +254,11 @@
     var summary;
     if (!changes.length) {
       summary = 'Nothing to apply.';
-    } else if (restart.length) {
+    } else if (restart.indexOf('host') !== -1 || restart.indexOf('port') !== -1) {
       summary = 'Saved. Restart the server to listen on ' + after + ' — it keeps answering on ' +
         before + ' until then.';
+    } else if (restart.length) {
+      summary = 'Saved. Restart the server for the new switches to take effect.';
     } else {
       summary = 'Saved.';
     }
@@ -249,6 +294,14 @@
       scope: {
         local: { active: d.scope === LOCAL, enabled: !hostLocked },
         lan: { active: d.scope === LAN, enabled: !hostLocked }
+      },
+      web: {
+        off: { active: !d.webUi, enabled: m.locked.indexOf('web_ui') === -1 },
+        on: { active: d.webUi, enabled: m.locked.indexOf('web_ui') === -1 }
+      },
+      subsonic: {
+        off: { active: !d.subsonic, enabled: m.locked.indexOf('subsonic') === -1 },
+        on: { active: d.subsonic, enabled: m.locked.indexOf('subsonic') === -1 }
       },
       autostart: {
         off: { active: !d.autostart, enabled: m.autostartSupported },
@@ -337,6 +390,16 @@
     var exposureHint = el('p', 'hint');
     card.appendChild(exposureHint);
 
+    var webRow = el('div', 'actions');
+    card.appendChild(webRow);
+    var webHint = el('p', 'hint');
+    card.appendChild(webHint);
+
+    var subsonicRow = el('div', 'actions');
+    card.appendChild(subsonicRow);
+    var subsonicHint = el('p', 'hint');
+    card.appendChild(subsonicHint);
+
     var startRow = el('div', 'actions');
     card.appendChild(startRow);
     var autostartHint = el('p', 'hint');
@@ -394,6 +457,30 @@
           'HARDLYLISTENING_HOST to move it.'
         : SCOPES[d.scope].detail;
 
+      webRow.textContent = '';
+      choice(webRow, 'Off', view.web.off.active,
+        state.canEdit && view.web.off.enabled,
+        function () { state.draft = setSwitch(state.draft, 'web_ui', false); render(); });
+      choice(webRow, 'On', view.web.on.active,
+        state.canEdit && view.web.on.enabled,
+        function () { state.draft = setSwitch(state.draft, 'web_ui', true); render(); });
+      webHint.textContent = m.locked.indexOf('web_ui') !== -1
+        ? 'The web UI is set by HARDLYLISTENING_WEB_UI for this session; change the variable ' +
+          'to move it.'
+        : SWITCHES.web_ui;
+
+      subsonicRow.textContent = '';
+      choice(subsonicRow, 'Off', view.subsonic.off.active,
+        state.canEdit && view.subsonic.off.enabled,
+        function () { state.draft = setSwitch(state.draft, 'subsonic', false); render(); });
+      choice(subsonicRow, 'On', view.subsonic.on.active,
+        state.canEdit && view.subsonic.on.enabled,
+        function () { state.draft = setSwitch(state.draft, 'subsonic', true); render(); });
+      subsonicHint.textContent = m.locked.indexOf('subsonic') !== -1
+        ? 'OpenSubsonic is set by HARDLYLISTENING_SUBSONIC for this session; change the ' +
+          'variable to move it.'
+        : SWITCHES.subsonic;
+
       startRow.textContent = '';
       choice(startRow, 'Off', view.autostart.off.active,
         state.canEdit && view.autostart.off.enabled,
@@ -411,8 +498,7 @@
         ? view.save.hint
         : 'Start at sign-in is only implemented for XDG (Linux) in this shell.';
 
-      foot.textContent = 'The web UI and OpenSubsonic have no server-side switch: ' +
-        'web/ is always served and /rest/ is always answered. ' +
+      foot.textContent =
         (m.configPath ? 'Settings file: ' + m.configPath + '. ' : '') +
         (m.autostartPath ? 'Autostart entry: ' + m.autostartPath + '.' : '');
 
@@ -426,6 +512,8 @@
       var host = hostForScope(state.draft.scope);
       if (host !== state.model.host) { patch.host = host; }
       if (Number(state.draft.port) !== state.model.port) { patch.port = Number(state.draft.port); }
+      if (state.draft.webUi !== state.model.webUi) { patch.web_ui = state.draft.webUi; }
+      if (state.draft.subsonic !== state.model.subsonic) { patch.subsonic = state.draft.subsonic; }
       var autostart = state.draft.autostartTouched ? state.draft.autostart : null;
       if (!pending.changes.length) { show('Nothing has been changed.'); return; }
       invoke('settings_write', { patch: patch, autostart: autostart }).then(function (result) {
@@ -449,6 +537,7 @@
         apply({
           address: read.address && !read.address.error ? read.address : state.model,
           locked: read.locked,
+          features: read.features,
           autostart: read.autostart,
           autostartSupported: read.autostart_supported,
           configPath: read.path,
@@ -504,7 +593,7 @@
     LAN: LAN,
     DEFAULT_PORT: DEFAULT_PORT,
     SCOPES: SCOPES,
-    UNSUPPORTED: UNSUPPORTED,
+    SWITCHES: SWITCHES,
     scopeOf: scopeOf,
     hostForScope: hostForScope,
     listen: listen,
@@ -512,6 +601,7 @@
     rows: rows,
     draft: draft,
     setScope: setScope,
+    setSwitch: setSwitch,
     setAutostart: setAutostart,
     edited: edited,
     dirty: dirty,

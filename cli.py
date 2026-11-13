@@ -31,7 +31,8 @@ commands:
   backup    consistent copy of the database: backup <directory> [--force]
   version   print the installed version
 
-run takes --host HOST and --port PORT, overriding the environment.
+run takes --host HOST and --port PORT, and --no-web-ui / --no-subsonic to serve less,
+each overriding the environment.
 """
 
 
@@ -131,8 +132,13 @@ def check() -> int:
     # -- configuration ------------------------------------------------------------
     try:
         host, port = config.host(), config.port()
-        add("config", True, f"{host}:{port}  data {paths.DATA_DIR}"
-            f"{'' if paths.DECLARED else ' (checkout, undeclared)'}")
+        web_ui, subsonic = config.web_ui(), config.subsonic()
+        detail = (f"{host}:{port}  data {paths.DATA_DIR}"
+                  f"{'' if paths.DECLARED else ' (checkout, undeclared)'}")
+        off = [name for name, on in (("web UI", web_ui), ("OpenSubsonic", subsonic)) if not on]
+        if off:
+            detail += f"  off: {', '.join(off)}"
+        add("config", True, detail)
     except ValueError as exc:
         add("config", False, str(exc))
         return _report(rows, failures)

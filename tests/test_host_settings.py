@@ -9,9 +9,10 @@ What this file is actually asserting:
   * **"Local only" and "the LAN" are the server's own bind control.** They are `127.0.0.1` and
     `0.0.0.0` handed to `--host`, nothing invented — `server.py` builds its HTTP server from
     that one value.
-  * **The web UI and OpenSubsonic are marked unsupported, not faked.** The server serves `web/`
-    and dispatches `/rest/` unconditionally, so a stored toggle would be a promise the next
-    start breaks. A patch asking for one is refused with a reason and nothing is written.
+  * **The two switches are real.** `web_ui` and `subsonic` are stored, refused when the
+    environment pins them, and passed to the server as `--no-web-ui` / `--no-subsonic` — the
+    flags `server.py` actually gates on. Their vocabulary is compared to `config.py`'s, because
+    a window that reads `HARDLYLISTENING_WEB_UI=no` as on would contradict the server.
   * **The environment wins, and the refusal says so.** Writing `host` while
     `HARDLYLISTENING_HOST` is set would change nothing, so it is refused with the variable named.
   * **Autostart is only ever an explicit choice.** It runs the server launcher, not the window,
@@ -27,6 +28,7 @@ import os
 import re
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import desktop.host.resolve as resolve
@@ -92,39 +94,74 @@ class Defaults(TempCase):
         by_key = {row['key']: row for row in described['rows']}
         self.assertTrue(by_key['host']['editable'])
         self.assertFalse(by_key['port']['editable'])
-        self.assertEqual(by_key['web_ui']['value'], 'Always served')
-        self.assertEqual(by_key['subsonic']['value'], 'Always on')
-        for key in ('web_ui', 'subsonic'):
-            self.assertFalse(by_key[key]['supported'], f'{key} has a server switch after all?')
-            self.assertFalse(by_key[key]['editable'])
-            self.assertEqual(by_key[key]['detail'], settings.UNSUPPORTED[key])
+        for key, label in (('web_ui', 'Web UI'), ('subsonic', 'OpenSubsonic')):
+            row = by_key[key]
+            self.assertEqual(row['label'], label)
+            self.assertEqual(row['value'], 'On')          # the server's default
+            self.assertTrue(row['supported'] and row['editable'], f'{key} is not a control')
+            self.assertFalse(row['locked'])
+            self.assertEqual(row['detail'], settings.SWITCHES[key])
+            self.assertEqual([option['value'] for option in row['options']], [False, True])
         self.assertEqual(by_key['autostart']['value'], 'Off')
 
 
-class TheServerHasNoSwitchForTwoOfThem(TempCase):
-    def test_the_unsupported_set_is_exactly_the_two_that_do_not_exist(self):
-        self.assertEqual(set(settings.UNSUPPORTED), {'web_ui', 'subsonic'})
-        self.assertIn('web/', settings.UNSUPPORTED['web_ui'])
-        self.assertIn('/rest/', settings.UNSUPPORTED['subsonic'])
-        # And the reason names the code that would have to change, not a shrug.
-        self.assertIn('server.py', settings.UNSUPPORTED['web_ui'])
-        self.assertIn('server.py', settings.UNSUPPORTED['subsonic'])
-
-    def test_asking_for_a_web_ui_switch_is_refused_and_writes_nothing(self):
+class TheTwoSwitchesAreReal(TempCase):
+    def test_a_switch_is_stored_as_a_boolean_and_read_back(self):
         loaded = self.load()
+        self.assertTrue(loaded.settings.web_ui and loaded.settings.subsonic)
         saved = self.save(loaded, {'web_ui': False})
-        self.assertEqual(saved.written, ())
-        self.assertFalse(saved.saved)
-        self.assertEqual([field for field, _ in saved.refused], ['web_ui'])
-        self.assertIn('web/', dict(saved.refused)['web_ui'])
-        self.assertFalse(self.config.exists(), 'an unsupported setting must not be stored')
+        self.assertEqual(saved.written, ('web_ui',))
+        self.assertEqual(json.loads(self.config.read_text()),
+                         {'host': '127.0.0.1', 'port': 8470,
+                          'web_ui': False, 'subsonic': True})
+        # The resolver the window and the launcher use agrees, so there is one answer.
+        features = resolve.features(self.env, self.config)
+        self.assertFalse(features.web_ui)
+        self.assertTrue(features.subsonic)
+        self.assertEqual(features.argv(), ['--no-web-ui'])
 
-    def test_asking_for_an_opensubsonic_switch_is_refused_the_same_way(self):
-        saved = self.save(self.load(), {'subsonic': False})
-        self.assertEqual(saved.written, ())
-        self.assertIn('/rest/', dict(saved.refused)['subsonic'])
+    def test_both_off_is_two_flags_and_nothing_else(self):
+        saved = self.save(self.load(), {'web_ui': False, 'subsonic': False})
+        self.assertEqual(saved.written, ('web_ui', 'subsonic'))
+        self.assertEqual(settings.load(self.env, self.config).settings.flags(),
+                         ['--no-web-ui', '--no-subsonic'])
+        # On writes no flag at all: the server's own defaults are the on state.
+        self.assertEqual(settings.Settings().flags(), [])
+
+    def test_a_string_truthy_value_is_refused_rather_than_guessed(self):
+        loaded = self.load()
+        with self.assertRaises(ValueError):
+            self.save(loaded, {'web_ui': 'false'})
+        with self.assertRaises(ValueError):
+            self.save(loaded, {'subsonic': 0})
         self.assertFalse(self.config.exists())
 
+    def test_a_declared_variable_pins_the_switch_and_names_itself(self):
+        env = dict(self.env, HARDLYLISTENING_WEB_UI='0')
+        loaded = settings.load(env, self.config)
+        self.assertFalse(loaded.settings.web_ui)
+        self.assertIn('web_ui', loaded.locked)
+        saved = settings.save(loaded, {'web_ui': True}, path=self.config, env=env)
+        self.assertEqual(saved.written, ())
+        self.assertIn('web_ui', [field for field, _ in saved.refused])
+        self.assertIn('HARDLYLISTENING_WEB_UI', dict(saved.refused)['web_ui'])
+        self.assertFalse(self.config.exists())
+
+    def test_the_vocabulary_is_the_servers_own(self):
+        """`config.web_ui()` and `resolve._switch()` must not disagree about a value."""
+        import config
+        for value in config.ON + config.OFF:
+            self.assertEqual(resolve._switch(value, 'the switch'), value in config.ON, value)
+            with unittest.mock.patch.dict(os.environ, {'HARDLYLISTENING_WEB_UI': value}):
+                self.assertEqual(config.web_ui(), value in config.ON, value)
+        self.assertEqual(sorted(config.ON + config.OFF),
+                         sorted(resolve.ON + resolve.OFF),
+                         'the two spellings drifted')
+        with self.assertRaises(ValueError):
+            resolve._switch('maybe', 'HARDLYLISTENING_WEB_UI')
+
+
+class NothingElseIsInvented(TempCase):
     def test_an_unknown_key_is_refused_rather_than_stored(self):
         saved = self.save(self.load(), {'expose_to_the_internet': True})
         self.assertEqual(saved.written, ())
@@ -137,7 +174,8 @@ class ItWritesOnlyWhatTheServerUnderstands(TempCase):
         saved = self.save(self.load(), {'scope': settings.LAN, 'port': 8480})
         self.assertEqual(saved.written, ('host', 'port'))
         self.assertTrue(saved.saved)
-        self.assertEqual(json.loads(self.config.read_text()), {'host': '0.0.0.0', 'port': 8480})
+        self.assertEqual(json.loads(self.config.read_text()),
+                         {'host': '0.0.0.0', 'port': 8480, 'web_ui': True, 'subsonic': True})
         # And the resolver the window actually uses agrees, so there is one address, not two.
         address = resolve.address(self.env, self.config)
         self.assertEqual((address.host, address.port, address.source),
@@ -159,7 +197,8 @@ class ItWritesOnlyWhatTheServerUnderstands(TempCase):
         backup = self.config.with_name(self.config.name + '.bak')
         self.assertEqual(saved.backup, backup)
         self.assertEqual(backup.read_text(), '{"host": "127.0.0.1",')
-        self.assertEqual(json.loads(self.config.read_text()), {'host': '127.0.0.1', 'port': 8481})
+        self.assertEqual(json.loads(self.config.read_text()),
+                         {'host': '127.0.0.1', 'port': 8481, 'web_ui': True, 'subsonic': True})
 
     def test_a_bad_port_or_host_is_an_error_not_a_default(self):
         loaded = self.load()
@@ -233,6 +272,19 @@ class AutostartIsAnExplicitChoice(TempCase):
         self.assertIn('X-GNOME-Autostart-enabled=true', text)
         self.assertIn('Terminal=false', text)
 
+    def test_the_autostart_entry_serves_what_the_window_does(self):
+        self.save(self.load(), {'web_ui': False, 'subsonic': False},
+                  autostart=True, launcher=LAUNCHER)
+        exec_line = next(line for line in self.autostart.read_text().splitlines()
+                         if line.startswith('Exec='))
+        self.assertIn('--no-web-ui --no-subsonic', exec_line)
+        # On is the default, so an all-on entry carries neither flag.
+        self.save(self.load(), {'web_ui': True, 'subsonic': True},
+                  autostart=True, launcher=LAUNCHER)
+        exec_line = next(line for line in self.autostart.read_text().splitlines()
+                         if line.startswith('Exec='))
+        self.assertNotIn('--no-', exec_line)
+
     def test_turning_it_off_removes_only_that_entry(self):
         self.save(self.load(), {}, autostart=True, launcher=LAUNCHER)
         self.assertTrue(self.autostart.exists())
@@ -302,7 +354,15 @@ class TheDiffSaysWhenARestartIsNeeded(TempCase):
         self.assertTrue(saved.restart_required)
         self.assertEqual(saved.diff['restart'], ['host'])
         self.assertEqual(saved.to_dict()['settings'],
-                         {'host': '0.0.0.0', 'port': 8470, 'scope': settings.LAN})
+                         {'host': '0.0.0.0', 'port': 8470, 'scope': settings.LAN,
+                          'web_ui': True, 'subsonic': True})
+
+    def test_a_switch_alone_still_needs_a_restart_and_says_which_one(self):
+        diff = settings.changed(settings.Settings(), settings.Settings(subsonic=False))
+        self.assertEqual(diff['restart'], ['subsonic'])
+        self.assertEqual(diff['changes'][0]['label'], 'OpenSubsonic')
+        self.assertIn('restart the server', diff['summary'].lower())
+        self.assertIn('switches', diff['summary'])
 
 
 class TheRustAndThePythonShareTheEntry(TempCase):

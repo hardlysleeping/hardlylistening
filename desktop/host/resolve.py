@@ -273,6 +273,74 @@ def _stored_port(stored: Mapping) -> int:
     return _port(stored.get('port'), 'the desktop config port')
 
 
+#: The only spellings the two switches understand — the same vocabulary `config.py` accepts,
+#: because the window and the server must not disagree about `HARDLYLISTENING_WEB_UI=no`.
+#: `tests/test_host_settings.py` compares the two parsers value by value rather than trusting this.
+ON = ('1', 'true', 'on', 'yes')
+OFF = ('0', 'false', 'off', 'no')
+
+
+@dataclass(frozen=True)
+class Features:
+    """The two surfaces the server can be told not to serve. On unless declared off."""
+
+    web_ui: bool = True
+    subsonic: bool = True
+    #: 'environment', 'desktop-config' or 'default', like `Address.source`.
+    source: str = 'default'
+
+    def argv(self) -> list[str]:
+        """The flags for the surfaces that are off — on is the server's own default."""
+        flags = []
+        if not self.web_ui:
+            flags.append('--no-web-ui')
+        if not self.subsonic:
+            flags.append('--no-subsonic')
+        return flags
+
+
+def _switch(value, origin: str) -> bool:
+    text = str(value).strip().lower()
+    if text in ON:
+        return True
+    if text in OFF:
+        return False
+    raise ValueError(f'{origin} must be one of {", ".join(ON + OFF)}: {text!r}')
+
+
+def _stored_flag(stored: Mapping, key: str) -> bool:
+    """A stored switch. Absent is on; anything but a JSON boolean is refused, not guessed."""
+    if key not in stored:
+        return True
+    value = stored.get(key)
+    if not isinstance(value, bool):
+        raise ValueError(f'{key} in the desktop config is not true or false: {value!r}')
+    return value
+
+
+def features(env: Mapping[str, str] | None = None, path: Path | None = None) -> Features:
+    """Resolve the two switches: environment, then the shell's config, then on.
+
+    The environment wins for the same reason it wins on the address: the server reads those
+    variables itself, so a file value written under them could never take effect.
+    """
+    env = os.environ if env is None else env
+    stored, _ = read_config(Path(path) if path is not None else config_path(env))
+    env_web = (env.get('HARDLYLISTENING_WEB_UI') or '').strip()
+    env_sub = (env.get('HARDLYLISTENING_SUBSONIC') or '').strip()
+    web_ui = (_switch(env_web, 'HARDLYLISTENING_WEB_UI') if env_web
+              else _stored_flag(stored, 'web_ui'))
+    subsonic = (_switch(env_sub, 'HARDLYLISTENING_SUBSONIC') if env_sub
+                else _stored_flag(stored, 'subsonic'))
+    if env_web or env_sub:
+        source = 'environment'
+    elif 'web_ui' in stored or 'subsonic' in stored:
+        source = 'desktop-config'
+    else:
+        source = 'default'
+    return Features(web_ui=web_ui, subsonic=subsonic, source=source)
+
+
 def resolve(env: Mapping[str, str] | None = None, app: Path | None = None,
             path: Path | None = None) -> dict:
     """Everything the window needs on startup, in one call.

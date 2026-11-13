@@ -92,7 +92,7 @@ function addressOf(host, port) {
         pending.changes[0].label);
 }
 
-// ---- the web UI and OpenSubsonic have no switch ------------------------
+// ---- the two switches are real toggles ---------------------------------
 {
   const rows = Settings.rows(Settings.model({}));
   const byKey = {};
@@ -101,22 +101,51 @@ function addressOf(host, port) {
         JSON.stringify(rows.map(r => r.key)) ===
         JSON.stringify(["host", "port", "web_ui", "subsonic", "autostart"]),
         rows.map(r => r.key).join(","));
-  check("the web UI is a fact, not a toggle",
-        byKey.web_ui.supported === false && byKey.web_ui.editable === false);
-  check("its reason names the code that would have to change",
-        /web\//.test(byKey.web_ui.detail), byKey.web_ui.detail);
-  check("OpenSubsonic is a fact, not a toggle",
-        byKey.subsonic.supported === false && byKey.subsonic.editable === false);
-  check("its reason names the /rest/ surface",
+  ["web_ui", "subsonic"].forEach(key => {
+    const row = byKey[key];
+    check(key + " is a control, not a fact", row.supported === true && row.editable === true);
+    check(key + " shows the server's default as On", row.value === "On", row.value);
+    check(key + " offers exactly Off and On",
+          JSON.stringify(row.options.map(o => o.value)) === JSON.stringify([false, true]));
+    check(key + " explains what off does", row.detail.length > 60 &&
+          /off/i.test(row.detail), row.detail);
+  });
+  check("the web UI's copy says the API keeps working",
+        /\/api/.test(byKey.web_ui.detail), byKey.web_ui.detail);
+  check("OpenSubsonic's copy names the /rest/ surface",
         /\/rest\//.test(byKey.subsonic.detail), byKey.subsonic.detail);
-  check("neither claims a value that would imply a switch",
-        byKey.web_ui.value === "Always served" && byKey.subsonic.value === "Always on",
-        byKey.web_ui.value + " / " + byKey.subsonic.value);
-  check("both unsupported rows carry a reason long enough to be a sentence",
-        byKey.web_ui.detail.length > 60 && byKey.subsonic.detail.length > 60);
-  check("the two unsupported settings are exactly those two",
-        JSON.stringify(Object.keys(Settings.UNSUPPORTED).sort()) ===
+  check("the two switch copy strings are exactly those two",
+        JSON.stringify(Object.keys(Settings.SWITCHES).sort()) ===
         JSON.stringify(["subsonic", "web_ui"]));
+}
+
+// ---- a stored switch reaches the model, the diff and the save ----------
+{
+  const m = Settings.model(Object.assign(addressOf("127.0.0.1", 8470),
+    { features: { web_ui: false, subsonic: true } }));
+  check("a stored switch is read from the server's answer",
+        m.webUi === false && m.subsonic === true, m.webUi + " / " + m.subsonic);
+  const off = Settings.setSwitch(Settings.draft(m), "subsonic", false);
+  check("turning a switch off is a change", Settings.dirty(m, off));
+  const pending = Settings.diff(m, off);
+  check("a switch change needs a restart", pending.restartRequired &&
+        JSON.stringify(pending.restart) === JSON.stringify(["subsonic"]),
+        JSON.stringify(pending.restart));
+  check("the summary says the switches need one", /switches/.test(pending.summary),
+        pending.summary);
+  const view = Settings.decide(m, off);
+  check("the panel shows which side of each switch is active",
+        view.subsonic.off.active && !view.subsonic.on.active &&
+        view.web.off.active && !view.web.on.active);
+
+  const locked = Settings.model(Object.assign(addressOf("127.0.0.1", 8470),
+    { locked: ["web_ui"] }));
+  const lockedView = Settings.decide(locked,
+    Settings.setSwitch(Settings.draft(locked), "web_ui", true));
+  check("a locked switch cannot be clicked", !lockedView.web.on.enabled &&
+        !lockedView.web.off.enabled);
+  check("and the click is not dirty: the variable wins",
+        !lockedView.dirty, lockedView.save.hint);
 }
 
 // ---- autostart is only ever an explicit choice -------------------------
@@ -210,12 +239,12 @@ function addressOf(host, port) {
         !/\bfetch\s*\(/.test(source));
   check("the panel writes no HTML", !/innerHTML/.test(source));
   const m = Settings.model({});
-  check("the model carries no web_ui or subsonic field, so a patch cannot save one",
-        m.web_ui === undefined && m.subsonic === undefined,
-        Object.keys(m).join(","));
+  check("with nothing stored both switches are on",
+        m.webUi === true && m.subsonic === true, m.webUi + " / " + m.subsonic);
   const d = Settings.draft(m);
-  check("the draft carries only the address and the entry's choice",
-        Object.keys(d).sort().join(",") === "autostart,autostartTouched,port,scope",
+  check("the draft carries the address, the two switches and the entry's choice",
+        Object.keys(d).sort().join(",") ===
+        "autostart,autostartTouched,port,scope,subsonic,webUi",
         Object.keys(d).join(","));
 }
 

@@ -423,6 +423,34 @@ class TheLaunchPlanIsTheLaunchers(Harness):
         self.assertEqual(launch.command[1:], ['--host', '127.0.0.1', '--port', str(port)])
         self.assertEqual(launch.command[1:], resolve.Address(host='127.0.0.1', port=port).argv())
 
+    def test_the_switches_are_flags_on_the_same_command(self):
+        """HOST-005's two settings reach the server, not just the file."""
+        launch = lifecycle.build_launch(
+            {'HARDLYLISTENING_PORT': '', 'HARDLYLISTENING_WEB_UI': '0',
+             'HARDLYLISTENING_SUBSONIC': 'off'}, environ={})
+        self.assertEqual(launch.command[1:],
+                         ['--host', '127.0.0.1', '--port', str(resolve.DEFAULT_PORT),
+                          '--no-web-ui', '--no-subsonic'])
+        self.assertFalse(launch.features.web_ui)
+        self.assertFalse(launch.features.subsonic)
+        # On is the default: nothing is added to the argv an older shell produced.
+        plain = lifecycle.build_launch({'HARDLYLISTENING_PORT': ''}, environ={})
+        self.assertEqual(len(plain.command[1:]), 4)
+        self.assertNotIn('--no-web-ui', plain.command)
+
+    def test_a_stored_switch_is_honoured_too(self):
+        config = self.tmp / 'host.json'
+        config.write_text(json.dumps({'web_ui': False}))
+        launch = lifecycle.build_launch({'HARDLYLISTENING_PORT': ''}, environ={},
+                                        config=config)
+        self.assertIn('--no-web-ui', launch.command)
+        self.assertNotIn('--no-subsonic', launch.command)
+
+    def test_a_bad_switch_value_refuses_the_launch(self):
+        with self.assertRaises(lifecycle.LaunchError) as raised:
+            lifecycle.build_launch({'HARDLYLISTENING_WEB_UI': 'maybe'}, environ={})
+        self.assertIn('HARDLYLISTENING_WEB_UI', raised.exception.detail)
+
     def test_the_environment_says_the_same_address_as_the_argv(self):
         launch = lifecycle.build_launch({'HARDLYLISTENING_PORT': ''},
                                         environ={'PATH': '/usr/bin'})

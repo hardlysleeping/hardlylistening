@@ -12,7 +12,9 @@ transcode targets are the ones the encoder accepts, and the extension list is th
 """
 import json
 import unittest
+from unittest.mock import patch
 
+import server
 import subsonic
 import test_security as harness
 
@@ -48,6 +50,22 @@ class Capabilities(unittest.TestCase):
         self.assertEqual(documented['extensions'], subsonic.EXTENSIONS)
         self.assertEqual(documented['transcode_targets'], sorted(subsonic.TRANSCODE_TARGETS))
         self.assertTrue(documented['open_subsonic'])
+
+    def test_the_two_boot_switches_are_reported_as_they_are(self):
+        """`subsonic.enabled` is a fact, not the constant it used to be — and the web UI joins it.
+
+        Both are read once at boot into `server.FEATURES`; the document is built from that, so a
+        server started with `--no-subsonic` must not claim the protocol.
+        """
+        body = self.caps()
+        self.assertTrue(body['subsonic']['enabled'])
+        self.assertTrue(body['web_ui']['enabled'])
+        with patch.object(server, 'FEATURES', {'web_ui': False, 'subsonic': False}):
+            body = self.caps()
+        self.assertFalse(body['subsonic']['enabled'])
+        self.assertFalse(body['web_ui']['enabled'])
+        # The protocol facts are still described; only the switch that admits them is off.
+        self.assertEqual(body['subsonic']['version'], subsonic.PROTOCOL_VERSION)
 
     def test_a_claimed_extension_is_really_answered(self):
         """`openSubsonic` is not a badge: the extension list has to be true."""

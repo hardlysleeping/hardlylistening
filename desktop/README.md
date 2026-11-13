@@ -148,8 +148,8 @@ one. See [modes.md](../docs/desktop/modes.md).
 
 * **Settings beyond the server's own** — HOST-005 wrote `desktop/host/settings.py`, the panel in
   `desktop/ui/settings.js` and the two commands in `src-tauri/src/settings.rs`. The window edits
-  the exposure (local vs LAN) and the autostart entry; the web UI and OpenSubsonic are reported
-  as having no server-side switch, because they have none. See
+  the exposure (local vs LAN), the web UI and OpenSubsonic switches, and the autostart entry —
+  every one of them a flag or entry the server reads. See
   [settings.md](../docs/desktop/settings.md).
 * **Managing a tailnet** — HOST-006 *reports* a reachable address, it does not manage one. The
   window reads `tailscale status --json` and the interfaces to say what another device could type,

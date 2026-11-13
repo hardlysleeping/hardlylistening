@@ -1,12 +1,15 @@
 """Runtime settings that are not filesystem paths: where to listen, what a new library seeds.
 
 `paths.py` answers "where may this process write". This module answers the other half of the
-packaged install: the two socket options and the media root, all with the same rule — an
-environment variable is a default, an explicit command-line flag still wins, and an existing
-install with nothing declared behaves exactly as it always has.
+packaged install: the two socket options, the two surfaces the server can be told not to serve,
+and the media root, all with the same rule — an environment variable is a default, an explicit
+command-line flag still wins, and an existing install with nothing declared behaves exactly as it
+always has.
 
     HARDLYLISTENING_HOST=127.0.0.1        loopback, as today
     HARDLYLISTENING_PORT=8470             8470, as today
+    HARDLYLISTENING_WEB_UI=0              serve the API, not the pages in web/
+    HARDLYLISTENING_SUBSONIC=0            answer /api, not /rest/*
     HARDLYLISTENING_MUSIC_DIR=/srv/...    only seeds a library nobody has chosen a root for
 
 `MUSIC_DIR` is deliberately *not* an override. The media root is a database setting the admin
@@ -50,6 +53,34 @@ def port() -> int:
 def music_dir() -> str:
     """The declared media root, or "" — never a guess, never the home directory."""
     return _text("HARDLYLISTENING_MUSIC_DIR")
+
+
+#: The only spellings a switch understands. A value that is neither is refused, for the same
+#: reason a bad port is: a server started with a surface the operator did not ask for is worse
+#: than one that will not start.
+ON = ("1", "true", "on", "yes")
+OFF = ("0", "false", "off", "no")
+
+
+def _switch(name: str, default: bool) -> bool:
+    declared = _text(name).lower()
+    if not declared:
+        return default
+    if declared in ON:
+        return True
+    if declared in OFF:
+        return False
+    raise ValueError(f"{name} must be one of {', '.join(ON + OFF)}: {declared!r}")
+
+
+def web_ui() -> bool:
+    """Whether this process serves `web/` under `/`. On unless declared off."""
+    return _switch("HARDLYLISTENING_WEB_UI", True)
+
+
+def subsonic() -> bool:
+    """Whether this process answers `/rest/*`. On unless declared off."""
+    return _switch("HARDLYLISTENING_SUBSONIC", True)
 
 
 def seed_music_root(store) -> bool:

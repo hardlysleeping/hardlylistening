@@ -21,7 +21,8 @@ APP_DIR = Path(__file__).resolve().parents[1]
 SERVER = APP_DIR / 'bin' / 'hardlylistening-server'
 
 CLEAN = ('HARDLYLISTENING_DATA_DIR', 'HARDLYLISTENING_DB', 'HARDLYLISTENING_HOST',
-         'HARDLYLISTENING_PORT', 'HARDLYLISTENING_MUSIC_DIR')
+         'HARDLYLISTENING_PORT', 'HARDLYLISTENING_MUSIC_DIR', 'HARDLYLISTENING_WEB_UI',
+         'HARDLYLISTENING_SUBSONIC')
 
 
 def run(code: str, **env_overrides):
@@ -68,6 +69,26 @@ class RuntimeConfig(unittest.TestCase):
                          HARDLYLISTENING_PORT=value)
             self.assertNotEqual(result.returncode, 0, value)
             self.assertIn('HARDLYLISTENING_PORT', result.stderr, value)
+
+    def test_the_two_surfaces_are_on_unless_declared_off(self):
+        declared = ('import config; print(config.web_ui()); print(config.subsonic())')
+        self.assertEqual(run(declared).stdout.split(), ['True', 'True'])
+        for value in ('0', 'false', 'off', 'no'):
+            self.assertEqual(run(declared, HARDLYLISTENING_WEB_UI=value,
+                                 HARDLYLISTENING_SUBSONIC=value).stdout.split(),
+                             ['False', 'False'], value)
+        for value in ('1', 'true', 'on', 'yes'):
+            self.assertEqual(run(declared, HARDLYLISTENING_WEB_UI=value,
+                                 HARDLYLISTENING_SUBSONIC=value).stdout.split(),
+                             ['True', 'True'], value)
+
+    def test_a_bad_switch_refuses_rather_than_guessing(self):
+        result = run('import config; print(config.web_ui())', HARDLYLISTENING_WEB_UI='maybe')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('HARDLYLISTENING_WEB_UI', result.stderr)
+        result = run('import config; print(config.subsonic())', HARDLYLISTENING_SUBSONIC='2')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('HARDLYLISTENING_SUBSONIC', result.stderr)
 
 
 class MusicRootSeed(unittest.TestCase):

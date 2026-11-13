@@ -123,6 +123,7 @@ class Launch:
     cwd: str | None
     address: object          # resolve.Address
     launcher: str
+    features: object = None      # resolve.Features; None means "everything on"
 
     def argv(self) -> list[str]:
         return list(self.command[1:])
@@ -138,8 +139,10 @@ def build_launch(env: Mapping[str, str] | None = None, app: Path | None = None,
     without pretending to be one.
     """
     env = os.environ if env is None else env
+    stored = Path(config) if config is not None else None
     try:
-        address = resolve.address(env, Path(config) if config is not None else None)
+        address = resolve.address(env, stored)
+        features = resolve.features(env, stored)
     except ValueError as error:
         raise LaunchError(BAD_ADDRESS, str(error)) from None
 
@@ -165,8 +168,11 @@ def build_launch(env: Mapping[str, str] | None = None, app: Path | None = None,
     # working directory is the checkout root — never wherever the window was launched from.
     root = server.parent.parent
     cwd = str(root) if root.is_dir() else None
-    return Launch(command=[str(server), *address.argv()], env=inherited, cwd=cwd,
-                  address=address, launcher=str(server))
+    # The switches are passed as flags too: the server reads them at boot, and the window's
+    # own file is the only place they are chosen. On is the default, so an all-on launch adds
+    # nothing to the argv an older shell already produced.
+    return Launch(command=[str(server), *address.argv(), *features.argv()], env=inherited,
+                  cwd=cwd, address=address, launcher=str(server), features=features)
 
 
 def probe_host(address) -> str:
