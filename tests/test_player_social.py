@@ -454,17 +454,23 @@ class Docs(unittest.TestCase):
             self.assertIn('`' + path, self.text, f'the doc does not refuse {path}')
         self.assertIn('501', self.text)
 
-    def test_it_names_the_wiring_without_applying_it(self):
+    def test_the_module_is_wired_and_the_doc_says_so(self):
         for tag in ('<script src="./connect.js"></script>',
                     '<script src="./api-bridge.js"></script>',
                     '<script src="./library-boot.js"></script>',
                     '<script src="./social.js"></script>'):
             self.assertIn(tag, self.text, tag)
         self.assertIn('PlayerSocial.attach(', self.text)
+        # Applied in the integration pass, not by the card. The order matters: the module attaches
+        # from `library-boot.js` after the bridge is installed, so its wrapper sits outside it.
         connect = (SHELL / 'connect.html').read_text()
-        # The block is reported, not applied: apply it and this assertion is what changes.
-        self.assertNotIn('social.js', connect,
-                         'the wiring block was applied; the card owns new files only')
+        loaded = re.findall(r'<script src="\./([^"]+)"', connect)
+        self.assertIn('social.js', loaded, 'the card ships a module nobody loads')
+        self.assertLess(loaded.index('library-boot.js'), loaded.index('social.js'),
+                        'social.js must load after the boot that attaches it')
+        boot = (SHELL / 'library-boot.js').read_text()
+        self.assertIn('PlayerSocial.attach({ session: session, say: message => say(message, document) })',
+                      boot, 'the boot has to hand the session to the module')
 
     def test_it_says_what_is_unverified(self):
         section = self.text.lower()

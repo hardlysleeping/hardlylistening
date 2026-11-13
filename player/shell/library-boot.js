@@ -189,6 +189,13 @@
       },
     });
 
+    /* PLAYER-006: the social surface is decided after the bridge is installed, because the
+     * decision is one request to the server's own capabilities document. The module refuses with
+     * the reason when the server has none, and the bridge's refusal then stands as it was. */
+    if (root.PlayerSocial && typeof root.PlayerSocial.attach === "function") {
+      root.PlayerSocial.attach({ session: session, say: message => say(message, document) });
+    }
+
     defaults(root.localStorage);
 
     let page;

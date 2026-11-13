@@ -96,8 +96,9 @@ endpoint and a status, never a query string — the same rule `PlayerApi.log()` 
 
 ## Wiring
 
-`connect.html` is PLAYER-001's file. This card adds files and reports this block; it does **not**
-apply it. One tag goes after the existing boot tag, and one hook goes inside `library-boot.js`:
+`connect.html` is PLAYER-001's file, so this card added files and reported the block. It was
+applied in the integration pass beside the other player cards. One tag goes after the existing boot
+tag, and one hook goes inside `library-boot.js`:
 
 ```html
 <script src="./connect.js"></script>
@@ -123,9 +124,10 @@ document)`), so a server that has social but requires members says so where ever
 sentence is said. `attach()` is idempotent (`detach()` then re-wrap) and `detach()` puts
 `window.fetch` back, so a session change does not leave two wrappers on the same transport.
 
-Neither block is applied by this card: `connect.html` is asserted, in the Python half, to contain
-no reference to `social.js`. Applying them is a one-line change to each file when the wiring card
-lands.
+Both are applied, and asserted rather than described: `connect.html` must load `social.js` after
+`library-boot.js`, and the boot must hand the session over with exactly that call. The earlier
+version of that assertion required the tag to be **absent** — a test that guarded the card's
+boundary. It was flipped when the boundary was crossed, not deleted.
 
 ## How it is tested
 
