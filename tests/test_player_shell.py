@@ -8,8 +8,9 @@ Two halves, because either alone can be fooled:
     what the player bundles.
   * **Runtime** — `assemble.mjs` is run into a temporary directory and its output is walked.
     "No acquisition module ships" is then a fact about files on disk, not a comment in a
-    source tree, and the bytes are hashed against `web/` to prove nothing was rewritten on
-    the way in.
+    source tree; every file but the entry document is hashed against `web/` to prove nothing
+    was rewritten on the way in, and the entry document is proven to differ from its source by
+    exactly the references the receipt says were dropped.
 
 The player is a client, so it also has to stay a separate tree: nothing under `player/` may
 reach `desktop/` (another shippable) or import the server's Python. That is asserted here as
@@ -169,10 +170,66 @@ class Assembly(unittest.TestCase):
             out = Path(tmp) / 'www'
             result = run_node(str(ASSEMBLE), '--out', str(out))
             self.assertEqual(result.returncode, 0, result.stderr)
-            for rel in ('index.html', 'js/library.js', 'js/playback-queue.js',
+            # The entry document is the one rewritten file, and its exact difference is
+            # asserted below; everything else has to arrive untouched.
+            for rel in ('js/library.js', 'js/playback-queue.js',
                         'styles/app.css', 'styles/components/player.css'):
                 self.assertEqual(sha256(out / rel), sha256(APP_DIR / 'web' / rel),
                                  f'{rel} was rewritten during assembly')
+
+    def test_the_entry_document_requests_nothing_it_does_not_carry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'www'
+            result = run_node(str(ASSEMBLE), '--out', str(out))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            page = (out / 'index.html').read_text()
+            for reference in ('/js/repo-discovery.js', '/app.webmanifest', '/icon-192.png',
+                              '/party', '/dj', '/swipe'):
+                self.assertNotIn(reference, page,
+                                 f'the assembled entry document still asks for {reference}')
+            # The library, the queue and the app's stylesheet are still requested.
+            for kept in ('/styles/app.css', '/js/library.js', '/js/playback-queue.js',
+                         '/js/social-feed.js', '/preferences.js', '/lifecycle.js'):
+                self.assertIn(kept, page)
+
+    def test_the_receipt_records_each_drop_and_nothing_else_changed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'www'
+            result = run_node(str(ASSEMBLE), '--out', str(out))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            receipt = json.loads((out / '.assembly.json').read_text())
+            dropped = receipt['dropped']
+            self.assertTrue(dropped, 'the entry document was rewritten without a receipt')
+            self.assertEqual({drop['file'] for drop in dropped}, {'index.html'})
+            self.assertIn('js/repo-discovery.js', {drop['path'] for drop in dropped})
+            page = (out / 'index.html').read_text()
+            for drop in dropped:
+                self.assertNotIn(drop['value'], page, f'{drop["value"]} survived the drop')
+            # Nothing else changed: the source minus the recorded removals is the output.
+            expected = (APP_DIR / 'web' / 'index.html').read_text()
+            for drop in dropped:
+                self.assertIn(drop['removed'], expected, 'the receipt names text the source lacks')
+                expected = expected.replace(drop['removed'], '', 1)
+            self.assertEqual(expected, page, 'the entry document changed beyond the recorded drops')
+            # And every other assembled file is still the source's own bytes.
+            for rel in receipt['assembled']:
+                if rel == 'index.html':
+                    continue
+                source = APP_DIR / 'web' / rel
+                if not source.is_file():
+                    source = PLAYER / 'shell' / rel
+                self.assertEqual(sha256(out / rel), sha256(source), rel)
+
+    def test_the_assembly_fails_when_a_referenced_file_is_forgotten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'www'
+            # `--forget-web` is the test hook that simulates an allow-list which forgot a file
+            # the entry document still asks for: silence there would ship a broken page.
+            result = run_node(str(ASSEMBLE), '--out', str(out), '--forget-web', 'js/library.js')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('js/library.js', result.stderr)
+            self.assertIn('neither assembled nor excluded', result.stderr)
+            self.assertFalse(out.exists(), 'a page with a dangling reference must not be written')
 
     def test_the_shell_entry_is_assembled_with_the_apps_stylesheets(self):
         with tempfile.TemporaryDirectory() as tmp:

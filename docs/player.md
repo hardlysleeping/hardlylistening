@@ -45,13 +45,18 @@ statement of what a player contains. Today that is:
 | `js/library.js`, `js/playback-queue.js`, `js/social-feed.js` | the library, the queue, the activity feed |
 | `styles/app.css` and every sheet it imports (`tokens`, `base`, `layout`, `motion`, `utilities`, `components/*`) | the app's visual language, so the gate looks like the app |
 
-Two consequences worth stating plainly:
+Three consequences worth stating plainly:
 
 * **Acquisition is excluded.** `web/js/repo-discovery.js` is not in `WEB_ALLOW`, and
   `EXCLUDED` names it with the reason, so the absence is a decision a reader can check.
   PLAYER-007 turns that into a store-safe assertion over the built tree.
 * **The player is not a copy.** Files are copied and then hashed against their source; if a
   byte changed on the way in, the script fails. There is nothing to keep in sync by hand.
+* **The entry document is the one file rewritten**, and only to drop references to `EXCLUDED`
+  files — the acquisition module, the web-app manifest and icon the host serves, and the
+  links to the Party, Mixer and Swipe pages the player does not carry. Each drop is recorded
+  in the receipt with the exact text removed, so the difference from `web/index.html` is
+  auditable rather than implied. `web/` itself is never edited.
 
 Everything else under `web/` is deliberately outside: the mixer (`dj.html`, `party.*`), the
 swipe page, `login.html`, `signup.html`, the offline page and `sw.js` (a service worker is a
@@ -65,14 +70,23 @@ icons that live at the repository root and are served by the Python host, not fr
 1. a listed file that is missing (`... are not there`);
 2. a plan that would ship a forbidden path — `repo-discovery.js`, `src-tauri`,
    `node_modules`, `electron`, or any `.py` (`... must not contain`);
-3. an output directory that already holds files the script did not assemble (a `.assembly.json`
+3. a document that references a file that is neither assembled nor excluded
+   (`... point at files it does not contain`) — a reference to an excluded file is dropped and
+   recorded, a reference to an unaccounted one is a mistake in the allow-list and stops the
+   build;
+4. an output directory that already holds files the script did not assemble (a `.assembly.json`
    receipt is written on every run, so a stray directory is never deleted);
-4. an output path inside `web/`, or one that contains `web/`.
+5. an output path inside `web/`, or one that contains `web/`.
+
+References are read from markup only: inline `<script>` bodies are code, not markup, and a
+template in them that writes an `<a href>` is not a request the window makes. A route the host
+serves from a file is read as that file (`/party` → `party.html`), which is how the excluded
+pages are recognised in the navigation.
 
 After copying it walks the finished tree once more for forbidden names, so the guard is about
 bytes on disk rather than about the plan. `--out <dir>` writes elsewhere, `--list` prints the
-plan as JSON (the tests read it), and `--include-web <rel>` exists only so a test can prove the
-guards fire. No build uses it.
+plan as JSON (the tests read it), and `--include-web <rel>` / `--forget-web <rel>` exist only so
+a test can prove the guards fire. No build uses them.
 
 ## Running it
 
@@ -169,6 +183,8 @@ Two known gaps that only a real build will settle: the shell fetches a server fr
 WebView's own origin, so a Subsonic server that sends no CORS headers may refuse the ping
 (the `tauri-plugin-http` route is the fallback, and it is PLAYER-002's decision along with
 the keychain), and iOS ATS needs an exception before a plain `http://` LAN server answers.
-Also, the assembled `index.html` still names `/js/repo-discovery.js`, which is not shipped;
-until PLAYER-003 owns the library route that request is a harmless 404, and PLAYER-007 must
-assert the exclusion over the built tree rather than trust the allow-list alone.
+The entry document's references are now resolved (nothing it asks for is absent), but its
+inline scripts still call the Python host's `/api/…` endpoints; inside the player those
+requests have no server until PLAYER-003 points the library at the Subsonic endpoints, and
+PLAYER-007 must assert the store-safe exclusion over the built tree rather than trust the
+allow-list alone.
