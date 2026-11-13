@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-hl-shell="1">
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow,noarchive">
@@ -18,6 +18,11 @@
 <script src="/lyrics.js" defer></script>
 </head>
 <body>
+<!-- HL-309: the page the service worker kept, painted with no network. Says so, because a
+     stale library presented as live is worse than an empty one. -->
+<div id="shelfmode" class="shelfbar" role="status" hidden>
+  Offline — showing your library as it was when you were last connected.
+</div>
 <header>
   <div class="bar">
     <div class="brand">Hardly<span>Listening</span></div>
@@ -4769,6 +4774,20 @@ for (const event of ["loadedmetadata", "durationchange", "seeked", "ratechange"]
 playerAudio.addEventListener("timeupdate", () => pushPositionState(false));
 playerAudio.addEventListener("play", () => { publishPlaybackState(); pushPositionState(true); if (typeof paintPlayerSave === "function") paintPlayerSave(); });
 playerAudio.addEventListener("pause", publishPlaybackState);
+
+// ---- offline shell (HL-309) -------------------------------------------------------
+// The service worker keeps the entry page and the last /api/library, so an installed app
+// opens with no network. This only says so: the library below it is whatever was cached.
+function paintShelfMode(){
+  const note = $("#shelfmode");
+  if (!note) return;
+  const off = navigator.onLine === false;
+  note.hidden = !off;
+  document.documentElement.classList.toggle("shelf", off);
+}
+addEventListener("online", paintShelfMode);
+addEventListener("offline", paintShelfMode);
+paintShelfMode();
 
 // ------------------------------------------------------------------ offline audio
 // A song that has actually played is kept whole in the service worker's audio cache, so the

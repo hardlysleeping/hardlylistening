@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'hardlylistening-static-v8';
+const CACHE = 'hardlylistening-static-v9';
 const AUDIO = 'hardlylistening-audio-v1';   // named in web/index.html as well
 // The app's stylesheet is a tree (app.css imports each owner under @layer). Every file in it
 // is precached, because the browser fetches each import as its own request: a missing entry
@@ -21,6 +21,11 @@ const STYLES = [
 const SCRIPTS = ['/js/playback-queue.js', '/js/repo-discovery.js', '/js/social-feed.js', '/js/library.js'];
 const STATIC = ['/offline.html','/lifecycle.js','/icon-192.png','/icon-512.png','/app.webmanifest',
                 ...STYLES, ...SCRIPTS];
+// The app shell and the last library listing (HL-309). Both are the signed-in member's own
+// data on the device that asked for it — the same trust boundary as the kept audio — and
+// both live in the versioned CACHE, so a deploy throws them away rather than serving an
+// old shell over new scripts.
+const LIBRARY_API = '/api/library';
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)));
 });
@@ -75,6 +80,51 @@ async function cachedAudio(request, url) {
   return new Response(slice, { status: 206, headers });
 }
 
+// -------------------------------------------------------------- offline shell
+// HTML is read twice: once to decide whether this is the app (the marker is on <html>),
+// once to hand to the page. A clone is cheap; guessing from the status code is not, because
+// a sign-in page is also a 200.
+const SHELL_MARK = 'data-hl-shell';
+async function appShell(request) {
+  try {
+    const response = await fetch(request);
+    const kind = response.headers.get('Content-Type') || '';
+    if (response.ok && !response.redirected && kind.includes('text/html')) {
+      const body = await response.clone().text();
+      if (body.includes(SHELL_MARK)) {
+        const cache = await caches.open(CACHE);
+        await cache.put('/', new Response(body, {
+          headers: {'Content-Type': 'text/html; charset=utf-8'}}));
+      }
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match('/');
+    if (cached) return cached;
+    const note = await caches.match('/offline.html');
+    return note || new Response('Offline', {status: 503,
+      headers: {'Content-Type': 'text/plain; charset=utf-8'}});
+  }
+}
+
+async function librarySnapshot(request) {
+  try {
+    const response = await fetch(request);
+    const kind = response.headers.get('Content-Type') || '';
+    if (response.ok && !response.redirected && kind.includes('application/json')) {
+      const body = await response.clone().text();
+      const cache = await caches.open(CACHE);
+      await cache.put(LIBRARY_API, new Response(body, {
+        headers: {'Content-Type': 'application/json; charset=utf-8'}}));
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(LIBRARY_API);
+    if (cached) return cached;
+    throw error;      // nothing kept yet: the page's own failure path is the honest answer
+  }
+}
+
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
   // Versioned stylesheet URLs (`/styles/app.css?v=…`) must still be served from the cache by
@@ -87,10 +137,18 @@ self.addEventListener('fetch', event => {
     event.respondWith(cachedAudio(request, url));
     return;
   }
-  // Only the app's entry navigation gets an informational network-failure page.
-  // Never store authenticated HTML, login/invite pages, API, artwork or credentials.
+  // The entry navigation, network first: what the server just sent is what paints, and a
+  // copy is kept only when it is the app itself. A redirect (to /login) or a page without
+  // the shell marker is never stored, so a signed-out browser cannot overwrite the shell
+  // with a sign-in form.
   if (request.mode === 'navigate' && (url.pathname === '/' || url.pathname === '/index.html')){
-    event.respondWith(fetch(request).catch(() => caches.match('/offline.html')));
+    event.respondWith(appShell(request));
+    return;
+  }
+  // The library listing, so an installed app opens with something to look at. Other API
+  // responses — credentials, member data, artwork — are deliberately not kept.
+  if (url.pathname === LIBRARY_API && request.method === 'GET'){
+    event.respondWith(librarySnapshot(request));
     return;
   }
   if (!STATIC.includes(url.pathname)) return;
