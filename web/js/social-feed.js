@@ -2,8 +2,9 @@
    the member profile dialog those cards open.
 
    `JS-031`. A plain classic script, loaded before the inline one: no build step, and every
-   name below stays global exactly as it was in index.html. Definitions only — the list is
-   painted by loadActivity() when the Activity view asks for it, never at load. `esc`, `ago`,
+   name below stays global exactly as it was in index.html. Nothing here paints at load — the
+   list is painted by loadActivity() when the Activity view asks for it — and nothing looks up
+   markup or reads a `const` from the inline script, which does not exist yet. `esc`, `ago`,
    `profileSymbol`, `api` and `showToast` stay where they were and resolve at call time.
 */
 let activityExpiryTimer = null;
