@@ -257,6 +257,7 @@ web/dj.html            the mixer board
 web/party.js           the room client (queue, votes, chat, host lease)
 web/swipe.js           one Repository card at a time
 subsonic.py            Subsonic / OpenSubsonic surface for phone players
+sdk/                   client for the Subsonic surface and the capability document (docs/client-sdk.md)
 docs/server-domains.md who owns which module, table and route (Core/Repo/Library/Playback/Social)
 docs/server-packaging.md  headless VPS layout, systemd unit, Docker image, backup boundary
 ```

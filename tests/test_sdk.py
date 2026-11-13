@@ -13,7 +13,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from sdk import subsonic
+from sdk import capabilities, subsonic
 from sdk.subsonic import ClientError, Credentials, NotSupported, SubsonicClient, WrongCredentials
 
 STREAM = bytes(range(256)) * 12          # 3072 bytes: every offset is distinguishable
@@ -349,6 +349,113 @@ class Streams(Wire):
         with self.assertRaises(ClientError) as caught:
             self.client.read_range('7', offset=len(STREAM) + 1)
         self.assertIn('416', str(caught.exception))
+
+
+#: The shape `/api/v1/capabilities` really answers (server.py). `repo` is absent on purpose:
+#: the document advertises `discovery`, and no client may upgrade that into acquisition.
+CAPABILITIES = {
+    'server': {'name': 'HardlyListening', 'version': '0.16.6', 'api': 'v1',
+               'requires_members': True},
+    'subsonic': {'enabled': True, 'version': '1.16.1', 'server_version': 'scoped-1',
+                 'open_subsonic': True,
+                 'extensions': [{'name': 'transcoding', 'versions': [1]}],
+                 'transcode_targets': ['aac', 'mp3', 'opus'], 'default_transcode': 'mp3'},
+    'features': {
+        'accounts': {'password': True, 'login_link': True, 'invite_only': True, 'google': False},
+        'library': {'scope': 'member', 'bookmarks': True, 'ratings': True},
+        'playback': {'range': True, 'transcode': True, 'hls': False},
+        'party': {'enabled': True, 'chat': True, 'jukebox': False},
+        'social': {'comments': True, 'votes': True, 'likes': True, 'activity': True},
+        'discovery': {'search': True, 'sonic_analysis': False},
+    },
+}
+
+
+class CapabilitiesDocument(StubServer):
+    """The document `server.py` really answers, and the ways it can go wrong."""
+
+    def setUp(self):
+        self.document = json.loads(json.dumps(CAPABILITIES))
+        self.failure = None
+        super().setUp()
+
+    def answer(self, path, query, headers):
+        if path != capabilities.CAPABILITIES_PATH:
+            return super().answer(path, query, headers)
+        if self.failure:
+            return self.failure
+        return 200, {'Content-Type': 'application/json'}, json.dumps(self.document).encode()
+
+
+class CapabilityClient(CapabilitiesDocument):
+
+    def test_the_document_is_read_into_one_object(self):
+        found = capabilities.probe(self.base)
+        self.assertFalse(found.degraded)
+        self.assertEqual(found.server.name, 'HardlyListening')
+        self.assertTrue(found.server.requires_members)
+        self.assertEqual(found.subsonic.version, '1.16.1')
+        self.assertEqual(found.subsonic.transcode_targets, ('aac', 'mp3', 'opus'))
+        self.assertEqual(found.subsonic.extensions, ({'name': 'transcoding', 'versions': [1]},))
+        self.assertTrue(found.subsonic.open_subsonic)
+
+    def test_each_optional_domain_says_whether_it_is_there(self):
+        found = capabilities.probe(self.base)
+        self.assertTrue(found.features.social.available)
+        self.assertEqual(found.features.social.get('comments'), True)
+        self.assertTrue(found.features.discovery.available)
+        self.assertFalse(found.features.discovery.get('sonic_analysis'))
+        # The document names no repo, so no acquisition is offered even though the app has one.
+        self.assertFalse(found.features.repo.available)
+        self.assertFalse(found.features.repo.get('anything'))
+        # A domain no server of this shape uses is unavailable, not an exception.
+        self.assertFalse(found.feature('podcasts').available)
+
+    def test_federation_is_false_because_the_server_does_not_advertise_it(self):
+        self.assertFalse(capabilities.probe(self.base).federation)
+
+    def test_a_federation_flag_is_honoured_when_one_appears(self):
+        self.document['features']['federation'] = True
+        self.assertTrue(capabilities.probe(self.base).federation)
+
+    def test_a_missing_domain_degrades_instead_of_raising(self):
+        del self.document['features']['social']
+        found = capabilities.probe(self.base)
+        self.assertFalse(found.degraded)              # the document itself is fine
+        self.assertFalse(found.features.social.available)
+        self.assertEqual(found.features.social.details, {})
+        self.assertTrue(found.features.discovery.available)
+
+    def test_a_document_with_no_features_at_all_still_reads(self):
+        self.document = {'server': {'name': 'Something else'}}
+        found = capabilities.probe(self.base)
+        self.assertEqual(found.server.name, 'Something else')
+        self.assertTrue(found.subsonic.enabled)       # core, nothing more
+        self.assertFalse(found.subsonic.open_subsonic)
+        self.assertFalse(any(found.feature(name).available for name in capabilities.DOMAINS))
+
+    def test_a_broken_capability_call_assumes_core_only(self):
+        self.failure = (500, {'Content-Type': 'text/html'}, b'<h1>boom</h1>')
+        found = capabilities.probe(self.base)
+        self.assertTrue(found.degraded)
+        self.assertIn('500', found.reason)
+        self.assertTrue(found.subsonic.enabled)
+        self.assertFalse(found.subsonic.open_subsonic)
+        self.assertEqual(found.subsonic.extensions, ())
+        self.assertFalse(found.features.social.available)
+        self.assertFalse(found.federation)
+
+    def test_malformed_json_assumes_core_only(self):
+        self.failure = (200, {'Content-Type': 'application/json'}, b'not json')
+        found = capabilities.probe(self.base)
+        self.assertTrue(found.degraded)
+        self.assertFalse(found.subsonic.open_subsonic)
+
+    def test_an_empty_document_is_not_an_error(self):
+        found = capabilities.Capabilities.from_document({})
+        self.assertEqual(found.server.api, 'v1')
+        self.assertFalse(found.features.social.available)
+        self.assertFalse(found.federation)
 
 
 if __name__ == '__main__':
