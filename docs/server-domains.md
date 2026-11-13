@@ -27,6 +27,12 @@ Allowed edges: `Library → Repo` (resolve playable media), `Playback → Repo` 
 Forbidden: `Repo → Social`, `Repo → personal Library state`, `Library → Social`, and
 `Playback` depending on anything except Repo + Library + Core.
 
+**The acquisition descriptor is the only acquisition artefact that may cross a boundary.**
+`repo/federation.py` builds it from a provider result — provider, the provider's own track id and
+the metadata a re-acquisition needs, never a credential, a file path or a member — and
+`repo/service.py` is the only way anything reaches that code (§3). It is a shape for mirroring,
+not a channel: nothing here opens a socket, and the Player never speaks it (`docs/federation.md`).
+
 ---
 
 ## 2. Domains
@@ -83,7 +89,7 @@ Packages:
 | `engine/` | Repo | acquisition queue and scheduler |
 | `downloaders/` | Repo | yt-dlp invocation and AI match helpers |
 | `providers/` | Repo | provider adapters (SoundCloud, Apple Music, generic) |
-| `repo/` | Repo | `service.py`: the entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue |
+| `repo/` | Repo | `service.py`: the entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue, and the acquisition descriptor (`federation.py`, which nothing outside the package may import except `service.py`) |
 | `discovery/` | Repo | artist profile, subscriptions, tracklist — the provider-facing reads `repo/service.py` delegates to |
 | `library/` | **Repo today, Library tomorrow** | artwork, art store, id3 art, imports, import rules, metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser export, playlist views — see §7 |
 | `tools/` | none | operator scripts, not imported by the server |
@@ -253,6 +259,8 @@ Apply to any change that adds a module, table or route:
 - [ ] It opens no connection of its own and writes no other domain's table directly.
 - [ ] A new route's owner is taken from §5, not from the file that was convenient.
 - [ ] If it is a player-facing capability, it works with Social and Party absent.
+- [ ] Federation code is reached through `repo/service.py`; no `web/`, Player or Adapter module
+      imports it, and an acquisition descriptor carries no credential and no file path.
 - [ ] Personal state (favourites, pins, plays) and social signal (votes, boosts) are not merged.
 
 ## 10. Re-measuring this document
@@ -277,7 +285,7 @@ The Python core is the **canonical runtime**. Everything else is a client of it.
 | `server` (this repo's Python core) | the application. Runs directly, under systemd, or in Docker | Python + the OS | a GUI toolkit, a WebView, a desktop shell, a window |
 | `web` (`web/`) | the full frontend served by the server | HTTP only | server internals |
 | Desktop shell | an optional GUI controller **and** client | the server, its HTTP API, and the `web/` it serves | server-domain rules, a second implementation of anything in §3–§5 |
-| Player | an independent OpenSubsonic client | `/rest/*` + `/api/v1/capabilities` | any Repo acquisition code |
+| Player | an independent OpenSubsonic client | `/rest/*` + `/api/v1/capabilities` | any Repo acquisition code, and any federation descriptor |
 
 Rules that follow:
 
@@ -290,3 +298,7 @@ Rules that follow:
 * Packaging (`server/`, `web/`, `desktop/`, `player/`) is a **layout target for the builds**, not a
   repo reorganisation demanded today. The hard part is the dependency direction above, which is
   testable without moving a single file.
+* **The Player never speaks federation.** Repo federation attaches to `repo/service.py` only;
+  `subsonic.py`, `library/playback.py`, `lyrics.py`, `mixer_room.py`, `shares.py` and the shipped
+  web client import none of it. `tests/test_federation.py` parses the modules to keep that true,
+  so a future `sdk/` or `player/` tree cannot reach the descriptor by accident either.

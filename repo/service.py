@@ -22,6 +22,7 @@ from __future__ import annotations
 from discovery import subscriptions as _subscriptions
 from discovery import tracklist as _tracklist
 from discovery.artist_profile import profile as _artist_profile
+from repo import federation as _federation
 
 
 # -- the snapshot ---------------------------------------------------------------------------------
@@ -127,3 +128,25 @@ def release_seat(store, watch_id: int, member_id: str) -> dict:
     if not store.watch_release(int(watch_id), str(member_id or "")):
         raise ValueError("that is not one of your subscriptions")
     return {"unsubscribed": int(watch_id)}
+
+
+# -- acquisition descriptors (federation) ---------------------------------------------------------
+
+def acquisition_descriptor(result) -> dict:
+    """The safe descriptor for one provider result: what a peer would need to re-acquire it.
+
+    `FED-MIRROR-001`. Provider, the provider's own track id and the metadata a re-acquisition
+    needs — never a credential, a file path or a member. This is the only acquisition artefact
+    allowed to cross a boundary, and it crosses through here (see `docs/federation.md`).
+    """
+    return _federation.build(result)
+
+
+def descriptor_json(descriptor: dict) -> str:
+    """The canonical encoding of a descriptor, so two nodes agree on the same bytes."""
+    return _federation.dumps(descriptor)
+
+
+def parse_descriptor(text: str) -> dict:
+    """A descriptor from a peer: input, not truth, so it is fully re-checked before use."""
+    return _federation.parse(text)
