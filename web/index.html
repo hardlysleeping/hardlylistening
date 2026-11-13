@@ -1603,13 +1603,6 @@ async function emptyTrash(){
     if (last) fillSettings(last);
   } catch (e){ showToast(e.message); }
 }
-function fmtBytes(n){
-  n = Number(n) || 0;
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(0)} MB`;
-  return `${(n / 1024 ** 3).toFixed(1)} GB`;
-}
 function fillSettings(st){
   const s = st.settings || {};
   const trashCount = Number((st.stats || {}).trash_count || 0);
