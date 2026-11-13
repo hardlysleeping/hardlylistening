@@ -18,7 +18,7 @@ const STYLES = [
 ];
 // Feature scripts the shell loads by URL. index.html is never cached (it is authenticated HTML),
 // but a cached copy of its scripts is what lets a same-origin reload paint without the network.
-const SCRIPTS = ['/js/playback-queue.js', '/js/repo-discovery.js', '/js/social-feed.js', '/js/library.js'];
+const SCRIPTS = ['/js/playback-queue.js', '/js/playback.js', '/js/repo-discovery.js', '/js/social-feed.js', '/js/library.js'];
 const STATIC = ['/offline.html','/lifecycle.js','/icon-192.png','/icon-512.png','/app.webmanifest',
                 ...STYLES, ...SCRIPTS];
 // The app shell and the last library listing (HL-309). Both are the signed-in member's own
