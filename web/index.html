@@ -746,6 +746,7 @@
 <script src="/js/repo-discovery.js"></script>
 <script src="/js/social-feed.js"></script>
 <script src="/js/library.js"></script>
+<script src="/js/playback.js"></script>
 <script>
 const $ = (s, r=document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -3218,16 +3219,6 @@ function warmArtwork(row){
   img.decoding = "async";
   img.src = url;
 }
-function mediaArtwork(row){
-  if (!row || !row.artwork) return [];
-  const src = new URL(artHQ(row.artwork), location.href).href;
-  // WebKit draws NO artwork entry that has no declared type — a width/size hint alone
-  // still leaves an empty square on the lock screen and in the car. Say what the bytes
-  // are, from the URL the artwork route actually served.
-  const ext = (src.match(/\.([a-z]{3,4})(?:\?|$)/i) || [, ""])[1].toLowerCase();
-  const type = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-  return [{src, sizes: "512x512", type}];
-}
 // `tracks.album` holds only the release a song came out on, and 410 of 937 rows in a real
 // library have no release at all. Those rows name the set they were pulled from on the
 // player's own line, so the lock screen publishes the same string: album when there is one,
@@ -3244,100 +3235,7 @@ function albumFor(row){
 function playerSub(row){
   return [row && row.artist_name, albumFor(row)].filter(Boolean).join(" · ");
 }
-// iOS's Now Playing sheet draws the title and the artist string only: it never renders the
-// album field, even though WebKit forwards it. The car does have an album spot, so folding it
-// into the artist put the album on screen twice there. The artist line stays the artist; the
-// album field carries the album (or the set) for the platforms that draw it.
-function publishMediaSession(row){
-  if (!("mediaSession" in navigator) || !row) return;
-  try {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: row.title || "Untitled", artist: row.artist_name || "",
-      album: albumFor(row), artwork: mediaArtwork(row)
-    });
-  } catch (_) { /* older browser: the car just keeps the previous tag */ }
-  // Assigning metadata is what activates the session. Claim the transport actions
-  // immediately afterwards, while it is active, so the platform never falls back to
-  // its default +10/-10 layout.
-  bindMediaSession();
-}
-function publishPosition(){
-  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
-  const duration = playerAudio.duration;
-  if (!Number.isFinite(duration) || duration <= 0) return;
-  try {
-    navigator.mediaSession.setPositionState({
-      duration, playbackRate: playerAudio.playbackRate || 1,
-      position: Math.min(Math.max(playerAudio.currentTime || 0, 0), duration)
-    });
-  } catch (_) { /* a car with no timeline support does not need this */ }
-}
-function publishPlaybackState(){
-  if (!("mediaSession" in navigator)) return;
-  navigator.mediaSession.playbackState = playerAudio.paused ? "paused" : "playing";
-  // WebKit drops action handlers when the session deactivates — a pause, a trip to the
-  // background, a PWA resume. Re-claim them with every state change so the lock screen
-  // keeps ⏮/⏭ instead of reverting to the platform's +10/-10 seek pair.
-  bindMediaSession();
-}
-function bindMediaSession(){
-  if (!("mediaSession" in navigator)) return;
-  // Lock-screen layout is chosen from the REGISTERED actions: previous/next track gives
-  // ⏮/⏭, while any registered seek action replaces them with +10/-10. So clear the seek
-  // actions and claim only the track ones. RULE: never register seekbackward, seekforward
-  // or seekto here — it is the one thing that loses the skip buttons.
-  for (const action of ["seekbackward","seekforward","seekto"]){
-    try { navigator.mediaSession.setActionHandler(action, null); } catch (_) {}
-  }
-  const handlers = {
-    play: () => playerAudio.play().catch(() => {}),
-    pause: () => playerAudio.pause(),
-    previoustrack: () => playerPrev(),
-    nexttrack: () => playerNext(),
-    // The lock-screen timeline is only scrubbable when a seekto handler exists; it does
-    // NOT swap the skip pair for +10/-10 (that is seekbackward/seekforward alone).
-    seekto: details => {
-      if (details && Number.isFinite(details.seekTime)) {
-        playerAudio.currentTime = Math.max(0, Math.min(playerAudio.duration || details.seekTime, details.seekTime));
-      }
-    }
-  };
-  for (const [action, handler] of Object.entries(handlers)){
-    try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
-  }
-}
 
-// iOS drops the whole lock-screen block when the page reloads: the session is gone, and nothing
-// assigns `mediaSession.metadata` again until a *different* track starts — so the phone falls back
-// to the app's name and icon, and the car's ⏮/⏭ stop doing anything. Re-claim it whenever the page
-// comes back and whenever the audio element actually starts, using the row that is already playing.
-function republishMediaSession(){
-  if (playingId == null) return;
-  const row = currentRows.find(t => t.id === playingId) || libQueue.find(t => t.id === playingId);
-  if (!row) return;
-  publishMediaSession(row);
-  publishPlaybackState();
-}
-window.addEventListener("pageshow", republishMediaSession);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") republishMediaSession();
-});
-playerAudio.addEventListener("play", republishMediaSession);
-// A skip reuses the one audio element, and a head unit that latches the now-playing block
-// for the life of the Bluetooth media session never sees the tag it was handed before
-// `play()` — which is why the first song lands and every manual skip does not. Publishing
-// again on the element's own milestones hands it a tag after the new resource is attached,
-// and costs one assignment. (Measured here; the head unit itself cannot be tested.)
-playerAudio.addEventListener("loadedmetadata", republishMediaSession);
-playerAudio.addEventListener("playing", republishMediaSession);
-// A skip detaches the old resource before the new one is attached, and WebKit answers that
-// with `emptied` — the same event it uses to drop the now-playing tag. Re-publishing on it
-// puts the tag back on the session the saloon is still holding, and `canplay` covers the
-// car that asks again once it has bytes. Both are one assignment, and both only fire while
-// a row is loaded.
-playerAudio.addEventListener("emptied", republishMediaSession);
-playerAudio.addEventListener("canplay", republishMediaSession);
-playerAudio.addEventListener("error", republishMediaSession);
 
 // Playback of the next queued song should not wait for the network. The audio
 // route is no-store (a Range stream for seeking), so the only way to start
@@ -3410,7 +3308,7 @@ function playQueue(rows, start = 0){
   if (!playable.length){ showToast("Nothing playable here yet."); return; }
   libQueue = playable;
   libIndex = Math.max(0, Math.min(start, playable.length - 1));
-  if (plShuffle){ shuffleBase = playable.map(t => t.id); shuffleUpNext(); }
+  if (plShuffle && playback) playback.shuffleQueue(libIndex);
   playFromLibrary(playable[libIndex].id);
 }
 
@@ -3555,13 +3453,11 @@ function playFromLibrary(id){
   // Publish the new tag before playback starts: the car asks for it the moment it
   // sees the stream, and assigning it afterwards left the old song on the screen.
   warmArtwork(row);
-  publishMediaSession(row);
-  // A skip that lands while the previous play() is still pending rejects it. Swallowing
-  // that left the session published as "playing" with no `playing` milestone to follow,
-  // so a head unit that latched nothing kept a blank block until a reload. Re-claim the
-  // tag on the failure too — the row is still the one loaded on the element.
-  playerAudio.play().catch(() => republishMediaSession());
-  publishPlaybackState();
+  // The playback module owns the media session: one call tags the new row, claims the
+  // transport actions and publishes the position. A rejected play() re-publishes on the
+  // same row, because a head unit that latched nothing otherwise stays blank until a reload.
+  if (playback) playback.publish();
+  playerAudio.play().catch(() => { if (playback) playback.publish(); });
   paintTransport(wasPlaying);
   // The compact add/remove follows the track: without this it only painted when the
   // fullscreen player repainted or when the saves list happened to reload.
@@ -3623,6 +3519,9 @@ function stepTrack(delta){
 
 let plShuffle = localStorage.getItem("hl.shuffle") === "1";
 let plRepeat = localStorage.getItem("hl.repeat") || "off";
+// Assigned by the attach below. Declared here so a restored queue or a click can never reach
+// it before the page has finished evaluating.
+let playback = null;
 
 function paintPlayerModes(){
   $("#plshuffle").classList.toggle("on", plShuffle);
@@ -4727,60 +4626,17 @@ function playerPrev(){
   if (playerAudio.currentTime > 3) playerAudio.currentTime = 0; else stepTrack(-1);
 }
 function playerNext(){ stepTrack(1); }
-// The order shuffle started from, so switching it off puts the queue back.
-let shuffleBase = null;
-function restoreQueueOrder(){
-  if (!shuffleBase) return;
-  const rank = new Map(shuffleBase.map((id, position) => [id, position]));
-  const start = Math.max(0, libIndex + 1);
-  const tail = libQueue.slice(start);
-  tail.sort((a, b) => {
-    const ra = rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER;
-    const rb = rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER;
-    return ra - rb;
-  });
-  libQueue = libQueue.slice(0, start).concat(tail);
-  commitPlaybackQueue();
-  paintPlaybackQueue();
-}
-// Shuffle reorders everything still waiting, hand-queued songs included.
-function shuffleUpNext(){
-  const start = Math.max(0, libIndex + 1);
-  const tail = libQueue.slice(start);
-  if (tail.length < 2) return;
-  const before = tail.map(t => t.id).join();
-  // Turning shuffle off and on again must produce a different order, not the same one.
-  for (let attempt = 0; attempt < 6; attempt++){
-    for (let i = tail.length - 1; i > 0; i--){
-      const j = Math.floor(Math.random() * (i + 1));
-      [tail[i], tail[j]] = [tail[j], tail[i]];
-    }
-    if (tail.length < 3 || tail.map(t => t.id).join() !== before) break;
-  }
-  libQueue = libQueue.slice(0, start).concat(tail);
-  commitPlaybackQueue();
-  paintPlaybackQueue();
-}
 function toggleShuffle(){
-  plShuffle = !plShuffle;
-  localStorage.setItem("hl.shuffle", plShuffle ? "1" : "0");
-  if (plShuffle){
-    shuffleBase = libQueue.map(t => t.id);
-    shuffleUpNext();
-  } else {
-    restoreQueueOrder();
-    shuffleBase = null;
-  }
-  paintPlayerModes();
-  showToast(plShuffle ? "Shuffling up next" : "Shuffle off — original order restored");
+  if (!playback) return;
+  const on = playback.toggleShuffle();
+  showToast(on ? "Shuffling up next" : "Shuffle off — original order restored");
 }
 $("#plshuffle").setAttribute("aria-pressed", "false");
 $("#pfshuffle").setAttribute("aria-pressed", "false");
 function cycleRepeat(){
-  plRepeat = plRepeat === "off" ? "all" : plRepeat === "all" ? "one" : "off";
-  localStorage.setItem("hl.repeat", plRepeat);
-  paintPlayerModes();
-  showToast(plRepeat === "one" ? "Repeat one song" : plRepeat === "all" ? "Repeat the queue" : "Repeat off");
+  if (!playback) return;
+  const mode = playback.cycleRepeat();
+  showToast(mode === "one" ? "Repeat one song" : mode === "all" ? "Repeat the queue" : "Repeat off");
 }
 function seekTo(fraction){
   if (playerAudio.duration) playerAudio.currentTime = (Number(fraction) / 1000) * playerAudio.duration;
@@ -4800,44 +4656,14 @@ playerAudio.addEventListener("timeupdate", () => {
   $("#pftime").textContent = fmtClock(playerAudio.currentTime);
   $("#pfdur").textContent = fmtClock(playerAudio.duration);
 });
-playerAudio.addEventListener("ended", () => {
-  if (plRepeat === "one"){ playerAudio.currentTime = 0; playerAudio.play().catch(() => {}); return; }
-  // Queued songs continue; running out stops. Repeat is the only thing that keeps going.
-  if (libIndex < libQueue.length - 1){ stepTrack(1); return; }
-  if (plRepeat === "all" && libQueue.length){ libIndex = -1; stepTrack(1); return; }
-  paintPlayerModes();
-});
 // Cache the next queued song only once this one can play, so the prefetch never
 // competes with the bytes of the song you are actually listening to.
 playerAudio.addEventListener("canplay", prefetchAhead);
 playerAudio.addEventListener("timeupdate", () => { if (typeof saveNowState === 'function') saveNowState(false); });
 playerAudio.addEventListener("pause", () => { if (typeof saveNowState === 'function') saveNowState(true); });
-playerAudio.addEventListener("ended", () => { if (typeof saveNowState === 'function') saveNowState(true); });
 playerAudio.addEventListener("play", paintPlayerModes);
 playerAudio.addEventListener("pause", paintPlayerModes);
-// Keep the car's timeline honest: without a position state many head units show a
-// frozen or invented elapsed/total. ~1 Hz is enough; timeupdate fires ~4 Hz.
-let lastPositionPush = 0;
-function pushPositionState(force){
-  const now = performance.now();
-  if (!force && now - lastPositionPush < 1000) return;
-  lastPositionPush = now;
-  publishPosition();
-}
-bindMediaSession();
-// A reload, a resume from the home screen or a return from the background recreates the
-// media session with no handlers; every one of those entry points re-claims them so the
-// lock screen's ⏮/⏭ do not silently become +10/-10 again. This, not the single call above,
-// is what keeps the skip buttons.
-document.addEventListener("visibilitychange", bindMediaSession);
-window.addEventListener("pageshow", bindMediaSession);
-playerAudio.addEventListener("loadedmetadata", bindMediaSession);
-for (const event of ["loadedmetadata", "durationchange", "seeked", "ratechange"]){
-  playerAudio.addEventListener(event, () => pushPositionState(true));
-}
-playerAudio.addEventListener("timeupdate", () => pushPositionState(false));
-playerAudio.addEventListener("play", () => { publishPlaybackState(); pushPositionState(true); if (typeof paintPlayerSave === "function") paintPlayerSave(); });
-playerAudio.addEventListener("pause", publishPlaybackState);
+playerAudio.addEventListener("play", () => { if (typeof paintPlayerSave === "function") paintPlayerSave(); });
 
 // ---- offline shell (HL-309) -------------------------------------------------------
 // The service worker keeps the entry page and the last /api/library, so an installed app
@@ -4982,8 +4808,36 @@ playerAudio.addEventListener("playing", () => {
   clearTimeout(offlineTimer);
   offlineTimer = setTimeout(() => { if (playingId === id) cachePlayedAudio(id); }, 5000);
 });
-// bindMediaSession() runs here, after playFromLibrary is defined; it closes over the
-// transport functions above, so the car's buttons always drive the live queue.
+// The playback module owns the media session, the transport actions, the position and the
+// shuffle/repeat mode. It attaches here, after playFromLibrary is defined, so its queue
+// adapter closes over the live queue and the car's buttons drive it. `report` is a no-op:
+// the app's own listen beacon (`reportListen`) is the report, and a second one would count
+// every play twice.
+playerAudio.addEventListener("ended", () => {
+  // AutoDJ tops the queue up before the module advances; attach registers its own ended
+  // listener below, so this one has to come first.
+  if (typeof autoDjEnsure === "function") autoDjEnsure();
+});
+playback = PlayerPlayback.attach({
+  audio: playerAudio,
+  coverUrl: function (row) { return row && row.artwork ? artHQ(row.artwork) : ""; },
+  shuffle: plShuffle,
+  repeat: plRepeat,
+  report: function () {},
+  onmode: function (mode) {
+    plShuffle = mode.shuffle;
+    plRepeat = mode.repeat;
+    localStorage.setItem("hl.shuffle", plShuffle ? "1" : "0");
+    localStorage.setItem("hl.repeat", plRepeat);
+    paintPlayerModes();
+  },
+});
+playerAudio.addEventListener("ended", () => {
+  // After the module has advanced: save the song that is now current, and repaint the play
+  // button for the one case that does not advance (the queue ran out with repeat off).
+  if (typeof saveNowState === "function") saveNowState(true);
+  if (typeof paintPlayerModes === "function") paintPlayerModes();
+});
 $("#plseek").addEventListener("input", e => {
   if (playerAudio.duration)
     playerAudio.currentTime = (e.target.value / 1000) * playerAudio.duration;

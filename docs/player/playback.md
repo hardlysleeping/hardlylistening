@@ -1,9 +1,9 @@
 # Playback
 
-Card: **PLAYER-004**. `player/shell/playback.js` is the playback layer of the player shell: the
-media session the operating system reads, the transport commands it sends back, the position it
-draws, and the scrobble the server is owed. It is a classic script with no build step, no
-dependency and no storage, and it is loaded by the shell page next to the app's own scripts.
+Card: **PLAYER-004**. `web/js/playback.js` is the playback layer: the media session the operating
+system reads, the transport commands it sends back, the position it draws, and the scrobble the
+server is owed. It is a classic script with no build step, no dependency and no storage, and it is
+loaded by the app's own page, which the browser and the player shell both serve.
 
 It is **not a second player**. The audio element (`#player-audio`), the queue (`libQueue`,
 `libIndex`, `playingId`), the shuffle order and the repeat mode all belong to `web/` and stay
@@ -145,130 +145,107 @@ queue that silently drops a song is worse than an order that did not change.
 
 ## Wiring
 
-This card adds one file to `player/shell/`, which **is** the assembly's shell allow-list, so it
-ships without an edit to `player/assemble.mjs`. Everything else is handed over: line numbers are
-from `eaf55d0`, and none of it may be applied by this card, because `web/` belongs to PLAYER-003
-and the shipped page to whoever owns the shell document.
+This card shipped the module and reported the page edits; PLAYER-004's integration pass applied
+them. The module now lives in `web/js/playback.js` — the app's own tree — rather than
+`player/shell/`, because the player runs the app's page and a copy in the shell would be a second
+one. `player/assemble.mjs` lists `js/playback.js` in `WEB_ALLOW`, so the player assembly carries it
+too.
 
-The shape of it: the module becomes the **only** writer of `navigator.mediaSession`, of the
-`ended` advance, and of shuffle/repeat state. Two owners fight over the handlers and every
-re-claim undoes the other's; two `ended` listeners advance two songs per end.
+The shape of it: the module is the **only** writer of `navigator.mediaSession`, of the `ended`
+advance, and of shuffle/repeat state. Two owners fought over the handlers and every re-claim undid
+the other's; two `ended` listeners advanced two songs per end.
 
-### 1. `web/index.html` — delete the media-session implementation
+### What the page lost
 
-Delete these ranges, and nothing else in them:
+- `mediaArtwork`, `publishMediaSession`, `publishPosition`, `publishPlaybackState`,
+  `bindMediaSession`, `republishMediaSession` and their `pageshow` / `visibilitychange` / `play` /
+  `loadedmetadata` / `playing` / `emptied` / `canplay` / `error` listeners.
+- `lastPositionPush`, `pushPositionState`, the re-claim listeners and the position-state loop. The
+  one line kept is the save-button repaint: `paintPlayerSave()` on `play`.
+- The inline `ended` handler (repeat one, advance, repeat all) and the `saveNowState(true)` copy
+  that ran with it. The module replays the advance; the save and the mode repaint are registered
+  **after** `attach`, so they still see the row the module has advanced to.
+- `restoreQueueOrder`, `shuffleUpNext` and `shuffleBase`: dead once the module owns the order, and
+  a second shuffle would have reordered twice.
+- The 2026-11-12 skip-boundary experiment (`skipBoundary`, `boundaryPending`, `settleBoundary`, the
+  `"none"` hand-over): its only consumer was the media session this card hands over. The manual
+  skip still tears the element down; the module re-tags on every load milestone.
 
-| lines | what goes |
-| --- | --- |
-| 3228–3237 | `mediaArtwork` (only `publishMediaSession` used it) |
-| 3258–3347 | `publishMediaSession`, `publishPosition`, `publishPlaybackState`, `bindMediaSession`, `republishMediaSession`, and the `pageshow` / `visibilitychange` / `play` / `loadedmetadata` / `playing` / `emptied` / `canplay` / `error` listeners |
-| 4825–4847 | `lastPositionPush`, `pushPositionState`, `bindMediaSession();`, the re-claim listeners, the position-state loop, and the `play` / `pause` publish lines |
+`warmArtwork` stays (the prefetch warms the next cover with it), and so do `realAlbum`, `albumFor`
+and `playerSub`, which paint the player's own second line.
 
-Keep, because the app's own UI still calls them: `warmArtwork` (3213–3227, used by
-`prefetchAhead` at 3367 to warm the next cover), and `realAlbum` / `albumFor` / `playerSub`
-(3242–3253), which paint the player's second line.
+### What the page calls
 
-Keep one line from the range at 4825–4847 — the save button repaint that the module does not do:
+`playFromLibrary` tags the new row before playback starts with `playback.publish()` and
+re-publishes on a rejected `play()`. `reportListen` stays the only listen report; `attach` is given
+a no-op `report`, so the module's Subsonic scrobble cannot count a play the app has already counted.
 
-```js
-playerAudio.addEventListener("play", () => { if (typeof paintPlayerSave === "function") paintPlayerSave(); });
-```
-
-### 2. `web/index.html:4810–4816` — delete the inline `ended` handler
-
-```js
-playerAudio.addEventListener("ended", () => {
-  if (plRepeat === "one"){ playerAudio.currentTime = 0; playerAudio.play().catch(() => {}); return; }
-  if (libIndex < libQueue.length - 1){ stepTrack(1); return; }
-  if (plRepeat === "all" && libQueue.length){ libIndex = -1; stepTrack(1); return; }
-  paintPlayerModes();
-});
-```
-
-The module replays exactly this from its own `ended` listener, including the hand-over when the
-playing row is outside the queue. Leave the `saveNowState(true)` listener on 4822 alone.
-
-### 3. `web/index.html:3564–3571` — `playFromLibrary` publishes through the module
-
-Replace `publishMediaSession(row);` (3565) with `playback.publish();` — it re-tags from the row
-`playingId` now names and pushes the position, and it warms nothing, so `warmArtwork(row;` on
-3564 stays.
-
-Replace the two lines
-
-```js
-  playerAudio.play().catch(() => republishMediaSession());
-  publishPlaybackState();
-```
-
-with
-
-```js
-  playerAudio.play().catch(() => playback.refresh());
-```
-
-`refresh()` is the module's own re-claim: sync, claim, re-tag, state, position. The comment above
-it (a skip landing while the last `play()` is pending) still describes what it is for.
-
-### 4. `web/index.html:4771–4790` — shuffle and repeat call the module
-
-The buttons stay where they are, so nothing is lost. Replace the *bodies* of `toggleShuffle` and
-`cycleRepeat`; the queue reorder and the `localStorage` writes inside them go with the module's
-own adapter (`setOrder` → `commitPlaybackQueue`), and the toasts stay:
+The toggle bodies shrink to the module plus their toast:
 
 ```js
 function toggleShuffle(){
-  plShuffle = playback.toggleShuffle();
-  paintPlayerModes();
-  showToast(plShuffle ? "Shuffling up next" : "Shuffle off — original order restored");
+  if (!playback) return;
+  const on = playback.toggleShuffle();
+  showToast(on ? "Shuffling up next" : "Shuffle off — original order restored");
 }
 function cycleRepeat(){
-  plRepeat = playback.cycleRepeat();
-  paintPlayerModes();
-  showToast(plRepeat === "one" ? "Repeat one song" : plRepeat === "all" ? "Repeat the queue" : "Repeat off");
+  if (!playback) return;
+  const mode = playback.cycleRepeat();
+  showToast(mode === "one" ? "Repeat one song" : mode === "all" ? "Repeat the queue" : "Repeat off");
 }
 ```
 
-`plShuffle` / `plRepeat` stay as the app's mirror of the module's state, because
-`paintPlayerModes()` (3634) and `upcomingIds()` (3381) read them. `restoreQueueOrder`,
-`shuffleUpNext` and `shuffleBase` (4755–4768) become unused and may be deleted with the module in
-place; they must not be called, or the order is shuffled twice.
+`plShuffle` / `plRepeat` remain the app's mirror, because `paintPlayerModes()` and `upcomingIds()`
+read them; `attach`'s `onmode` writes them and `localStorage` (`hl.shuffle`, `hl.repeat`) and
+repaints. They are also handed *in* at `attach`, so a reload opens with the buttons it left pressed
+without re-shuffling a queue the app already restored.
 
-Consequence, stated rather than buried: shuffle and repeat are no longer written to
-`localStorage` (`hl.shuffle`, `hl.repeat` at 3631–3632), so they reset on reload. A shell page
-that wants them to survive can call `playback.setShuffle(true)` / `playback.setRepeat(value)`
-after `attach`, from its own stored copy.
+Two module additions came out of the wiring, both from real parity gaps:
 
-### 5. The shell page that runs the library — load the module
+- `attach({ shuffle, repeat })` adopts the app's persisted modes as state only. Calling
+  `setShuffle(true)` at boot would reorder a queue the listener never touched.
+- `shuffleQueue(anchor)` shuffles a queue the app has just built, from the song the listener chose.
+  `setShuffle(true)` is a no-op when shuffle is already on, so a new album queue would otherwise
+  arrive unshuffled; and `appQueue().setOrder` now redraws the queue panel, which the app's own
+  `shuffleUpNext` used to do.
 
-After the app's scripts:
+The tag also reaches a row that is in neither the queue nor `libAll` — a search result or a release
+page — because `appQueue().rowOf` now asks `currentRows` last, which is the list `playFromLibrary`
+itself reads.
+
+### The page loads it
 
 ```html
-<script src="./playback.js"></script>
+<script src="/js/playback.js"></script>
 <script>
-  const playback = PlayerPlayback.attach({
-    audio: document.getElementById("player-audio"),
-    coverUrl: artHQ,
-    onmode: mode => { plShuffle = mode.shuffle; plRepeat = mode.repeat; paintPlayerModes(); },
+  playback = PlayerPlayback.attach({
+    audio: playerAudio,
+    coverUrl: function (row) { return row && row.artwork ? artHQ(row.artwork) : ""; },
+    shuffle: plShuffle,
+    repeat: plRepeat,
+    report: function () {},
+    onmode: function (mode) { /* mirror + localStorage + paintPlayerModes() */ },
   });
 </script>
 ```
 
-`player/shell/connect.html` is the *gate*, not the library page, so this belongs to whichever
-document PLAYER-003 routes to. It must **not** be added to `web/index.html`, where `./playback.js`
-would 404 in the browser build.
+It is a classic script loaded before the inline one, so `PlayerPlayback` exists when the attach
+runs. `attach` needs no queue: `appQueue()` reaches `libQueue`, `playingId`, `libAll`,
+`currentRows`, `playFromLibrary`, `stepTrack`, `commitPlaybackQueue` and `paintPlaybackQueue` by
+bare name, which is what reaches the app's top-level `let` bindings.
 
-`attach` needs nothing else: with no `queue` it binds `appQueue()` (the app's `libQueue`,
-`playingId`, `libAll`, `playFromLibrary`, `stepTrack`, `commitPlaybackQueue` by bare name), with no
-`mediaSession` it takes `navigator.mediaSession`, with no `report` it posts to the session
-`PlayerConnect` is holding, and with no `announce` it stays quiet on track start (see scrobble).
+One unrelated fix was required to make any of it run: `web/index.html` had two top-level
+`fmtBytes` declarations (the `const` from 0.11.0 and a `function` added with HL-306). Two
+declarations of one name in one script is a parse error, so the whole inline script had stopped
+before `$`, the library or the player existed. The later `function` was removed, and
+`tests/test_index_scripts.py` now runs `node --check` over every inline block.
 
 ## Tests
 
 ```sh
 cd <repo>
 node tests/test_player_playback.cjs
-PYTHONPATH=.:tests python3 -m unittest tests.test_player_playback tests.test_player_shell
+PYTHONPATH=.:tests python3 -m unittest tests.test_player_playback tests.test_player_shell tests.test_index_scripts
 ```
 
 No dependency is needed for the browser-free test: it uses `vm` from the standard library.

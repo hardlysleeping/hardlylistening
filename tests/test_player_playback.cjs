@@ -12,7 +12,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const SOURCE = fs.readFileSync(path.join(__dirname, "..", "player", "shell", "playback.js"), "utf8");
+const SOURCE = fs.readFileSync(path.join(__dirname, "..", "web", "js", "playback.js"), "utf8");
 
 let failures = 0;
 function check(name, ok, detail) {

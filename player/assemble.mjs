@@ -40,6 +40,7 @@ const WEB_ALLOW = [
   'lyrics.js',
   'lifecycle.js',
   'js/library.js',
+  'js/playback.js',
   'js/playback-queue.js',
   'js/social-feed.js',
   'styles/app.css',

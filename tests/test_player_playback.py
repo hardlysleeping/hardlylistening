@@ -25,7 +25,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1]
 PLAYER = APP_DIR / 'player'
 SHELL = PLAYER / 'shell'
-PLAYBACK = SHELL / 'playback.js'
+PLAYBACK = APP_DIR / 'web' / 'js' / 'playback.js'
 ASSEMBLE = PLAYER / 'assemble.mjs'
 INDEX = APP_DIR / 'web' / 'index.html'
 DOC = APP_DIR / 'docs' / 'player' / 'playback.md'
@@ -206,11 +206,13 @@ class Documentation(unittest.TestCase):
 
 
 class Ships(unittest.TestCase):
-    """`player/shell/` is the assembly's shell allow-list, so being there is being shipped."""
+    """The module lives in the app's own `web/js/`, which both the browser and the player serve."""
 
-    def test_the_module_is_in_the_shell_directory(self):
+    def test_the_module_is_in_the_app_tree(self):
         self.assertTrue(PLAYBACK.is_file())
-        self.assertEqual(PLAYBACK.parent, SHELL)
+        self.assertEqual(PLAYBACK.parent, APP_DIR / 'web' / 'js')
+        self.assertFalse((SHELL / 'playback.js').exists(),
+                         'the module moved to web/js; a copy in the shell would be a second one')
 
     def test_the_assembly_plan_carries_it(self):
         if not NODE:
@@ -219,9 +221,9 @@ class Ships(unittest.TestCase):
                                 capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, result.stderr)
         plan = json.loads(result.stdout)
-        self.assertIn('playback.js', plan['shell'])
-        self.assertIn('playback.js', plan['assembled'] if 'assembled' in plan else plan['shell'])
-        self.assertNotIn('playback.js', [rel for rel, _ in plan['excluded']])
+        self.assertIn('js/playback.js', plan['web'])
+        self.assertIn('js/playback.js', plan['assembled'] if 'assembled' in plan else plan['web'])
+        self.assertNotIn('js/playback.js', [rel for rel, _ in plan['excluded']])
 
 
 if __name__ == '__main__':

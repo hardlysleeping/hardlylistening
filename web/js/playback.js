@@ -173,7 +173,13 @@
       const queued = rows().find(item => item && item.id === id);
       if (queued) return queued;
       const known = typeof libAll === "undefined" || !libAll ? [] : libAll;
-      return known.find(item => item && item.id === id) || null;
+      const found = known.find(item => item && item.id === id);
+      if (found) return found;
+      /* A search result or a release page can hold a row that is in neither the queue nor the
+         library's full list, and the app plays it by passing that row's id. Reaching it here is
+         what lets the lock-screen tag name the song the listener actually tapped. */
+      const shown = typeof currentRows === "undefined" || !currentRows ? [] : currentRows;
+      return shown.find(item => item && item.id === id) || null;
     };
     return {
       row: () => rowOf(playing()),
@@ -186,6 +192,7 @@
         if (order.length !== ids.length) return;
         libQueue = order;
         if (typeof commitPlaybackQueue === "function") commitPlaybackQueue();
+        if (typeof paintPlaybackQueue === "function") paintPlaybackQueue();
       },
       play: id => {
         if (typeof playFromLibrary === "function") playFromLibrary(id);
@@ -230,6 +237,16 @@
       published: { at: -POSITION_INTERVAL, value: 0, epoch: 0 },
       seekEpoch: 0,
     };
+
+    /* The app persists shuffle and repeat in its own storage and hands them in, so a reload
+       opens with the buttons it left pressed. This is state only: the queue the app restored is
+       already in the order it was saved in, and re-shuffling it at boot would change a queue the
+       listener never touched. */
+    if (config.shuffle === true) state.shuffle = true;
+    if (config.repeat != null) {
+      const wanted = text(config.repeat);
+      state.repeat = REPEATS.indexOf(wanted) >= 0 ? wanted : "off";
+    }
 
     const handlers = {
       play: play,
@@ -485,33 +502,42 @@
       } catch (error) { /* a repaint failing is not a playback fault */ }
     }
 
-    /* Shuffle reorders what is still to come and never moves the song that is playing. Turning
-       it off puts the waiting songs back in the order they were in before. */
+    /* Shuffle reorders what is still to come and never moves the song that is playing. The
+       order it found is kept as the base, so turning it off puts the waiting songs back.
+       `anchor` is the index of the song the listener chose: a queue the app has just built is
+       shuffled after that song, not after whatever was playing before it. */
+    function shuffleQueue(anchor) {
+      sync();
+      const order = orderNow();
+      const wanted = Number(anchor);
+      const at = Number.isFinite(wanted) ? wanted : indexNow();
+      state.base = order.slice();
+      const head = at >= 0 ? order.slice(0, at + 1) : [];
+      let tail = at >= 0 ? order.slice(at + 1) : order.slice();
+      if (tail.length > 1) {
+        const before = tail.join();
+        tail = shuffleOrder(tail);
+        /* Turning it off and on again has to change something, or the button is a lie. */
+        for (let attempt = 0; attempt < 6 && tail.length > 2 && tail.join() === before; attempt++) {
+          tail = shuffleOrder(tail);
+        }
+      }
+      state.shuffle = true;
+      setOrder(head.concat(tail));
+      mode();
+      return state.shuffle;
+    }
+
     function setShuffle(on) {
       sync();
       const wanted = !!on;
       if (wanted === state.shuffle) return state.shuffle;
+      if (wanted) return shuffleQueue(indexNow());
       const order = orderNow();
       const at = indexNow();
-      if (wanted) {
-        state.base = order.slice();
-        const head = at >= 0 ? order.slice(0, at + 1) : [];
-        let tail = at >= 0 ? order.slice(at + 1) : order.slice();
-        if (tail.length > 1) {
-          const before = tail.join();
-          tail = shuffleOrder(tail);
-          /* Turning it off and on again has to change something, or the button is a lie. */
-          for (let attempt = 0; attempt < 6 && tail.length > 2 && tail.join() === before; attempt++) {
-            tail = shuffleOrder(tail);
-          }
-        }
-        state.shuffle = true;
-        setOrder(head.concat(tail));
-      } else {
-        state.shuffle = false;
-        setOrder(restoreOrder(state.base, order, at));
-        state.base = null;
-      }
+      state.shuffle = false;
+      setOrder(restoreOrder(state.base, order, at));
+      state.base = null;
       mode();
       return state.shuffle;
     }
@@ -585,6 +611,7 @@
       seek: seek,
       seekTo: seek,
       setShuffle: setShuffle,
+      shuffleQueue: shuffleQueue,
       toggleShuffle: () => setShuffle(!state.shuffle),
       setRepeat: setRepeat,
       cycleRepeat: cycleRepeat,

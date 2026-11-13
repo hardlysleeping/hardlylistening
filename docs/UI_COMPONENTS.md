@@ -15,6 +15,7 @@ Read this before changing the player, the queue, or anything they share.
 | `web/js/repo-discovery.js` | ~30 KB | Releases, the follows and the artist/release pages (`JS-030`). A plain classic script loaded before the inline one; every name stays global, so nothing else had to change |
 | `web/js/social-feed.js` | ~12 KB | Feed = Activity: the day cards, the boost pin, the member profile dialog (`JS-031`). Same shape as the file above |
 | `web/js/library.js` | ~60 KB | The library's drawing layer: grouping, the songs/albums/artists renderers and the detail-view editors (`JS-032`). Reads the library's state, which is still inline |
+| `web/js/playback.js` | ~26 KB | The playback layer (`PLAYER-004`): the media session the OS reads, the transport commands it sends back, the position, shuffle/repeat state and the scrobble. It is the **only** writer of `navigator.mediaSession` and the only `ended` advance; it drives the app's own audio element and queue through an adapter |
 
 There is no build step: the files above are what the server serves. A change is live on
 reload; there is nothing to compile. Components read the entry point's imports; never add a
