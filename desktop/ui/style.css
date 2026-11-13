@@ -258,3 +258,34 @@ button:disabled {
   font-size: 11px;
   color: #c3c3d0;
 }
+/* Two independent choices: a switch and a pair of radios, never one mode switch. */
+.card.mode { display: flex; flex-direction: column; gap: 10px; }
+
+.card.mode .choice { display: flex; flex-direction: column; gap: 4px; }
+
+.card.mode label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+
+.card.mode .choice-label { margin: 0; color: var(--muted); font-size: 12px; }
+
+.card.mode input[type="checkbox"],
+.card.mode input[type="radio"] { margin: 0; accent-color: var(--accent); }
+
+.card.mode .origin { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+
+.card.mode .origin span { color: var(--muted); font-size: 12px; }
+
+.card.mode input[type="url"] {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.card.mode input[type="url"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

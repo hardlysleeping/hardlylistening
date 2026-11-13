@@ -51,6 +51,17 @@ struct State {
     pid: Option<u32>,
 }
 
+impl Lifecycle {
+    /// Whether a server this window started is still alive. The status pill and the state
+    /// machine must not keep separate opinions, so both read the same child slot.
+    pub fn owned(&self) -> bool {
+        match self.state.lock() {
+            Ok(mut state) => Self::alive(&mut state),
+            Err(_) => false,
+        }
+    }
+}
+
 impl Default for Lifecycle {
     fn default() -> Self {
         Lifecycle {
@@ -117,6 +128,11 @@ pub fn command(launcher: &Path, address: &host::Address) -> Command {
         if root.is_dir() {
             command.current_dir(root);
         }
+    }
+    // HOST-002's answers, read fresh: a start after the wizard needs no window restart. With
+    // no usable `setup.json` this yields nothing and the server's own defaults decide.
+    for (name, value) in crate::wizard::server_env() {
+        command.env(name, value);
     }
     #[cfg(unix)]
     {

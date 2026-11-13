@@ -20,15 +20,41 @@
     <p class="eyebrow" id="server-title">Server</p>
     <p class="url" id="address">—</p>
     <p class="hint" id="address-hint"></p>
+    <p class="url" id="share-address" hidden></p>
+    <p class="hint" id="share-hint" hidden></p>
     <p class="reason" id="health-error" hidden></p>
     <div class="actions">
       <button id="start" type="button" class="primary">Start local server</button>
       <button id="stop" type="button">Stop</button>
       <button id="open" type="button">Open in browser</button>
+      <button id="copy-address" type="button" disabled>Copy address</button>
       <span class="spacer"></span>
       <button id="quit" type="button" class="quiet">Quit</button>
     </div>
     <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+    <p class="reason" id="lifecycle-reason" hidden></p>
+    <p class="notice" id="lifecycle-handoff" role="status" aria-live="polite" hidden></p>
+    <label class="hint"><input type="checkbox" id="stop-on-close">
+      Stop the server when this window closes</label>
+    <p class="hint" id="lifecycle-close"></p>
+  </section>
+
+  <section class="card mode" id="mode-section" aria-labelledby="mode-title">
+    <p class="eyebrow" id="mode-title">Two choices</p>
+    <div class="choice">
+      <label class="switch"><input type="checkbox" id="mode-local" role="switch"> Run a local server on this computer</label>
+      <p class="hint" id="mode-local-hint"></p>
+    </div>
+    <div class="choice">
+      <p class="choice-label">This window talks to</p>
+      <label class="radio"><input type="radio" name="mode-target" id="mode-target-local" value="local"> This computer</label>
+      <label class="radio"><input type="radio" name="mode-target" id="mode-target-remote" value="remote"> A remote server</label>
+      <p class="hint" id="mode-target-hint"></p>
+    </div>
+    <label class="origin"><span>Remote address</span>
+      <input type="url" id="mode-origin" placeholder="https://music.example.org" spellcheck="false" autocomplete="off">
+    </label>
+    <p class="reason" id="mode-problem" hidden></p>
   </section>
 
   <div class="columns">
@@ -58,6 +84,11 @@
   </div>
 </main>
 <script src="state.js"></script>
+<script src="mode.js"></script>
+<script src="address.js"></script>
+<script src="lifecycle.js"></script>
+<script src="wizard.js"></script>
 <script src="app.js"></script>
+<script src="settings.js"></script>
 </body>
 </html>

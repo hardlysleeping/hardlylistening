@@ -279,7 +279,7 @@ becomes:
 Also anchor (the address table):
 
 ```markdown
-| `<XDG_STATE_HOME>/hardlylistening-desktop/host.json` | a person chose an address in the window (HOST-005 writes it; nothing writes it yet) |
+| `<XDG_STATE_HOME>/hardlylistening-desktop/host.json` | a person chose an address in the window (HOST-005 writes it) |
 ```
 
 becomes:

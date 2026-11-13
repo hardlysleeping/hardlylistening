@@ -264,3 +264,31 @@ pub fn launcher(app: &tauri::AppHandle) -> Option<PathBuf> {
     }
     bundled(app).or_else(dev_launcher)
 }
+
+/// Where `addresses.py` lives: an override, the bundle's resources, then a development
+/// checkout. A miss is reported rather than guessed at — the window then says nothing.
+pub fn detector(app: &tauri::AppHandle) -> Option<PathBuf> {
+    use tauri::Manager;
+
+    if let Some(declared) = env_text("HARDLYLISTENING_DESKTOP_HOST") {
+        return Some(PathBuf::from(declared));
+    }
+    let mut roots = Vec::new();
+    if let Ok(dir) = app.path().resource_dir() {
+        roots.push(dir.join("host"));
+        roots.push(dir.join("desktop").join("host"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent().map(Path::to_path_buf);
+        for _ in 0..6 {
+            let Some(current) = dir else { break };
+            roots.push(current.join("desktop").join("host"));
+            roots.push(current.join("host"));
+            dir = current.parent().map(Path::to_path_buf);
+        }
+    }
+    roots
+        .into_iter()
+        .map(|root| root.join("addresses.py"))
+        .find(|candidate| candidate.is_file())
+}

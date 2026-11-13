@@ -38,6 +38,7 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "externalBin": ["bin/hardlylistening-server"]
+    "externalBin": ["bin/hardlylistening-server"],
+    "resources": { "../host/addresses.py": "host/addresses.py" }
   }
 }

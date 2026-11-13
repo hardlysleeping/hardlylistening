@@ -7,13 +7,27 @@ imports, not by asking you to trust it.
 
 ```
 desktop/
-├── host/resolve.py        path + address resolution (tested; the spec the Rust mirrors)
+├── host/                  the decisions, in Python, where they can be tested
+│   ├── resolve.py         path + address resolution (the spec the Rust mirrors)
+│   ├── addresses.py       which address another device could actually type
+│   ├── mode.py            two independent choices, four combinations
+│   ├── lifecycle.py       start deadline, stop ownership, close handoff
+│   ├── settings.py        the settings model and what has no server-side switch
+│   └── setup.py           the first run's four answers
 ├── tools/stage_sidecar.py copy bin/hardlylistening-server to the sidecar name
 ├── ui/                    plain HTML/CSS/JS — no framework, no bundler, no node_modules
-│   ├── state.js           every decision the window makes (tested)
+│   ├── state.js           status, health and the button state (tested)
+│   ├── mode.js            the two controls
+│   ├── address.js         the one address worth copying, or nothing
+│   ├── lifecycle.js       transition wording and button enablement
+│   ├── settings.js        the settings panel, self-mounting
+│   ├── wizard.js          the first-run steps
 │   └── app.js             painting + the Tauri bridge, nothing else
-└── src-tauri/             Rust: window, six commands, sidecar spawn, HTTP probe
+└── src-tauri/             Rust: window, sidecar spawn, HTTP probe, the OS halves
 ```
+
+Every `.js` under `ui/` is loaded by `ui/index.html` and the test asserts that: a module written
+and never wired would be a feature that silently is not there.
 
 Rules this shell obeys, in the order they constrain the code:
 
@@ -73,7 +87,7 @@ What the bundle contains:
 
 | part | what it is |
 | --- | --- |
-| the window binary | this crate: six Rust commands and a WebView |
+| the window binary | this crate: twelve Rust commands and a WebView |
 | `ui/` assets | embedded at build time, exactly the files in `desktop/ui` |
 | the sidecar | a copy of `bin/hardlylistening-server` |
 | icons | generated from the repository's `icon.svg` |
@@ -98,7 +112,7 @@ The window asks the same questions the packaged installs answer:
 | source | wins when |
 | --- | --- |
 | `HARDLYLISTENING_HOST`, `HARDLYLISTENING_PORT` | the environment declares them |
-| `<XDG_STATE_HOME>/hardlylistening-desktop/host.json` | a person chose an address in the window (HOST-005 writes it; nothing writes it yet) |
+| `<XDG_STATE_HOME>/hardlylistening-desktop/host.json` | a person chose an address in the window (HOST-005 writes it) |
 | the server's defaults (`127.0.0.1:8470`) | neither |
 
 Whatever is resolved is passed to the launcher as explicit `--host`/`--port`, so one address is
@@ -107,30 +121,48 @@ path. A typo in the port is an error shown in the window, never a silent fall ba
 
 ## Ownership, and what closing the window does
 
-`Shell::child` holds **only a server this window spawned**. A server found answering the health
+The lifecycle's child slot holds **only a server this window spawned**. A server found answering the health
 check that is not in that slot belongs to systemd, Docker or a terminal: Start is disabled, Stop
 is disabled, and an attempted stop reports "that server was running before this window opened…
 left alone". This is the rule that keeps a desktop window from stopping the VPS's service
 because it happened to be open.
 
-Closing the window (or pressing Quit) stops the server it started — `SIGTERM` first, so the
-server's own graceful shutdown runs, with a 3-second grace before the process is killed — and
-touches nothing else. Whether closing should *ask*, or offer to leave it running, is HOST-003.
+**HOST-003.** Closing the window (or pressing Quit) hands the server off rather than killing it, unless the
+person asked otherwise; the preference and the handoff record live in `lifecycle.json` beside
+`host.json`. A server this window did not start is never signalled. See
+[lifecycle.md](../docs/desktop/lifecycle.md).
+
+## The first run, and the two choices
+
+**HOST-002.** On a launch with no usable `setup.json` the window asks four questions — music folder, data
+folder, server name, admin account — and writes its answers as it goes, so a second launch resumes
+instead of starting over. The admin account is created by the server's own one-shot account path,
+never by writing the database from the window. See [wizard.md](../docs/desktop/wizard.md).
+
+**HOST-004.** Beside the server buttons are two separate choices: whether this window runs a local server, and
+which server the window talks to. They are two axes, not one mode switch, and neither rewrites
+the other. Remote-only — a remote server and no local one — is a supported state, not a degraded
+one. See [modes.md](../docs/desktop/modes.md).
 
 ## What is deliberately not here
 
-* **The first-run wizard** — HOST-002. There is no library root picker, no account setup.
-* **Settings** — HOST-005. The window shows the address and the config path; it does not write
-  them.
-* **LAN / Tailscale exposure** — HOST-005 and HOST-006. The window can point at a LAN address,
-  and that is all: it neither binds one nor manages a tailnet.
+* **Settings beyond the server's own** — HOST-005 wrote `desktop/host/settings.py`, the panel in
+  `desktop/ui/settings.js` and the two commands in `src-tauri/src/settings.rs`. The window edits
+  the exposure (local vs LAN) and the autostart entry; the web UI and OpenSubsonic are reported
+  as having no server-side switch, because they have none. See
+  [settings.md](../docs/desktop/settings.md).
+* **Managing a tailnet** — HOST-006 *reports* a reachable address, it does not manage one. The
+  window reads `tailscale status --json` and the interfaces to say what another device could type,
+  never runs `up`, `down`, `login` or `set`, and says nothing when nothing is reachable. See
+  [addresses.md](../docs/desktop/addresses.md).
 * **A log viewer.** The server's stdout/stderr are deliberately not captured: its logs belong to
   whoever owns it (the journal, a terminal, Docker's log driver). A failed start shows up as
   "down" plus the probe's error, not as a log pane.
 * **An HTTP shutdown endpoint.** Stopping uses the OS signal the server already handles. Adding
   a route would put a destructive control in the server's API surface; that is a separate
   decision and not one this card makes.
-* **Autostart, tray icon, update checks.** Not in HOST-001.
+* **A tray icon and update checks.** Autostart is HOST-005's; a tray icon and update checks are
+  still absent.
 * **The served UI.** `web/` is untouched. "Open in browser" points the OS browser at the
   address the server already serves; the window does not reimplement a player.
 
@@ -142,7 +174,17 @@ reboot. So the proof is split:
 
 ```sh
 python3 -m unittest tests.test_desktop_host     # config, capabilities, imports, sidecar, resolver
+python3 -m unittest tests.test_host_wizard      # the first run's four answers
+python3 -m unittest tests.test_host_mode        # two choices, four combinations
+python3 -m unittest tests.test_host_addresses   # which address is reachable, and silence
+python3 -m unittest tests.test_host_settings    # the settings model and its refusals
+python3 -m unittest tests.test_host_lifecycle   # start, stop, handoff, deadline
 node tests/test_desktop_state.cjs               # ownership, health states, address formatting
+node tests/test_host_wizard.cjs                 # the wizard's steps and resumption
+node tests/test_host_mode.cjs                   # the two controls never couple
+node tests/test_host_address.cjs                # the window's one line of truth
+node tests/test_host_settings.cjs               # the panel's decisions
+node tests/test_host_lifecycle.cjs              # the lifecycle's transitions
 rustfmt --check desktop/src-tauri/src/*.rs      # parses; formatting only
 ```
 
@@ -167,7 +209,7 @@ What that does **not** cover, stated plainly:
 
 ## Packaging note
 
-Nothing in the server's build or packaging names `desktop/`: `deploy/install.sh`, the Dockerfile
-and `install-service.sh` do not reference it, and `tests/test_desktop_host.py` keeps it that way.
-`COPY . /app` in the Dockerfile would carry these files into the image as inert data if the
-directory were present at build time — the server never reads them, so the image is unaffected.
+The direction is asserted, not intended: `tests/test_host_dependency.py` walks the server's real
+import closure, boots a copy with exactly `desktop/` removed, and pins the staged sidecar to the
+launcher by SHA-256. `.dockerignore` excludes `desktop`, so `COPY . /app` cannot carry these files
+into the image as inert data. See [dependency.md](../docs/desktop/dependency.md).

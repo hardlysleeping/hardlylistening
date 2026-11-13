@@ -143,6 +143,42 @@ class TauriConfig(unittest.TestCase):
                             f'{entry} is in the config but not on disk')
 
 
+class EveryModuleIsWired(unittest.TestCase):
+    """A feature module that nobody loads is a card that is not actually done.
+
+    The shell has one page and no bundler, so "is it in the build" is a question the entry
+    document answers: every `.js` under `desktop/ui` must be referenced there, every reference
+    must resolve to a file, and every element `app.js` reaches for must exist in the markup.
+    """
+
+    def setUp(self):
+        self.ui = DESKTOP / 'ui'
+        self.page = (self.ui / 'index.html').read_text()
+
+    def test_every_ui_module_is_loaded_by_the_page(self):
+        loaded = set(re.findall(r'<script src="([^"]+)"', self.page))
+        on_disk = {path.name for path in self.ui.glob('*.js')}
+        self.assertEqual(sorted(on_disk - loaded), [], 'an unwired module is a missing feature')
+
+    def test_every_script_reference_resolves(self):
+        for name in re.findall(r'<script src="([^"]+)"', self.page):
+            self.assertTrue((self.ui / name).is_file(), f'{name} is requested and absent')
+
+    def test_the_modules_app_js_uses_load_before_it(self):
+        loaded = re.findall(r'<script src="([^"]+)"', self.page)
+        self.assertIn('app.js', loaded)
+        app_at = loaded.index('app.js')
+        for name in ('state.js', 'mode.js', 'address.js', 'lifecycle.js', 'wizard.js'):
+            self.assertIn(name, loaded, f'app.js needs {name}')
+            self.assertLess(loaded.index(name), app_at, f'{name} must load before app.js')
+
+    def test_every_element_app_js_reads_exists_in_the_page(self):
+        asked = set(re.findall(r"\$\('([^']+)'\)", (self.ui / 'app.js').read_text()))
+        self.assertTrue(asked, 'the scan found nothing to check')
+        missing = [name for name in sorted(asked) if f'id="{name}"' not in self.page]
+        self.assertEqual(missing, [], 'app.js would read a node the page does not paint')
+
+
 class Capabilities(unittest.TestCase):
     def test_every_capability_file_parses_and_grants_something(self):
         files = sorted((SRC_TAURI / 'capabilities').glob('*.json'))
@@ -236,9 +272,15 @@ class TheReadmeIsHonest(unittest.TestCase):
         for package in ('webkit2gtk-4.1', 'gtk+-3.0', 'libsoup-3.0', 'cargo tauri'):
             self.assertIn(package, self.text)
 
-    def test_it_names_the_cards_that_are_not_here(self):
-        for card in ('HOST-002', 'HOST-003', 'HOST-005', 'HOST-006'):
+    def test_it_accounts_for_every_card_it_implements(self):
+        # A card that ships without a line in the README is a card a reader cannot find. The
+        # wizard, the lifecycle, the two choices, the settings, the address and the dependency
+        # rule each get their paragraph and their doc link.
+        for card in ('HOST-001', 'HOST-002', 'HOST-003', 'HOST-005', 'HOST-006'):
             self.assertIn(card, self.text)
+        for page in ('wizard.md', 'lifecycle.md', 'modes.md', 'settings.md', 'addresses.md',
+                     'dependency.md'):
+            self.assertIn(page, self.text)
 
     def test_it_states_what_could_not_be_verified(self):
         self.assertRegex(self.text, r'(?i)never seen a compiler|cannot be compiled')
