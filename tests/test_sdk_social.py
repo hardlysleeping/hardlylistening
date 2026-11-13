@@ -464,6 +464,14 @@ class CredentialsStayOutOfMessages(Wire):
         self.assertNotIn(COOKIE, repr(session))
         self.assertEqual(session.header(), {'Cookie': f'{social.SESSION_COOKIE}={COOKIE}'})
 
+    def test_the_session_is_one_type_shared_with_the_repo_client(self):
+        # Three modules send this cookie. A second copy would be two spellings of one header, and
+        # the header is the credential: identity, not equality.
+        from sdk import repo, session
+        self.assertIs(social.Session, session.Session)
+        self.assertIs(repo.Session, session.Session)
+        self.assertIs(social.SESSION_COOKIE, session.SESSION_COOKIE)
+
     def test_a_cookie_header_is_read_back_into_a_session(self):
         session = social.Session.from_cookie_header(
             f'other=1; {social.SESSION_COOKIE}={COOKIE}; more=2')

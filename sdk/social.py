@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from urllib.parse import quote, urlencode, urlsplit
 
 from .capabilities import Capabilities
+from .session import SESSION_COOKIE, Session
 
 #: Where the three versioned reads live (`api/v1.py`, its `ROUTES` table).
 ACTIVITY_PATH = '/api/v1/social/activity'
@@ -44,8 +45,6 @@ SUMMARY_PATH = '/api/v1/social/summary'
 BOOST_PATH = '/api/boost'
 #: The prefix the unversioned discussion adapter matches (`social/api.py`).
 DISCUSSION_PATH = '/api/social'
-#: The session cookie `security.py` authenticates, and `server.py` expires on sign-out.
-SESSION_COOKIE = '__Host-hl_session'
 API_VERSION = 'v1'
 DEFAULT_TIMEOUT = 15
 
@@ -109,35 +108,6 @@ def error_for(status, message, retry_after=0):
     """The exception an `{"error": …}` answer with this status deserves."""
     mapper = ERROR_STATUS.get(int(status or 0), Denied)
     return mapper(message or 'the server declined the request', status, retry_after)
-
-
-@dataclass(frozen=True)
-class Session:
-    """One signed-in member's browser session: the `__Host-hl_session` value and nothing else.
-
-    The cookie is the whole of the credential, it is only ever sent in a header, and it is kept
-    out of this value's repr so a logged object does not print a working session.
-    """
-
-    cookie: str = field(default='', repr=False)
-
-    @classmethod
-    def from_cookie(cls, value):
-        """From the cookie's value, as sign-in answered it."""
-        return cls(cookie=str(value or ''))
-
-    @classmethod
-    def from_cookie_header(cls, header):
-        """From a `Cookie:` header a browser already holds; an absent name is an empty session."""
-        for part in str(header or '').split(';'):
-            name, _, value = part.strip().partition('=')
-            if name == SESSION_COOKIE:
-                return cls(cookie=value)
-        return cls()
-
-    def header(self):
-        """The one header this session contributes, or nothing when there is no cookie."""
-        return {'Cookie': f'{SESSION_COOKIE}={self.cookie}'} if self.cookie else {}
 
 
 def _mapping(value):

@@ -9,7 +9,8 @@ writes — and refuses by name when the document does not advertise the flag an 
 `sdk.repo` reads the Repository (`/api/v1/repo/*`: snapshot, releases, tracks, artist,
 subscriptions) and refuses by name because this server's document names no `repo` domain. It is
 the one module the player build must never import; `tests/test_player_store_safe.py` asserts that
-over the assembled tree. Stdlib only; see `docs/client-sdk.md`.
+over the assembled tree. `sdk.session` holds the member cookie those two send, so neither imports
+the other for it. Stdlib only; see `docs/client-sdk.md`.
 
 The refusals stay in their own modules: `sdk.social` keeps `Unavailable`, `Denied`, `NotFound`,
 `SignInRequired`, `RateLimited` and `ClientError`, and `sdk.repo` defines the same names for its
@@ -19,7 +20,8 @@ same reason `sdk.social.Track` exists: the two rows are different shapes.
 """
 from .capabilities import (Capabilities, Feature, Features, ServerInfo, SubsonicInfo, probe)
 from .repo import ArtistPage, Release, ReleasePage, RepoClient, RepoError, Snapshot, Subscription
-from .social import (Boost, Comment, CommentPage, DayCard, Entry, Member, Session, SocialClient,
+from .session import Session
+from .social import (Boost, Comment, CommentPage, DayCard, Entry, Member, SocialClient,
                      SocialError, Summary, Track, Voter)
 from .subsonic import (Album, Artist, Bookmark, ClientError, Credentials, Extension, GenericError,
                        IncompatibleClient, MissingParameter, NotFound, NotAuthorized, NotSupported,

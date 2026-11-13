@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlencode
 
 from .capabilities import Capabilities
-from .social import Session
+from .session import Session
 
 #: The five versioned reads (`api/v1.py`, its `ROUTES` table).
 SNAPSHOT_PATH = '/api/v1/repo/snapshot'

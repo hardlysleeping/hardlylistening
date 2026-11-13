@@ -146,9 +146,12 @@ change here; a client does not invent the section, and no flag inside it is gues
 
 The refusal classes stay in the module, like Social's: `sdk.repo.Unavailable` (`needed='repo'`),
 `Denied`/`NotFound`/`SignInRequired`/`RateLimited` for an `{"error": "..."}` answer, and
-`ClientError` when the answer was not an answer at all. `Session` is `sdk.social`'s, reused
-rather than defined twice: the reads are shared reads, so in hosted mode they need the member's
-cookie, which travels in a header and never in a URL or in a message.
+`ClientError` when the answer was not an answer at all. `Session` comes from `sdk.session` — its
+own module since the second client needed it, because a cookie type that lives inside the first
+module to use it makes the second one import a surface it does not speak. `sdk.social.Session`
+and `sdk.repo.Session` are that same object, not copies of it, and a test asserts the identity
+rather than the equality. In hosted mode the reads send it in a header, never in a URL and never
+in a message.
 
 ## What it deliberately does not do
 
