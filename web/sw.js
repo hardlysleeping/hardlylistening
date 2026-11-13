@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'hardlylistening-static-v9';
+const CACHE = 'hardlylistening-static-v10';
 const AUDIO = 'hardlylistening-audio-v1';   // named in web/index.html as well
 // The app's stylesheet is a tree (app.css imports each owner under @layer). Every file in it
 // is precached, because the browser fetches each import as its own request: a missing entry

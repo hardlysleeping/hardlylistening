@@ -93,6 +93,12 @@
       + "library; this player only reads from your server"],
     [/^\/api\/track\/[^/]+\/(source|skip|retry|move|delete|unpick|restore|candidates)$/,
       "that edits the host's download queue; this player only reads from your server"],
+    [/^\/api\/art\/[^/]+$/, "a cover here is the music server's own picture, carried as bytes; "
+      + "this player has no host artwork store to address"],
+    [/^\/api\/track\/[^/]+\/artwork$/, "a cover is the music server's own picture, carried as "
+      + "bytes; the host extracts and caches its own"],
+    [/^\/api\/playback\/events$/, "playback telemetry goes to the host's own log; this player "
+      + "reports a play to the music server through its own scrobble route"],
     [/^\/api\/release\/[^/]+\/remove$/, "deleting a release is a host feature"],
     [/^\/api\/playlist\/[^/]+\/remove$/, "deleting a playlist is a host feature"],
     [/^\/api\/artist(\/.*)?$/, "artist pictures and artist profiles are the host's own store"],

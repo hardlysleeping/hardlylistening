@@ -29,7 +29,7 @@ function fakeAudio(overrides) {
   const listeners = {};
   const audio = Object.assign({
     paused: true, currentTime: 0, duration: NaN, playbackRate: 1, ended: false,
-    plays: 0, pauses: 0,
+    plays: 0, pauses: 0, src: "",
     addEventListener(name, handler) {
       (listeners[name] = listeners[name] || []).push(handler);
     },
@@ -61,7 +61,7 @@ function fakeDocument() {
 
 // The app's queue, as small as the adapter contract: current row, order, step, reorder.
 function fakeQueue(rows, current) {
-  const log = { steps: [], orders: [] };
+  const log = { steps: [], reasons: [], orders: [] };
   const queue = {
     order: rows.map(row => row.id),
     current: current == null ? null : current,
@@ -71,8 +71,9 @@ function fakeQueue(rows, current) {
     index() { return queue.order.indexOf(queue.current); },
     setOrder(ids) { log.orders.push(ids.slice()); queue.order = ids.slice(); },
     play(id) { queue.current = id; },
-    step(delta) {
+    step(delta, reason) {
       log.steps.push(delta);
+      log.reasons.push(reason);
       if (!queue.order.length) return;
       // The app's own `stepTrack`: modulo around the queue, and a track that is not one of the
       // queued ones (-1) steps forward onto the queue's first song.
@@ -110,6 +111,7 @@ function harness(options) {
   ];
   const queue = fakeQueue(rows, config.current === undefined ? 1 : config.current);
   const reports = [];
+  const reloads = { count: 0 };
   const clock = { now: 0 };
   const Metadata = class {
     constructor(tag) { session.tags.push(tag); Object.assign(this, tag); }
@@ -119,8 +121,15 @@ function harness(options) {
     report: entry => reports.push(entry),
     clock: () => clock.now,
     random: config.random || (() => 0),
+    // The app's own reload path: one fresh request for the same track.
+    reloadSource: () => {
+      reloads.count += 1;
+      audio.src = "/api/track/1/audio?retry=1";
+      audio.paused = true;
+      return true;
+    },
   }, config.attach || {}));
-  return { api, audio, session, doc, queue, reports, clock, controller, ctx,
+  return { api, audio, session, doc, queue, reports, clock, controller, ctx, reloads,
     tags: () => session.tags.length,
     last: () => session.tags[session.tags.length - 1] };
 }
@@ -218,6 +227,7 @@ async function main() {
 
     handlers.get("nexttrack")();
     equal("next is one step forward in the app's queue", h.queue.log.steps, [1]);
+    equal("a skip asked for by hand is a manual step", h.queue.log.reasons, ["manual"]);
     equal("and the queue followed it", h.queue.current, 3);
     equal("and the tag followed it", h.last().title, "Three");
 
@@ -520,23 +530,197 @@ async function main() {
     equal("and nothing was stepped", h.queue.log.steps, []);
   }
 
+  // ---- interrupted, then recovered ---------------------------------------------------------
+  // A car head unit that leaves the now-playing screen deactivates the session. WebKit then
+  // refuses a `play()` or pauses the element on its own. Neither is the listener's decision, and
+  // treating either as one leaves a head unit showing a paused song until someone picks up the
+  // phone. The tests below pin the difference — and pin that a real pause is never fought.
+  {
+    const rows = [{ id: 1, title: "One" }, { id: 2, title: "Two" }];
+    const h = harness({ rows, current: 1 });
+    h.audio.src = "/api/track/1/audio";
+    h.audio.duration = 100;
+    equal("nothing is wanted before anyone asks", h.controller.state().wanted, "paused");
+
+    h.audio.play = () => Promise.reject(new DOMException("NotAllowed", "NotAllowedError"));
+    h.controller.play();
+    await Promise.resolve();
+    await Promise.resolve();
+    equal("a refusal still counts as wanting to play", h.controller.state().wanted, "playing");
+    equal("and is recorded as an interruption", h.controller.state().interrupted, true);
+
+    // The next signal is the retry: a refusal is often the session still deactivating.
+    h.audio.play = () => { h.audio.paused = false; h.audio.plays += 1; return Promise.resolve(); };
+    h.doc.visibilityState = "visible";
+    h.doc.emit("visibilitychange");
+    equal("coming back resumes the song that was refused", h.audio.plays, 1);
+    equal("the session says it is playing again", h.session.playbackState, "playing");
+    equal("and the interruption is over", h.controller.state().interrupted, false);
+
+    // A pause that no call of this module asked for: the platform's own.
+    h.audio.paused = true;
+    h.audio.emit("pause");
+    equal("a pause nobody asked for is an interruption", h.controller.state().interrupted, true);
+    equal("and does not become the listener's intent", h.controller.state().wanted, "playing");
+    const plays = h.audio.plays;
+    h.doc.emit("visibilitychange");
+    equal("the next signal resumes it", h.audio.plays, plays + 1);
+
+    // A pause the listener asked for stays paused, forever.
+    h.session.handlers.get("pause")();
+    h.audio.emit("pause");
+    equal("a pause the listener asked for is not an interruption",
+      h.controller.state().interrupted, false);
+    equal("and the intent is theirs", h.controller.state().wanted, "paused");
+    const afterPause = h.audio.plays;
+    h.doc.emit("visibilitychange");
+    h.controller.refresh();
+    equal("and is never undone by a resume", h.audio.plays, afterPause);
+
+    // A refused play is asked a second time at once. No timer: this module schedules nothing on
+    // one, because a suspended page runs no timers at all.
+    const again = harness({ rows, current: 1 });
+    again.audio.src = "/api/track/1/audio";
+    let attempts = 0;
+    again.audio.play = () => { attempts += 1; return Promise.reject(new Error("NotAllowed")); };
+    again.controller.play();
+    await Promise.resolve();
+    await Promise.resolve();
+    equal("a refusal is asked again, immediately", attempts, 2);
+    again.controller.play();
+    await Promise.resolve();
+    await Promise.resolve();
+    equal("and never a third time, so a refusal cannot become a loop", attempts, 3);
+  }
+
+  // ---- a route that dies mid-track ---------------------------------------------------------
+  {
+    const rows = [{ id: 1, title: "One" }];
+    const h = harness({ rows, current: 1 });
+    h.audio.src = "/api/track/1/audio";
+    h.controller.play();
+    const plays = h.audio.plays;
+    h.audio.error = { code: 2 };
+    h.audio.emit("error");
+    equal("a dropped connection asks the app for one reload", h.reloads.count, 1);
+    equal("and that reload is played", h.audio.plays, plays + 1);
+    h.audio.emit("error");
+    equal("a second error is not a loop", h.reloads.count, 1);
+  }
+  {
+    // A source the platform cannot use fails the same way twice: a reload there is a loop.
+    const h = harness({ rows: [{ id: 1, title: "One" }], current: 1 });
+    h.audio.src = "/api/track/1/audio";
+    h.controller.play();
+    h.audio.error = { code: 4 };
+    h.audio.emit("error");
+    equal("an unsupported source is not reloaded", h.reloads.count, 0);
+  }
+  {
+    // The module never picks a source. An app with nothing to offer is not played into the void.
+    const h = harness({ rows: [{ id: 1, title: "One" }], current: 1,
+      attach: { reloadSource: () => false } });
+    h.audio.src = "/api/track/1/audio";
+    h.controller.play();
+    h.audio.error = { code: 2 };
+    const plays = h.audio.plays;
+    h.audio.emit("error");
+    equal("an app with nothing to reload is left alone", h.audio.plays, plays);
+    equal("and the failure is still written down", h.controller.state().interrupted, true);
+  }
+
+  // ---- what one drive leaves behind --------------------------------------------------------
+  {
+    const events = [];
+    const rows = [{ id: 1, title: "One" }, { id: 2, title: "Two" }];
+    const h = harness({ rows, current: 1, attach: { log: event => events.push(event),
+      sourceKind: () => "stream" } });
+    h.audio.src = "/api/track/1/audio";
+    h.audio.play = () => Promise.reject(new Error("NotAllowed"));
+    h.controller.play();
+    await Promise.resolve();
+    await Promise.resolve();
+    h.controller.play();
+    await Promise.resolve();
+    await Promise.resolve();
+    const refused = events.filter(event => event.event === "refused");
+    equal("a refusal is written down once per track, not once per attempt", refused.length, 1);
+    check("the line names the track", refused[0] && refused[0].trackId === 1,
+      JSON.stringify(refused[0]));
+    check("and says whether the bytes were ours or the server's",
+      refused[0] && refused[0].srcKind === "stream", JSON.stringify(refused[0]));
+    check("and carries no URL at all",
+      refused[0] && !Object.keys(refused[0]).some(key => /src$|url|cookie/i.test(key)),
+      JSON.stringify(refused[0]));
+    check("and reports what the element itself thought",
+      refused[0] && "readyState" in refused[0] && "networkState" in refused[0],
+      JSON.stringify(refused[0]));
+
+    h.audio.paused = true;
+    h.audio.emit("pause");
+    check("a platform pause is written down too",
+      events.some(event => event.event === "interrupted"), JSON.stringify(events));
+    equal("but a listener's own pause is not",
+      (h.controller.pause(), events.filter(event => event.event === "interrupted").length), 1);
+  }
+
+  // ---- a manual skip throws the item away ---------------------------------------------------
+  // A skip destroys the element, so the platform is told the item is gone rather than paused:
+  // a head unit told "paused" keeps the old item latched, which is the frozen cover and title a
+  // skip used to leave. The pause that follows is the module's own and is never an interruption.
+  {
+    const rows = [{ id: 1, title: "One" }, { id: 2, title: "Two" }];
+    const h = harness({ rows, current: 1 });
+    h.audio.src = "/api/track/1/audio";
+    h.controller.play();
+    await Promise.resolve();
+    h.controller.release();
+    equal("a skip declares the item gone", h.session.playbackState, "none");
+    equal("and pauses the element", h.audio.paused, true);
+    h.audio.emit("pause");
+    equal("the module's own teardown is not an interruption", h.controller.state().interrupted, false);
+    equal("and the intent to play is untouched", h.controller.state().wanted, "playing");
+    const plays = h.audio.plays;
+    h.doc.emit("visibilitychange");
+    equal("so coming back does not fight the skip", h.audio.plays, plays);
+    // After the teardown the next resource plays as usual.
+    h.controller.play();
+    await Promise.resolve();
+    equal("and the next play is the listener's again", h.controller.state().wanted, "playing");
+  }
+  {
+    // Event order is not guaranteed: iOS queues the teardown's pause, and the next track can
+    // start before it is delivered. A pause for an element that is now playing is stale.
+    const h = harness({ rows: [{ id: 1, title: "One" }, { id: 2, title: "Two" }], current: 1 });
+    h.audio.src = "/api/track/1/audio";
+    h.controller.play();
+    await Promise.resolve();
+    h.controller.release();
+    h.audio.play();          // the next track, before the queued pause lands
+    h.audio.emit("pause");
+    equal("a pause that arrives after the next play started is ignored",
+      h.controller.state().interrupted, false);
+    equal("and is not published over the new state", h.session.playbackState, "none");
+  }
+
   // ---- the adapter over the app's queue ----------------------------------------------------
   {
     const { ctx, api } = sandbox();
-    const log = { steps: [], commits: 0 };
+    const log = { steps: [], reasons: [], commits: 0 };
     ctx.libQueue = [{ id: 7, title: "Seven" }, { id: 8, title: "Eight" }];
     ctx.libAll = [{ id: 9, title: "Nine" }];
     ctx.playingId = 8;
     ctx.playFromLibrary = id => { ctx.playingId = id; };
-    ctx.stepTrack = delta => { log.steps.push(delta); };
+    ctx.stepTrack = (delta, reason) => { log.steps.push(delta); log.reasons.push(reason); };
     ctx.commitPlaybackQueue = () => { log.commits += 1; };
 
     const queue = api.appQueue();
     equal("the adapter reads the row that is playing", queue.row().title, "Eight");
     equal("and the order the app actually has", queue.ids(), [7, 8]);
     equal("and its index", queue.index(), 1);
-    queue.step(-1);
+    queue.step(-1, "manual");
     equal("a step is the app's own step", log.steps, [-1]);
+    equal("and carries why it happened", log.reasons, ["manual"]);
     queue.play(7);
     equal("a start is the app's own start path", ctx.playingId, 7);
     queue.setOrder([8, 7]);

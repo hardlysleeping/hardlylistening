@@ -197,8 +197,8 @@
       play: id => {
         if (typeof playFromLibrary === "function") playFromLibrary(id);
       },
-      step: delta => {
-        if (typeof stepTrack === "function") stepTrack(delta);
+      step: (delta, reason) => {
+        if (typeof stepTrack === "function") stepTrack(delta, reason);
       },
     };
   }
@@ -225,6 +225,12 @@
        announcing a start would count each song twice. Turn it on for a server that honours the
        flag. */
     const announceStarted = config.announce === true;
+    /* One bounded line per interesting event, handed to the page. Never a URL, never a cookie:
+       the point is that a drive that stops leaves evidence instead of an anecdote. */
+    const logEvent = typeof config.log === "function" ? config.log : null;
+    /* The app owns the audio resource; this layer never assigns a `src`. The one thing it may
+       ask for is a reload after a failed stream. */
+    const reloadSource = typeof config.reloadSource === "function" ? config.reloadSource : null;
 
     const state = {
       shuffle: false,
@@ -234,6 +240,18 @@
       generation: 0,
       submitted: false,
       announced: false,
+      /* `wanted` is what the listener asked for; `interrupted` means the platform refused it or
+         paused the element afterwards. A refusal is not a decision, which is the whole difference
+         a car needs: a head unit that leaves the now-playing screen deactivates the session, and
+         iOS then either rejects a `play()` or pauses the element on its own. */
+      wanted: "paused",
+      interrupted: false,
+      /* A manual skip throws the element away; the pause that follows is ours, not the
+         platform's, so it must not be read as an interruption. */
+      releasing: false,
+      retries: 0,
+      retried: false,
+      noted: {},
       published: { at: -POSITION_INTERVAL, value: 0, epoch: 0 },
       seekEpoch: 0,
     };
@@ -311,6 +329,12 @@
         state.generation += 1;
         state.submitted = false;
         state.announced = false;
+        /* A new track is a new chance: the interruption, the retry and the once-per-track log
+           all belong to the song that had them. */
+        state.interrupted = false;
+        state.retried = false;
+        state.retries = 0;
+        state.noted = {};
         state.published = { at: -POSITION_INTERVAL, value: 0, epoch: state.seekEpoch };
         retag(row);
       }
@@ -356,6 +380,40 @@
       }
     }
 
+    /* `blob:` is the app's own prefetched bytes; anything else is the server's stream. The URL
+       itself is never reported — the field is a category, not an address. */
+    function srcKind() {
+      if (typeof config.sourceKind === "function") {
+        try { return text(config.sourceKind(audio)); } catch (error) { return "unknown"; }
+      }
+      return "unknown";
+    }
+
+    /* At most one line per event per track, so a fight with the platform cannot fill a log. */
+    function note(event) {
+      if (!logEvent) return;
+      const row = rowNow();
+      const id = row ? row.id : null;
+      const key = event + ":" + id;
+      if (state.noted[key]) return;
+      state.noted[key] = true;
+      try {
+        logEvent({
+          at: Date.now(),
+          trackId: id,
+          event: event,
+          wanted: state.wanted,
+          interrupted: state.interrupted,
+          readyState: Number(audio.readyState) || 0,
+          networkState: Number(audio.networkState) || 0,
+          errorCode: audio.error ? Number(audio.error.code) || 0 : 0,
+          srcKind: srcKind(),
+        });
+      } catch (error) {
+        /* Telemetry never breaks playback. */
+      }
+    }
+
     function announce() {
       if (!announceStarted) return;
       const row = sync();
@@ -375,9 +433,12 @@
       send({ id: row.id, submission: true, timeMs: Math.round(played * 1000) });
     }
 
-    function advance(delta) {
+    /* `reason` is the difference between a song that ended and a skip someone asked for. The
+       app needs it: on a finished song it keeps the media element alive, on a manual skip it
+       resets it (the reset is what stops iOS freezing on the previous cover and title). */
+    function advance(delta, reason) {
       sync();
-      if (typeof queue.step === "function") queue.step(delta);
+      if (typeof queue.step === "function") queue.step(delta, reason);
       /* The app's step is synchronous, so the new row is already the current one. Tagging it
          now means the car never shows the song that just stopped. */
       sync();
@@ -387,19 +448,80 @@
       return row;
     }
 
-    function play() {
-      sync();
+    /* One immediate second ask after a refusal, never a loop, and never on a timer: this module
+       schedules nothing on one, because a suspended page runs none. */
+    function retry() {
+      if (state.retries >= 1 || state.wanted !== "playing" || audio.ended) return;
+      if (typeof audio.paused === "boolean" && !audio.paused) return;
+      state.retries += 1;
       const started = audio.play();
       if (started && typeof started.catch === "function") started.catch(() => {});
+    }
+
+    function play(onError) {
+      sync();
+      state.wanted = "playing";
+      state.interrupted = false;
+      state.releasing = false;
+      const started = audio.play();
+      if (started && typeof started.catch === "function") {
+        started.catch(error => {
+          /* A refusal is not a decision: on a phone in a car the session can be deactivating
+             while the new source is still loading, and the head unit would otherwise show a
+             paused song for the rest of the drive. Keep the intent, say so, and ask once more. */
+          state.interrupted = true;
+          note("refused");
+          if (typeof onError === "function") { try { onError(error); } catch (ignored) {} }
+          retry();
+        });
+      }
       announce();
       publishState();
       publishPosition(true);
     }
 
     function pause() {
+      state.wanted = "paused";
+      state.interrupted = false;
       audio.pause();
       publishState();
       publishPosition(true);
+    }
+
+    /* A manual skip destroys the element on purpose. The platform is told the item is gone
+       (`none`) rather than paused: a head unit told "paused" keeps the old item latched, which
+       is the frozen cover and title a skip used to leave behind. The pause that follows is this
+       module's own, so it is not an interruption, and the intent to play is unchanged. */
+    function release() {
+      state.releasing = true;
+      state.interrupted = false;
+      if (session) {
+        try { session.playbackState = "none"; } catch (error) { /* not offered */ }
+      }
+      audio.pause();
+    }
+
+    /* The element paused and no call of this module asked for it. Keep the intent to play and
+       claim the transport again, because WebKit drops the handlers when the session deactivates.
+       Nothing is resumed here: that is `recover`, on the next signal. */
+    function interrupted() {
+      if (state.wanted !== "playing" || audio.ended) return;
+      state.interrupted = true;
+      claim();
+      note("interrupted");
+    }
+
+    /* The page or the head unit is back and the listener still wants this song playing. */
+    function recover() {
+      if (state.wanted !== "playing" || !state.interrupted) return;
+      if (!audio.paused || audio.ended) return;
+      note("recovered");
+      state.interrupted = false;
+      const started = audio.play();
+      if (started && typeof started.catch === "function") {
+        /* Refused again: still interrupted, and the next signal may try once more. */
+        started.catch(() => { state.interrupted = true; });
+      }
     }
 
     function seek(at) {
@@ -414,7 +536,7 @@
     }
 
     function next() {
-      advance(1);
+      advance(1, "manual");
       publishState();
     }
 
@@ -425,7 +547,7 @@
         seek(0);
         return;
       }
-      advance(-1);
+      advance(-1, "manual");
       publishState();
     }
     /* Neither of those pushes a position: until the new resource reports its own duration the
@@ -450,7 +572,7 @@
       const last = !order.length || (at >= 0 && at >= order.length - 1);
       if (!last || (state.repeat === "all" && order.length)) {
         /* The app's own step wraps at the end, so "repeat all" is one call, not a second path. */
-        advance(1);
+        advance(1, "auto");
         return;
       }
       publishState();
@@ -464,6 +586,9 @@
       const row = sync();
       claim();
       if (row) retag(row);
+      /* If the platform paused this song and nobody here asked it to, this is the moment to
+         start it again. A pause the listener asked for is not touched: `wanted` says paused. */
+      recover();
       publishState();
       publishPosition(true);
       maybeScrobble(audio.ended === true);
@@ -574,8 +699,48 @@
        tag and the position are re-published here rather than from a timer that would be
        suspended. */
     listen("play", () => { sync(); announce(); publishState(); publishPosition(true); });
-    listen("playing", () => { const row = sync(); if (row) retag(row); publishState(); });
-    listen("pause", () => { sync(); publishState(); publishPosition(true); });
+    listen("playing", () => {
+      const row = sync();
+      /* It is playing, so whatever the platform did to it has been undone. */
+      state.wanted = "playing";
+      state.interrupted = false;
+      state.retries = 0;
+      if (row) retag(row);
+      publishState();
+    });
+    listen("pause", () => {
+      sync();
+      /* Two pauses that must not be read as the listener giving up: the teardown of a manual
+         skip (which really did just declare `none`), and one the element has already been
+         played out of — event order is not guaranteed, so a pause can arrive after the next
+         track started. Neither says anything about intent. */
+      if (state.releasing || !audio.paused) { state.releasing = false; return; }
+      interrupted();
+      publishState();
+      publishPosition(true);
+    });
+    /* A stream can fail mid-track — a route change, a dropped connection. One re-request per
+       track, and only while something is actually wanted, and only for a failure a second
+       request could plausibly fix: MEDIA_ERR_NETWORK (2) or MEDIA_ERR_DECODE (3). A source the
+       platform says it cannot use (4) fails the same way twice, and asking again would be a
+       reload loop rather than a recovery. What to re-request is the app's decision: this layer
+       never picks a source, because a second `src` would be a second player. The app's hook
+       answers false when it has nothing to offer. */
+    listen("error", () => {
+      if (state.wanted !== "playing" || state.retried) return;
+      const code = Number(audio.error && audio.error.code) || 0;
+      if (code !== 2 && code !== 3) return;
+      state.retried = true;
+      state.interrupted = true;
+      note("error");
+      if (typeof reloadSource !== "function") return;
+      let ready = true;
+      try { ready = reloadSource() !== false; } catch (error) { ready = false; }
+      if (!ready) return;
+      const started = audio.play();
+      if (started && typeof started.catch === "function") started.catch(() => {});
+      publishState();
+    });
     listen("loadedmetadata", () => {
       const row = sync();
       if (row) retag(row);
@@ -606,6 +771,7 @@
     return {
       play: play,
       pause: pause,
+      release: release,
       next: next,
       previous: previous,
       seek: seek,
@@ -629,6 +795,8 @@
         shuffle: state.shuffle,
         repeat: state.repeat,
         position: state.published.value,
+        wanted: state.wanted,
+        interrupted: state.interrupted,
       }),
     };
   }

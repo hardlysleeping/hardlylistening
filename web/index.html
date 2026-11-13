@@ -2769,6 +2769,30 @@ function hue(text){
 function artHQ(url){
   return String(url || "").replace(/-large(\.[a-z]{3,4})(\?|$)/i, "-t500x500$1$2");
 }
+// The cover a car head unit fetches. The media session hands iOS a URL and iOS fetches it
+// itself, outside the page's session — so a provider CDN that is slow, expired or blocked draws
+// no picture at all. `art_hash` is the digest of the 640 px copy the server already stores, so
+// `/api/art/<hash>` is ours, needs no session and never changes. A row that has no digest yet
+// falls back to the provider URL; it is learned on the next prefetch (`ensureArt`).
+function coverArt(row){
+  if (!row) return "";
+  if (row.art_hash) return `/api/art/${row.art_hash}`;
+  return row.artwork ? artHQ(row.artwork) : "";
+}
+// Ask the server once per row for its cover: that request extracts the picture if it has never
+// been extracted and answers with the digest it registered (`X-Art-Hash`). Without this a row
+// that was never drawn has no `art_hash`, and the car would keep the provider URL.
+const artAsked = new Set();
+function ensureArt(row){
+  if (!row || !row.id || row.art_hash || artAsked.has(row.id)) return;
+  artAsked.add(row.id);
+  fetch(`/api/track/${row.id}/artwork`, {credentials: "same-origin"})
+    .then(r => {
+      const hash = r.headers.get("X-Art-Hash");
+      if (hash && /^[a-f0-9]{32}$/.test(hash)) row.art_hash = hash;
+    })
+    .catch(() => {});
+}
 function artImg(url, cls, lazy, key){
   const hq = artHQ(url);
   const fallback = hq === url ? "" : ` data-fallback="${esc(url)}"`;
@@ -3212,7 +3236,7 @@ const playerAudio = $("#player-audio");
 // publishing the position state is what many head units use for elapsed/total.
 const warmedArt = new Set();
 function warmArtwork(row){
-  const url = row && row.artwork ? artHQ(row.artwork) : "";
+  const url = coverArt(row);
   if (!url || warmedArt.has(url)) return;
   warmedArt.add(url);
   const img = new Image();
@@ -3255,7 +3279,12 @@ function prefetchAudio(id){
   if (!id || playingId === null || aheadAudio.has(id) || aheadJobs.has(id)) return;
   if (navigator.connection && navigator.connection.saveData) return;
   // Pull the cover now so the car's metadata update does not wait on the CDN.
-  warmArtwork(libQueue.find(t => t.id === id) || currentRows.find(t => t.id === id));
+  // Pull the cover now so the car's metadata update does not wait on the CDN. Learn the row's
+  // digest too: `ensureArt` is what turns the car's artwork URL into our own for a song whose
+  // picture has never been extracted.
+  const row = libQueue.find(t => t.id === id) || currentRows.find(t => t.id === id);
+  warmArtwork(row);
+  ensureArt(row);
   const controller = new AbortController();
   aheadJobs.set(id, controller);
   paintPlaybackQueue();
@@ -3340,8 +3369,8 @@ function playPlaylist(){
 
 function toggleSongPlayback(id){
   if (playingId === id && playerAudio.src){
-    if (playerAudio.paused) playerAudio.play().catch(e => showToast(e.message));
-    else playerAudio.pause();
+    if (playerAudio.paused) transportPlay(e => showToast(e.message));
+    else transportPause();
     $("#plplay").innerHTML = playerAudio.paused ? SVG.play(14) : SVG.pause(14);
     for (const button of document.querySelectorAll(`.songrow[data-id="${id}"] .splay`)) {
       button.innerHTML = playerAudio.paused ? SVG.play(13) : SVG.pause(13);
@@ -3415,7 +3444,34 @@ function reportListen(id){
   } catch (e) { /* a missed play is not worth breaking playback */ }
 }
 
-function playFromLibrary(id){
+// Every transport call goes through here once the module is attached. The module has to know
+// whether a pause was asked for: a pause it did not ask for is an interruption, and it will try
+// to recover that instead of leaving a car showing a paused song. `onError` keeps the one place
+// that explains a refused play to the listener.
+function transportPlay(onError){
+  if (playback){ playback.play(onError); return; }
+  const started = playerAudio.play();
+  if (started && typeof started.catch === "function"){
+    started.catch(error => { if (typeof onError === "function") onError(error); });
+  }
+}
+function transportPause(){
+  if (playback){ playback.pause(); return; }
+  playerAudio.pause();
+}
+function transportRelease(){
+  if (playback){ playback.release(); return; }
+  playerAudio.pause();
+}
+// Telemetry says whether the bytes were ours (a prefetched blob) or the server's stream. The
+// address itself is never sent: the field is a category.
+function sourceKind(){
+  const src = String(playerAudio.src || "");
+  if (!src) return "none";
+  return src.indexOf("blob:") === 0 ? "blob" : "stream";
+}
+
+function playFromLibrary(id, options){
   const row = (libQueue.find(t => t.id === id)) || currentRows.find(t => t.id === id);
   if (!row) return;
   const wasPlaying = playingId;
@@ -3425,14 +3481,17 @@ function playFromLibrary(id){
   playingId = id;
   rememberPlayed(id);
   if (typeof commitPlaybackQueue === 'function') commitPlaybackQueue();
-  // A track that ends on its own tears the audio element down, so the phone opens a fresh
-  // now-playing item and the next song's artwork, title and album land. A manual skip (lock
-  // screen, car, or our own next button) used to reuse the live element: iOS kept the item it
-  // had already latched and dropped the tag handed to it, so every skipped song froze on the
-  // previous cover and title. Reset the element the way an ended track does before the new
-  // source is attached.
-  if (wasPlaying != null && wasPlaying !== id && playerAudio.src){
-    playerAudio.pause();
+  // A manual skip (lock screen, car, or our own next button) resets the element: iOS kept the
+  // item it had already latched and dropped the tag handed to it, so every skipped song froze on
+  // the previous cover and title. `release` is what tells the platform that item is gone
+  // (`playbackState = "none"`) instead of paused, which would keep it latched. A song that
+  // *ended* is not a skip — tearing the element down there destroys the now-playing item, the
+  // head unit falls back to its source list and the next play() can be refused in the
+  // background. That reset was the reason playback stopped after a song or two in a car, so it
+  // is kept for skips only.
+  const manual = !options || options.reason !== "auto";
+  if (manual && wasPlaying != null && wasPlaying !== id && playerAudio.src){
+    transportRelease();
     playerAudio.removeAttribute("src");
     playerAudio.load();
   }
@@ -3453,11 +3512,10 @@ function playFromLibrary(id){
   // Publish the new tag before playback starts: the car asks for it the moment it
   // sees the stream, and assigning it afterwards left the old song on the screen.
   warmArtwork(row);
-  // The playback module owns the media session: one call tags the new row, claims the
-  // transport actions and publishes the position. A rejected play() re-publishes on the
-  // same row, because a head unit that latched nothing otherwise stays blank until a reload.
-  if (playback) playback.publish();
-  playerAudio.play().catch(() => { if (playback) playback.publish(); });
+  // The playback module owns the media session: play() tags the new row, claims the transport
+  // actions and publishes the position. It also keeps the intent to play when the platform
+  // refuses it, so a head unit that latched nothing does not stay blank for the whole drive.
+  transportPlay();
   paintTransport(wasPlaying);
   // The compact add/remove follows the track: without this it only painted when the
   // fullscreen player repainted or when the saves list happened to reload.
@@ -3511,10 +3569,10 @@ function paintTransport(previousId){
   }
 }
 
-function stepTrack(delta){
+function stepTrack(delta, reason){
   if (!libQueue.length) return;
   libIndex = (libIndex + delta + libQueue.length) % libQueue.length;
-  playFromLibrary(libQueue[libIndex].id);
+  playFromLibrary(libQueue[libIndex].id, {reason: reason});
 }
 
 let plShuffle = localStorage.getItem("hl.shuffle") === "1";
@@ -4109,7 +4167,7 @@ pfDisc.addEventListener('pointermove',event=>{
     // Pause on the first real movement (not on a tap) so the seek is audible
     // immediately instead of fighting the bytes still being played.
     pfDiscDrag.moved=true;pfDiscDrag.wasPlaying=!playerAudio.paused;
-    if(pfDiscDrag.wasPlaying) playerAudio.pause();
+    if(pfDiscDrag.wasPlaying) transportPause();
   }
   // Angular speed drives the scratch: the record is read as fast as the hand turns it,
   // smoothed so a single jittery sample cannot make the pitch jump.
@@ -4142,7 +4200,7 @@ function endPfDiscDrag(event){
   }
   pfScratchSilence();
   pfNoiseSilence();
-  if(drag.moved && drag.wasPlaying && fullPlayerOpen()) playerAudio.play().catch(()=>{});
+  if(drag.moved && drag.wasPlaying && fullPlayerOpen()) transportPlay();
   // Re-sync the record's angle to the position that was actually committed, so the
   // spin does not resume from an arbitrary drag angle.
   if(playerAudio.duration && Number.isFinite(playerAudio.duration)){
@@ -4619,8 +4677,8 @@ $("#plartwrap").onclick = () => {
   openAlbumForTrack(playingId);
 };
 function playerToggle(){
-  if (playerAudio.paused) playerAudio.play().catch(() => {});
-  else playerAudio.pause();
+  if (playerAudio.paused) transportPlay();
+  else transportPause();
 }
 function playerPrev(){
   if (playerAudio.currentTime > 3) playerAudio.currentTime = 0; else stepTrack(-1);
@@ -4820,10 +4878,27 @@ playerAudio.addEventListener("ended", () => {
 });
 playback = PlayerPlayback.attach({
   audio: playerAudio,
-  coverUrl: function (row) { return row && row.artwork ? artHQ(row.artwork) : ""; },
+  coverUrl: coverArt,
   shuffle: plShuffle,
   repeat: plRepeat,
   report: function () {},
+  // Playback telemetry: the page says what it saw when a song stopped, so a drive leaves
+  // evidence instead of an anecdote. Never a URL, never a cookie.
+  log: function (event) {
+    try {
+      const payload = Object.assign({}, event, {srcKind: sourceKind()});
+      fetch("/api/playback/events", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload), cache: "no-store", keepalive: true}).catch(() => {});
+    } catch (e) { /* telemetry never breaks playback */ }
+  },
+  // The module never picks a source: a second `src` would be a second player. This is the one
+  // reload it may ask for after a failed stream, using the app's own bytes where it has them.
+  reloadSource: function () {
+    if (playingId == null) return false;
+    const cached = aheadAudio.get(playingId);
+    playerAudio.src = cached || `/api/track/${playingId}/audio?retry=1`;
+    return true;
+  },
   onmode: function (mode) {
     plShuffle = mode.shuffle;
     plRepeat = mode.repeat;

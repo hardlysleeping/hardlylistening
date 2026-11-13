@@ -17,9 +17,17 @@ everything else through an adapter.
 | title | the playing row's `title` | `Untitled` when the server names nothing |
 | artist | the row's `artist_name` | |
 | album | the row's `album`, else its set | the release when the server named one, otherwise the playlist the song was pulled from — the same rule the player's own second line uses, because 410 of 937 rows in a real library have no release and those rows were never blank on the lock screen |
-| artwork | the row's `artwork`, made absolute | one entry, `512x512`, with an explicit `type` — WebKit draws no artwork entry that has no declared type, leaving an empty square on the lock screen |
+| artwork | the row's `art_hash`, else its `artwork` | `/api/art/<hash>` when the server has extracted the cover — a first-party, session-free, immutable URL (the digest is the capability). A row with no digest yet falls back to the provider CDN, and learns its digest on the next prefetch. One entry, `512x512`, with an explicit `type` — WebKit draws no artwork entry that has no declared type, leaving an empty square on the lock screen |
 | position | `setPositionState` | `duration`, `playbackRate` and `position`; pushed as the position changes, throttled to about 1 Hz |
-| playback state | `playbackState` | `playing` or `paused`, from the element's own `paused` |
+| playback state | `playbackState` | `playing` or `paused`, from the element's own `paused`; `none` on a manual release (see below) |
+
+iOS fetches media-session artwork **itself**, outside the page's session, so a member-only route
+answers that request with a login redirect — which a car draws as no image at all. The artwork URL
+is therefore first-party and anonymous: `/api/art/<md5 of the stored image>`, served
+`public, max-age=31536000, immutable`. The digest is the secret, exactly as `/s/<token>` is for a
+share link, and the route is not gated by `web_ui`, so a headless server still feeds a car its art.
+`/api/track/<id>/artwork` answers with `X-Art-Hash`, which is what `ensureArt()` records for a row
+whose picture had never been extracted.
 
 The tag is published when the track changes **and** on the element's own milestones —
 `loadedmetadata`, `playing`, `emptied`, `canplay`, `play`, `pause`, `seeked`, `durationchange`.
@@ -31,12 +39,45 @@ app already learned this; the milestones are the same ones it publishes on.
 
 | action | what it does |
 | --- | --- |
-| `play` | the app's element: `play()`; a rejected promise is swallowed because a skip that lands mid-play rejects the previous one |
-| `pause` | the element: `pause()` |
-| `nexttrack` | one step forward through the app's queue (`stepTrack(1)`) |
+| `play` | the app's element: `play()`. The intent to play is recorded here, so a refusal is not mistaken for a decision |
+| `pause` | the element: `pause()`, and the intent becomes "paused" |
+| `release` | the element: `pause()` after declaring `playbackState = "none"` — the manual-skip teardown, where the item really is being thrown away |
+| `nexttrack` | one step forward through the app's queue (`stepTrack(1, "manual")`) |
 | `previoustrack` | before three seconds: one step back. After three seconds: a restart, which is a seek — the queue does not move |
 | `seekto` | the element's `currentTime`, clamped to `[0, duration]` |
 | `seekbackward`, `seekforward` | **explicitly cleared (`null`), never claimed** |
+
+### Ended or skipped: the difference that kept a car playing
+
+A song that **ends** and a skip someone **asks for** are not the same event, and treating them the
+same is what stopped playback after a song or two in a car:
+
+* **ended** — the element is left alive. The module advances the queue with reason `"auto"` and
+  the page does not touch the element. The phone keeps its now-playing item, the head unit keeps
+  its session, and the next `play()` is an ordinary play.
+* **skip** — the page `release()`s the element (declaring `none`, then pause, then detach) before
+  the new source is attached. That reset is what stopped iOS freezing on the previous cover and
+  title; it is only correct because the listener asked for the item to go away.
+
+A pause the module did not ask for is an **interruption**, not a decision. WebKit pauses the
+element when a session deactivates (a head unit leaving the now-playing screen is enough), and it
+may refuse a `play()` outright in the background. Neither is the listener's intent, so the module
+keeps `wanted = "playing"`, asks again once immediately (never on a timer — a suspended page runs
+none), and resumes on the next `visibilitychange`/`pageshow`. A pause the listener asked for is
+never undone: `wanted = "paused"` is checked first, every time.
+
+Mid-track a stream can also die. One reload is requested per track, and only for
+`MEDIA_ERR_NETWORK`/`MEDIA_ERR_DECODE` — a source the platform says it cannot use fails the same
+way twice. The module never assigns a source itself; it calls the page's `reloadSource` hook,
+which is the only layer that knows whether the bytes are a prefetched blob or the server's stream.
+
+### What one drive leaves behind
+
+`attach({log})` hands the page one bounded line per interesting event — `refused`, `interrupted`,
+`recovered`, `error` — with a fixed field list and no URL. The page posts it to
+`/api/playback/events`, which appends to `state/playback-events.log` (member-scoped, 4 KiB cap,
+rotated to `.1` past 256 KiB). It is evidence for the next report, not a feature: without it the
+next "it still stops" cannot be checked after the fact.
 
 The last row is a trade-off, and it is the same one the app makes: registering *either* of the
 `seekbackward`/`seekforward` pair makes the platform draw a ±10 s seek layout **instead of** the
@@ -138,7 +179,7 @@ a second queue grown from that mistake would look like it worked and be empty.
 | `row()`, `ids()`, `index()` | `libQueue`, `playingId`, `libAll` |
 | `setOrder(ids)` | replaces `libQueue` and calls `commitPlaybackQueue()` |
 | `play(id)` | `playFromLibrary(id)` |
-| `step(delta)` | `stepTrack(delta)` |
+| `step(delta)` | `stepTrack(delta)` — the app's `reason` (`"auto"`/`"manual"`) is forwarded, because the page needs it to know whether to reset the element |
 
 `setOrder` refuses a partial order (an id the app does not have) instead of applying it: a
 queue that silently drops a song is worse than an order that did not change.
@@ -168,17 +209,23 @@ the other's; two `ended` listeners advanced two songs per end.
 - `restoreQueueOrder`, `shuffleUpNext` and `shuffleBase`: dead once the module owns the order, and
   a second shuffle would have reordered twice.
 - The 2026-11-12 skip-boundary experiment (`skipBoundary`, `boundaryPending`, `settleBoundary`, the
-  `"none"` hand-over): its only consumer was the media session this card hands over. The manual
-  skip still tears the element down; the module re-tags on every load milestone.
+  `"none"` hand-over) was re-homed into the module as `release()`. The page no longer declares the
+  boundary itself: it asks the module, which is the only writer of `playbackState`, and the pause
+  that follows is known to be the module's own — so it is never read as an interruption.
+
+`playFromLibrary(id, {reason})` hands the row to `transportPlay()` and, on a **manual** skip with
+a previous source attached, calls `transportRelease()` then removes the source and `load()`s.
 
 `warmArtwork` stays (the prefetch warms the next cover with it), and so do `realAlbum`, `albumFor`
 and `playerSub`, which paint the player's own second line.
 
 ### What the page calls
 
-`playFromLibrary` tags the new row before playback starts with `playback.publish()` and
-re-publishes on a rejected `play()`. `reportListen` stays the only listen report; `attach` is given
+`playFromLibrary(id, {reason})` tags the new row before playback starts through `transportPlay()`,
+which is `playback.play(onError)`. `reportListen` stays the only listen report; `attach` is given
 a no-op `report`, so the module's Subsonic scrobble cannot count a play the app has already counted.
+`transportPlay`/`transportPause`/`transportRelease` are the only doors to the element's transport,
+so a page-level pause is never mistaken for an interruption.
 
 The toggle bodies shrink to the module plus their toast:
 

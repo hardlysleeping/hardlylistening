@@ -159,8 +159,8 @@ a new route takes its owner from this table rather than from the module that hap
 | --- | --- |
 | **Core** | `/api/health`, `/api/state`, `/api/settings`, `/api/members*`, `/api/member/*`, `/api/auth/*`, `/api/account*`, `/api/signup*`, `/api/signup-invite`, `/api/admin/signup-invite` |
 | **Repo** | `/api/tracks`, `/api/add`, `/api/pause`, `/api/cooldown/clear`, `/api/failed/retry`, `/api/queue/*`, `/api/import`, `/api/import/upload`, `/api/artist`, `/api/artist/art*`, `/api/catalogue`, `/api/feed*`, `/api/subscriptions*`, `/api/search`, `/api/playlist/(id)/{apple-backup,requeue,remove,verify}`, `/api/release/(id)/remove`, `/api/track/(id)/{artwork,bpm,move,retry,skip,source,unpick}`, `/api/track/queue`, `/api/library` (shared snapshot), `/api/library/{grab,move,verify,tempo,titles}`, `/api/genres*`, `/api/decisions*`, `/api/tempo/status`, `/api/titles/status` |
-| **Library** | `/api/listening/*`, `/api/shares*`, `/api/swipe*`, `/api/library/export`, `/api/library/download`, `/api/track/(id)/download`, `/api/playlist/(id)/download` |
-| **Playback** | `/api/track/(id)/audio`, `/api/mixer`, `/api/mixer/stream` |
+| **Library** | `/api/listening/*`, `/api/shares*`, `/api/swipe*`, `/api/library/export`, `/api/library/download`, `/api/track/(id)/download`, `/api/playlist/(id)/download`, `/api/art/(hash)` (the cover a head unit fetches: capability URL, anonymous on purpose) |
+| **Playback** | `/api/track/(id)/audio`, `/api/mixer`, `/api/mixer/stream`, `/api/playback/events` (bounded telemetry, member-scoped) |
 | **Social** | `/api/activity`, `/api/activity/listen`, `/api/social*`, `/api/boost`, `/api/profile` |
 | **Party** | `/api/party*` |
 | **Adapter** | `/rest/*.view` (every Subsonic endpoint) |

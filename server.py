@@ -40,6 +40,10 @@ FEATURES = {"web_ui": True, "subsonic": True}
 #: UI from a typo in the URL.
 UI_OFF = b"The web UI is disabled on this server.\n"
 
+#: Playback telemetry is one bounded line per interesting event. Past this size the log is
+#: rotated once (`.1`), because the point is the next drive, not a growing archive.
+PLAYBACK_LOG_MAX = 256 * 1024
+
 STORE: db.Store | None = None
 QUEUE: Queue | None = None
 SCHEDULER = None
@@ -179,6 +183,25 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/shares' or path.startswith('/api/shares/'):
                 import shares
                 shares.dispatch(self, boot()[0], SECURITY)
+                return False
+            # A cover is a capability URL: the digest is the secret, so the one route a head
+            # unit's artwork fetch needs is anonymous. Public for the same reason `/s/<token>`
+            # is: iOS fetches media-session artwork itself, outside the page's cookies.
+            art = re.fullmatch(r'/api/art/([a-f0-9]{32})', path)
+            if art:
+                if self.command != 'GET':
+                    raise Denied(405, 'Method not allowed')
+                self.art_image(art.group(1))
+                return False
+            # Playback telemetry: what the page saw when a song stopped, so a drive leaves
+            # evidence instead of an anecdote. Member-scoped, capped, and never a URL.
+            if path == '/api/playback/events':
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if self.command != 'POST':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.limit(self.member['id'], 'playback', 60)
+                self.record_playback_event()
                 return False
             # Temporary party credentials NEVER enable the legacy local bypass.
             # A real independent browser membership may still use its own scope.
@@ -965,6 +988,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             payload = image.read_bytes()
             self.send_response(200)
+            # Say which digest this cover now lives under, so the page can switch the car's
+            # artwork URL to our own route without waiting for the next `/api/state` poll.
+            record = store.conn.execute(
+                'SELECT art_hash FROM tracks WHERE id=?', (int(cover.group(1)),)).fetchone()
+            if record and record['art_hash']:
+                self.send_header('X-Art-Hash', record['art_hash'])
             self.send_header("Content-Type", "image/jpeg")
             self.send_header("Content-Length", str(len(payload)))
             self.send_header("Cache-Control", "public, max-age=86400")
@@ -1197,6 +1226,61 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Set-Cookie', f'__Host-hl_signup={digest}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={SECURITY.SIGNUP_FLOW_TTL}')
         self.send_header('Content-Length', '0')
         self.end_headers()
+
+    def art_image(self, key: str) -> None:
+        """One cover, by its own digest: the URL a head unit's artwork fetch can use.
+
+        Public on purpose. iOS fetches media-session artwork itself, outside the page's
+        session, so a member-only route answers that request with a login redirect — which a
+        car draws as no image at all. The digest is the unguessable part. `display()` is
+        content-addressed and memoised, so the only work on a miss is one deterministic
+        transcode of the canonical copy the store already holds.
+        """
+        from library import art_store
+        image = art_store.display(boot()[0], key)
+        if image is None or not image.is_file():
+            self._send(404, b"no art", "text/plain; charset=utf-8")
+            return
+        payload = image.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def record_playback_event(self) -> None:
+        """Append one line of playback telemetry. Never a URL, never a cookie, never a body.
+
+        A fixed field list is the point: whatever a client sends, the file holds only what a
+        future diagnosis needs, with every free-text value clipped.
+        """
+        length = self.headers.get('Content-Length', '0')
+        if not length.isdigit() or int(length) > 4096:
+            raise Denied(413, 'Event exceeds 4 KiB')
+        event = self.body()
+        if not isinstance(event, dict):
+            raise Denied(400, 'Object required')
+        line = {}
+        for field in ('at', 'trackId', 'event', 'wanted', 'interrupted', 'readyState',
+                      'networkState', 'errorCode', 'srcKind'):
+            if field in event:
+                value = event[field]
+                line[field] = value if isinstance(value, (int, float, bool)) else str(value)[:64]
+        if not line:
+            # `body()` turns anything that is not a JSON object into `{}`; an empty line would
+            # be noise in the one file that is supposed to be readable after a drive.
+            raise Denied(400, 'No known event field')
+        try:
+            paths.STATE_DIR.mkdir(parents=True, exist_ok=True)
+            log = paths.STATE_DIR / 'playback-events.log'
+            if log.is_file() and log.stat().st_size > PLAYBACK_LOG_MAX:
+                log.replace(log.with_name(log.name + '.1'))
+            with log.open('a', encoding='utf-8') as handle:
+                handle.write(json.dumps(line, default=str) + '\n')
+        except OSError:
+            raise Denied(503, 'Playback telemetry is not writable')
+        self.json({'ok': True})
 
     def web_ui_off(self) -> bool:
         """Answer 404 for the browser app when `--no-web-ui` was used, and say why.
