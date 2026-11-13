@@ -403,6 +403,14 @@ class Handler(BaseHTTPRequestHandler):
                     },
                 })
                 return False
+            if path.startswith('/api/v1/'):
+                # The versioned surface has its own table (`api/v1.py`) so a client can rely
+                # on a shape without the unversioned routes being rewritten underneath it.
+                # It authenticates per route: shared reads follow `/api/artist`, personal
+                # reads follow `/api/listening`, and `capabilities` was answered above.
+                import api.v1 as api_v1
+                api_v1.dispatch(self, boot()[0], SECURITY)
+                return False
             if self.command == 'POST' and path == '/api/auth/session':
                 SECURITY.csrf(self)
                 SECURITY.limit(SECURITY.client_ip(self), 'enrollment', 15)
