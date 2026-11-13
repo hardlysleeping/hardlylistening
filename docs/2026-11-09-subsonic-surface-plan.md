@@ -1,6 +1,7 @@
 # Plan — Subsonic surface: completeness, bookmarks, shares, jukebox, sonic, radio, podcasts, chat
 
-Status: Phase 0, 1, 2, 5 and 6 shipped. Phase 3 (jukebox), 4 (sonic analysis) and 7 (chat) open.
+Status: Phase 0, 1, 2, 6 shipped; Phase 5 shipped as the Subsonic CRUD only (see that section for
+what is not built). Phase 3 (jukebox), 4 (sonic analysis) and 7 (chat) open.
 Decisions are locked; do not re-open them while building.
 
 ## Locked decisions
@@ -11,7 +12,11 @@ Decisions are locked; do not re-open them while building.
 3. **Shares expire in 24 hours**, fixed. **Only members and admins can share** — guests cannot mint links.
 4. **Music videos are dropped.** No `--video` pipeline, no `getVideos`/`getVideoInfo`. `getCaptions`
    answers empty.
-5. **Radio is one shared list** for the whole install (not per member).
+5. **Radio is member-scoped**: every member owns their own stations. The first draft of this plan
+   said one shared list for the whole install; that was re-decided when accounts landed, because a
+   station's `stream_url` can embed a credential and a personal list should not be readable, editable
+   or deletable by another member. The Subsonic protocol carries no owner field on a station, so each
+   caller simply gets their own set.
 6. **Audio analysis may use numpy** (and any dependency that helps). The pure-python rule applies only to
    the existing tempo worker, which stays as it is.
 7. **Phase 0 ships as one release.**
@@ -25,8 +30,11 @@ container, codec and average bitrate; a client that accepts the file gets those 
 Range seeking, and one that would need a re-encode gets `canTranscode: false` with a reason. A time
 `offset` is refused, because without an encoder it cannot be honoured.
 
-Radio shipped **member-scoped**, not install-wide: `radio_stations` carries `member_id`, and a member
-only ever sees, changes or deletes their own stations. Locked decision 5 was not implemented that way.
+Radio is member-scoped as decision 5 now says: `listening_radio_stations` carries `member_id`, and a
+member only ever sees, changes or deletes their own stations (`tests/test_subsonic_phase34.py`
+`test_radio_is_member_scoped`). There is no admin view of another member's stations, and no way to
+promote a station to the install; an operator who wants a shared list would need a new decision,
+not a flag.
 
 ## Phase 0 — everything that maps onto data we already have (one release)
 
@@ -106,15 +114,24 @@ bpm_source/bpm_at` columns). This phase adds the sonic half, with numpy allowed.
 - API: `/api/sonic/similar/<id>`, `/api/sonic/path?from=&to=`, `/api/sonic/status`.
 - UI: "Sounds like this" under a track, "Sonic path" in the row menu, BPM where it already appears.
 
-## Phase 5 — Internet radio (one shared list)
+## Phase 5 — Internet radio (member-scoped)
 
-- `radio_stations(id, name, stream_url, homepage, created, created_by)` — install-wide, admin-editable,
-  members may add.
-- "Radio" in the More menu (beside Party/Mixer/Swipe): list + add, play through the audio deck.
-  Nothing is downloaded, nothing counts against quota.
-- Guards: http/https only, no private/localhost targets (SSRF), HEAD probe before save, ICY title when present.
+Shipped: `radio.py`, the Subsonic CRUD only. Not built: the More-menu page, the `getMusicDirectory`
+Radio folder, the SSRF address check, a HEAD probe before saving, and ICY titles. The list below
+records what exists, then what the original plan asked for and did not ship.
+
+- `listening_radio_stations(id, member_id, name, stream_url, homepage_url, created)`. The owner is
+  part of every read, update and delete, so a station id from another member answers error 70, not a
+  row.
+- Validation is on the value, not the network: absolute `http(s)` only, no userinfo (a credential is
+  never persisted), 2048 characters, no control characters or whitespace; name 1–200. Nothing is
+  fetched or probed server-side, so a station URL is inert data and cannot be used to reach a private
+  address from this server. That is why there is no SSRF guard and no HEAD probe: there is no request
+  to guard.
+- Nothing is downloaded and nothing counts against quota; playback is the client's own stream.
 - Subsonic: `getInternetRadioStations`, `createInternetRadioStation`, `updateInternetRadioStation`,
-  `deleteInternetRadioStation`, and a "Radio" folder in `getMusicDirectory`.
+  `deleteInternetRadioStation`. No "Radio" folder in `getMusicDirectory`, and no web UI — the
+  stations are reachable only from a Subsonic client.
 
 ## Phase 6 — Podcasts
 

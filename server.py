@@ -767,6 +767,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self.json({"ok": True, "version": db.VERSION})
             return
+        if path == "/api/federation":
+            # Read-only: what this node's mirror is set to (FED-MIRROR-002/003/004). Writing the
+            # mode or the peer list is an operator action, not a web form: a peer has to be
+            # authenticated before this node can serve it bytes, and that half is still open.
+            from repo import mirror
+            self.json(mirror.status(store))
+            return
         if path == "/api/feed":
             query = parse_qs(urlparse(self.path).query)
             decision = (query.get("decision") or [""])[0]

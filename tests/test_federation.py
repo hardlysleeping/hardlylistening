@@ -183,12 +183,18 @@ class Boundary(unittest.TestCase):
     def reachable(self, name):
         return name == self.FEDERATION or name.startswith(self.FEDERATION + '.')
 
-    def test_only_repo_service_imports_federation(self):
+    def test_only_the_repo_package_imports_federation_and_only_its_two_owners(self):
         importers = {path.relative_to(APP_DIR).as_posix()
                      for path in self.modules()
                      if any(self.reachable(name) for name in self.imports(path))}
-        self.assertEqual(importers, {'repo/service.py'},
-                         'Repo federation is reached through repo/service.py and nowhere else')
+        # `repo/mirror.py` is the sibling implementation, not a second door: it answers what a
+        # descriptor is re-acquired from, which is the same acquisition subject as the descriptor
+        # itself. The rule that matters to a player is the second assertion — outside the package,
+        # federation is reached through `repo/service.py` or not at all.
+        self.assertEqual(importers, {'repo/service.py', 'repo/mirror.py'},
+                         'federation belongs to the Repo package and to nobody outside it')
+        self.assertFalse([name for name in importers if not name.startswith('repo/')],
+                         'a module outside repo/ imported federation directly')
 
     def test_nothing_a_player_talks_to_imports_it(self):
         for relative in self.PLAYER_FACING:

@@ -166,6 +166,27 @@ class RadioAndPodcasts(unittest.TestCase):
                                            device=owner)['internetRadioStations']
                              ['internetRadioStation']), 1)
 
+    def test_the_plan_and_the_code_agree_on_radio_scope(self):
+        """The plan doc promised one shared list; the code shipped member-scoped.
+
+        The decision is now member-scoped and this is what keeps the two from drifting apart
+        again: the table has to have an owner column, and the document may not still promise the
+        shared list it could not deliver. The sentence that records the reversal is allowed to
+        name it — what is refused is the promise.
+        """
+        import pathlib
+        import radio
+        radio.schema(self.store)
+        with self.store.lock:
+            columns = [row['name'] for row in
+                       self.store.conn.execute('PRAGMA table_info(listening_radio_stations)')]
+        self.assertIn('member_id', columns)
+        doc = (pathlib.Path(__file__).resolve().parent.parent
+               / 'docs' / '2026-11-09-subsonic-surface-plan.md').read_text()
+        self.assertIn('member-scoped', doc)
+        self.assertNotIn('Radio is one shared list', doc)
+        self.assertNotIn('install-wide, admin-editable', doc)
+
     # -- podcasts -----------------------------------------------------------
     def test_podcast_subscribe_refresh_list_play_and_delete(self):
         self.assertEqual(self.response('createPodcastChannel', url=self.feed_url)['status'], 'ok')

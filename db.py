@@ -466,6 +466,9 @@ ADDED_COLUMNS = {
         "bpm_phase": "REAL DEFAULT 0",
         "bpm_source": "TEXT DEFAULT ''",
         "bpm_at": "REAL DEFAULT 0",
+        # Federation mirror: 1 = this node keeps a copy even in `selected` mode (FED-MIRROR-004).
+        # Node state, not a member's list: every member sees the same answer.
+        "mirror_selected": "INTEGER DEFAULT 0",
         # Cover art: the hash of the one image this track shares with every other
         # track carrying the same cover, and when the file was last looked at.
         # art_checked 0 = the artwork sweep still has work to do on this row.

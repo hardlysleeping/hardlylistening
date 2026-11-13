@@ -80,9 +80,11 @@ local path refuses, and that the refusal does not contain the value.
 Repo owns acquisition, so the descriptor lives in `repo/federation.py` — inside the package whose
 owner it is, not in a top-level `federation.py` that would become a seventh domain.
 
-`repo/service.py` is the only module in the tree allowed to import it. `tests/test_federation.py`
-parses every Python file and fails if the importers are anything other than
-`{'repo/service.py'}`, so:
+Two modules may import it, and both are inside the package that owns it: `repo/service.py`, the
+facade every outside caller goes through, and `repo/mirror.py`, the sibling implementation that
+answers what a descriptor is re-acquired from. `tests/test_federation.py` parses every Python file
+and fails if the importers are anything other than `{'repo/service.py', 'repo/mirror.py'}`, and
+separately fails if any module outside `repo/` imports it, so:
 
 * the composition root reaches federation through Repo like it reaches everything else;
 * `subsonic.py`, `library/playback.py`, `lyrics.py`, `mixer_room.py`, `shares.py` and `listening.py`
@@ -126,3 +128,94 @@ the right size (256 bits) whose scheme is still to be chosen, and `FED-001`'s re
 choose the scheme, sign descriptors or mirror requests with it, and decide how peers exchange or
 pin each other's public halves. That work belongs with the mirror cards
 (`FED-MIRROR-002`/`003`), which are what would actually need authentication.
+
+## 4. Re-acquiring a descriptor (`FED-MIRROR-002`)
+
+`repo/mirror.py` answers the question a descriptor exists to raise: *what do I ask for, and how do
+I know the answer is the same recording?*
+
+`plan(descriptor)` returns one of two shapes:
+
+| `how` | when | what it carries |
+| --- | --- | --- |
+| `url` | the descriptor names a page | that `source_url`, which the descriptor's own provider must claim |
+| `search` | it does not | `artist title` as one query |
+
+Refusals, each with a reason that names no URL and no credential:
+
+* the provider name is not installed here (`an unknown provider is refused by name`);
+* the provider is metadata-only (`apple` names a recording, it does not serve one);
+* the descriptor names a page its claimed provider does not claim — one of the two is a lie and
+  this side will not guess which.
+
+`matches(descriptor, found)` then judges the answer. The provider's own id settles it when both
+sides carry one. Otherwise the checks are the ones a person would make: duration inside
+`max(3 s, 2 %)`, and title similarity at or above `0.5` after the same normalisation the queue's
+search ranking uses. A duration nobody recorded is reported as `unverified`, not as a mismatch —
+refusing there would reject every row a provider listed without a length.
+
+Re-acquisition itself is **not** wired into the queue. `engine/queue.py` still resolves its own
+sources; the plan is an input to that work, not a replacement for it.
+
+## 5. Copying from a peer (`FED-MIRROR-003`), and the half that is missing
+
+A copy may come only from an address an operator pinned:
+
+```json
+[{"base_url": "https://peer.example", "node_id": "<32 hex chars>"}]
+```
+
+The rules, and why:
+
+* **The allow-list is typed, never learned.** No address arrives from the wire, so there is no DNS
+  guard to write and no resolver trick to defend against. `node_id` is pinned alongside the
+  address: a peer answering under a different name is a different node.
+* **https only.** `http` is accepted for loopback and only with
+  `HARDLYLISTENING_ALLOW_LOCAL_PEERS=1`, which exists so the tests can run a stub. A peer address
+  may not embed credentials.
+* **No redirects.** Re-validating a redirect would still be a second address nobody pinned, so a
+  `3xx` is a refusal.
+* **Bounded while reading.** 64 MiB hard cap checked chunk by chunk, 30 s timeout, bytes hashed
+  with SHA-256 as they arrive, and the file written to a temporary name beside the destination and
+  `os.replace`d — a half copy never lands where a completed one belongs.
+* **Named by digest.** `md5(federation.dumps(descriptor))` names both the peer request and the
+  cache file (`paths.FEDERATION_CACHE_DIR/<digest>`), so two nodes name the same track without a
+  second exchange.
+
+The contract this side calls:
+
+```
+GET <base_url>/federation/audio/<digest>
+→ 200, the audio bytes; 404 when this node does not hold that descriptor's audio
+```
+
+**The serving half does not exist.** No route answers that path. Handing music to a peer requires
+authenticating the peer, and §3 is explicit that the node identity has no signature scheme yet.
+Until a peer can prove it is the node it claims to be, a serving route would be an unauthenticated
+file server — so it is not built, and `tests/test_federation_route.py` pins that `/api/federation`
+is a read.
+
+## 6. Modes (`FED-MIRROR-004`)
+
+One settings row decides whether bytes are fetched at all:
+
+| mode | fetches |
+| --- | --- |
+| `metadata` (default) | never — descriptors are the whole contribution |
+| `cache` | on play, and only then |
+| `selected` | only tracks marked `tracks.mirror_selected` |
+| `all` | every import |
+
+`should_fetch(store, event=..., selected=...)` is the single decision; `event` is `import` or
+`play` and anything else is a refusal. An unknown mode — a typo, or a value written by hand — is
+reported as `invalid` by `status()` and refused by `mode()`, never silently turned back into
+`metadata`: a typo must not be the thing that starts (or stops) mirroring a library.
+
+Selection is node state (`tracks.mirror_selected`), not a member's list: a mirror is about which
+songs this node keeps, and every member sees the same answer.
+
+`GET /api/federation` is the read-only view — `{mode, modes, peers, selected, node_id}` where
+`peers` is the count (`-1` when the stored list is malformed) and `node_id` is empty unless
+identity was already generated; a status read must not be the thing that mints key material.
+Writing the mode or the peer list is an operator action through `repo.mirror.set_mode` /
+`set_peers`, not a web form.
