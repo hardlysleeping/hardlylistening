@@ -9,10 +9,10 @@
    that is not an envelope — is refused with the reason, because "something went wrong" hides
    the one thing a person needs to fix.
 
-   The credentials are kept in this page's memory for the session, in `session`, and nowhere
-   else: no localStorage, no IndexedDB, no file, no cookie. Remembering them across launches
-   (the system keychain on each platform) is PLAYER-002, and until that exists the honest
-   behaviour is to ask again after a restart rather than to leave a password on disk.
+   The server and the username are a plain record; the password is handed to `accounts.js`, which
+   puts it in the system keychain when there is one and keeps it in memory when there is not. No
+   secret reaches localStorage, IndexedDB, a file or a cookie, and a machine without a keychain
+   asks again after a restart rather than leaving a password on disk.
 
    Loaded as a classic script with no build step, like the rest of the app: `PlayerConnect` is
    the API and the wiring at the bottom only runs when the markup is there, so the same file
@@ -39,6 +39,14 @@
 
   /* Held for this page's lifetime only. Nothing here is written anywhere. */
   let session = null;
+
+  /* The secret store, when the shell provides one. In a browser tab there is no `invoke`, so the
+   * vault reports "memory" and nothing is written anywhere — the same behaviour as before, said
+   * out loud instead of assumed. */
+  const invoke = root.__TAURI__ && root.__TAURI__.core && root.__TAURI__.core.invoke;
+  const accounts = root.PlayerAccounts
+    ? root.PlayerAccounts.open({ vault: root.PlayerAccounts.keychainVault(invoke) })
+    : null;
 
   function text(value) {
     return value == null ? "" : String(value);
@@ -171,8 +179,13 @@
       serverVersion: text(envelope.serverVersion),
       openSubsonic: envelope.openSubsonic === true,
     };
-    /* In memory, for this page's lifetime. PLAYER-002 replaces this with the keychain. */
     session = { server: server, credentials: { username: username, password: password } };
+    /* The page keeps no copy beyond this line: `accounts` splits the record from the secret, and
+     * the secret's home is the handoff below, not this object. */
+    if (accounts) {
+      const moved = await accounts.migrate(session);
+      if (!moved.ok) { root.console.warn(accounts.log(moved.error)); }
+    }
     return { ok: true, server: server };
   }
 

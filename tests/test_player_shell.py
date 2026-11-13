@@ -299,16 +299,20 @@ class Independence(unittest.TestCase):
                     offenders.append(f'{path.relative_to(APP_DIR)}: {needle}')
         self.assertEqual(offenders, [], 'the player must not import the host or the server')
 
-    def test_the_connect_screen_keeps_credentials_in_memory_only(self):
+    def test_the_connect_screen_hands_the_secret_to_the_store_and_keeps_nothing(self):
         source = (PLAYER / 'shell' / 'connect.js').read_text()
-        # Comments may name what is absent; statements may not reach for it.
+        # Comments may name what is absent; statements may not reach for it. The connect page
+        # itself never persists anything: the address and the username are a plain record and the
+        # password's home is `accounts.js`, which writes it to the keychain or keeps it in memory.
         code = re.sub(r'/\*[\s\S]*?\*/', '', source)
         code = re.sub(r'^\s*//.*$', '', code, flags=re.M)
         for call in ('localStorage', 'sessionStorage', 'indexedDB', 'document.cookie',
                      'writeFile', 'setItem'):
             self.assertNotIn(call, code, f'{call} would put a password on disk')
         self.assertIn('/rest/ping.view', code)
-        self.assertIn('PLAYER-002', source, 'the next card has to be named where the gap is')
+        # The handoff, not a promise: PLAYER-002's module is loaded and given the credentials.
+        self.assertIn('PlayerAccounts.open', code, 'the secret store has to be the one used')
+        self.assertIn('accounts.migrate(session)', code, 'the session is handed over, not kept')
 
 
 if __name__ == '__main__':

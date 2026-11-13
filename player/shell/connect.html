@@ -35,10 +35,13 @@
 
   <div id="connect-msg" class="msg" role="status" aria-live="polite"></div>
 
-  <p class="fine">The address, username and password are held in memory for this session and
-    nowhere else — no file, no cookie, no browser storage. Remembering them in the system
-    keychain is the next card, PLAYER-002.</p>
+  <p class="fine">The server address and username are kept as a plain record; the password goes
+    to the system keychain, and only there. A machine with no keychain keeps it in memory for
+    this session and says so, rather than writing a secret to disk.</p>
 </main>
 <script src="./connect.js"></script>
+<script src="./accounts.js"></script>
+<script src="./api-bridge.js"></script>
+<script src="./library-boot.js"></script>
 </body>
 </html>

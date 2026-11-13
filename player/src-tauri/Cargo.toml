@@ -19,6 +19,17 @@ tauri-build = { version = "2", features = [] }
 # No plugins: the window, the asset protocol and the OS WebView are the whole surface. A
 # fetcher, a keychain and an audio background mode are each a later card with a named need.
 tauri = { version = "2", features = [] }
+serde_json = "1"
+
+# The keychain, per platform: the Keychain on macOS and iOS, the Credential Manager on Windows,
+# the Secret Service (through dbus) on Linux. Android has no backend in this crate, so it lands
+# on the in-memory fallback that `accounts.rs` documents.
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# `offline.rs` asks `statvfs` for free space on unix; elsewhere it reports no figure rather than
+# guessing one.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.release]
 codegen-units = 1
