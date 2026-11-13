@@ -24,6 +24,8 @@ The rule everything else follows from:
 
 > `hardlylistening-server` is the canonical runtime. systemd, Docker and the Desktop GUI all
 > launch that same backend. **No GUI dependency may exist inside the server package.**
+> That direction is asserted, not intended: `docs/desktop/dependency.md` and
+> `tests/test_host_dependency.py`.
 
 ```
                     hardlylistening-server

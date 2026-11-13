@@ -296,7 +296,9 @@ Rules that follow:
 
 * **Desktop depends on Server; Server never depends on Desktop.** No import, no shared module, no
   build step in either direction that makes the core need a GUI to start.
-* The core must start and serve with no display, no session, no Tauri, no Node toolchain.
+* The core must start and serve with no display, no session, no Tauri, no Node toolchain —
+  enforced by `tests/test_headless.py` and `tests/test_host_dependency.py`
+  (`docs/desktop/dependency.md`).
   A headless host runs the core alone and still exposes the web UI, OpenSubsonic and the API.
 * The GUI adds its own memory and CPU while it is open. Closing it must not be what stops the
   server, and starting it must not be the only way to start the server.
