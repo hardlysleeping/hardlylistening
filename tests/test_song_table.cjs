@@ -5,7 +5,9 @@
 // widened it differently and the header drifted off its own column; detail pages
 // (album, playlist) had no header at all.
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
-const html = fs.readFileSync('web/index.html', 'utf8');
+// The drawing layer lives in web/js/library.js (JS-032) and the state it reads is still
+// inline, so the page's JavaScript is assembled rather than read from one file.
+const html = require('./_page.cjs').indexHtml() + require('./_page.cjs').js();
 
 // ---- CSS -----------------------------------------------------------------
 const gridRule = html.match(/\.songhead,\.songrow\{([^}]*)\}/);

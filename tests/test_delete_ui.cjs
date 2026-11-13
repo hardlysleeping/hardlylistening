@@ -1,11 +1,17 @@
 // The delete controls: two clicks before anything unlinks, the right buttons for
 // the right person, and a disk banner that says which guard stopped the queue.
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
-const html = fs.readFileSync('web/index.html', 'utf8');
+const page = require('./_page.cjs');
+const indexHtml = page.indexHtml();
+assert(indexHtml.includes('/js/library.js'), 'the page must load the file these helpers live in');
+// Two homes now: the delete helpers moved to web/js/library.js (JS-032), while the banner and
+// the playlist card they sit beside are still inline.
+const html = page.feature('library.js');
 
 const delStart = html.indexOf('// Deleting audio is destructive');
-const delEnd = html.indexOf('// ------------------------------------------------------------------ artist profile');
+const delEnd = html.length;   // the delete helpers are the tail of the file
 assert(delStart > 0 && delEnd > delStart, 'delete helpers not found');
+assert(html.includes('async function deleteTrack('), 'deleteTrack must be in the slice');
 
 const calls = [];
 const toasts = [];
@@ -28,9 +34,10 @@ const ctx = vm.createContext({
 vm.runInContext('let detail = {key:"x"};', ctx);
 vm.runInContext(html.slice(delStart, delEnd), ctx);
 // renderBanners + playlistCard for the rest of the assertions
-const bStart = html.indexOf('function banner(');
-const bEnd = html.indexOf('async function loadDecisions');
-vm.runInContext(html.slice(bStart, bEnd), ctx);
+const bStart = indexHtml.indexOf('function banner(');
+const bEnd = indexHtml.indexOf('async function loadDecisions');
+assert(bStart > 0 && bEnd > bStart, 'banner block not found');
+vm.runInContext(indexHtml.slice(bStart, bEnd), ctx);
 const run = s => vm.runInContext(s, ctx);
 
 // ---- two-step delete ----------------------------------------------------

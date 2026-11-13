@@ -6,7 +6,7 @@ Read this before changing the player, the queue, or anything they share.
 
 | File | Size | Owns |
 | --- | --- | --- |
-| `web/index.html` | ~388 KB | All markup and the remaining inline script. No component CSS |
+| `web/index.html` | ~332 KB | All markup and the remaining inline script (state, layouts, sorting, playback). No component CSS |
 | `web/styles/app.css` | small | The one stylesheet entry point: layer order and imports only |
 | `web/styles/*.css` | — | `tokens`, `base`, `layout`, `motion`, `utilities` (see `docs/frontend-css.md`) |
 | `web/styles/components/*.css` | — | One file per surface; the ownership contract is `docs/frontend-css.md` |
@@ -14,6 +14,7 @@ Read this before changing the player, the queue, or anything they share.
 | `web/genres.js`, `web/lyrics.js`, `web/lifecycle.js` | small | Genre chips, lyrics, reload-on-new-version |
 | `web/js/repo-discovery.js` | ~30 KB | Releases, the follows and the artist/release pages (`JS-030`). A plain classic script loaded before the inline one; every name stays global, so nothing else had to change |
 | `web/js/social-feed.js` | ~12 KB | Feed = Activity: the day cards, the boost pin, the member profile dialog (`JS-031`). Same shape as the file above |
+| `web/js/library.js` | ~60 KB | The library's drawing layer: grouping, the songs/albums/artists renderers and the detail-view editors (`JS-032`). Reads the library's state, which is still inline |
 
 There is no build step: the files above are what the server serves. A change is live on
 reload; there is nothing to compile. Components read the entry point's imports; never add a
@@ -37,6 +38,27 @@ All of these have their markup and behaviour in `web/index.html`; their styling 
 | Volume | `#plvol` (header, behind `#plvolbtn`), `#pfvol` (fullscreen foot) | `paintVolume()`, `paintVolumeToggle()`, one `input` listener per fader | Desktop only: both paint from `playerAudio`, never from each other; `--vol` drives the accent fill, so at 100% the whole track is accent. The header's speaker sits immediately left of shuffle, opens a 72×18 fader into the space to its left (absolute, so the header never reflows) and stays open across sessions (`hl.compactVolume`). Its slot is also the header's flex spacer, so hiding the button on a phone does not move shuffle |
 | Shared state | — | `playingId`, `playerAudio`, `libAll`, `libQueue`, `currentRows` | One source for both surfaces; never duplicate it |
 | Offline audio | `#dlg-offline` (user menu), `web/sw.js` | `cachePlayedAudio()`, `offlineEvict()`, `offlineReconcile()`, `clearOfflineAudio()`, `setOfflineBudget()` | Per device, not per account: budget in `hl.offlineBudget`, index in `hl.offlineIndex`, bytes in the worker cache `hardlylistening-audio-v1` — that name is written in both `index.html` and `sw.js`, so change them together |
+
+## The library's drawing layer
+
+`web/js/library.js` turns the library's state into markup: the grouping, every renderer
+(songs list / cards / grid, albums, artists, playlists), and the detail-view editors behind
+them, including the two-step delete controls. It is a classic script loaded before the inline
+one, so it reads `lib`, `libQueue`, `libView`, `libSort` and `detail` at call time rather than
+holding them.
+
+| Piece | Owner |
+| --- | --- |
+| Grouping | `groupTracks()`, `SORT_BY_VIEW` — one sort at a time, a direction per column |
+| Songs views | `renderSongs()`, `songRow()`, `songCard()`, `songTile()`, `headCell()`, `songHead()` |
+| Album and artist walls | `renderAlbums()`, `albumCard/Tile/Row()`, `renderArtists()`, `artistCard()` |
+| Playlists | `playlistCard()`, `renderPlaylistsView()` |
+| Detail views | `renderAlbumDetail()`, `renderPlaylistDetail()`, `renderArtistDetail()` and their editors |
+| Delete controls | `deleteAlbum()`, `deleteTrack()`, `deletePlaylistFiles()` — two clicks, `armButton()` |
+
+What is *not* in it: the library's state (`lib`, `libQueue`, `playingId`), the view/layout/
+sort choices and their saved values, the density control, and the boot/poll that calls
+`renderLibrary()`. Those stay in `index.html`; the next split moves them.
 
 ## Library filter row
 
@@ -270,8 +292,8 @@ Changed states write `<state>.actual.png` next to the baseline for inspection.
 
 - **`index.html` is still a large inline script.** Markup, styling and behaviour can be
   reviewed independently now that the CSS has left, and the release/follow/artist half has
-  moved to `web/js/repo-discovery.js`, and Activity to `web/js/social-feed.js`; the rest is one
-  block. A further split is a separate
+  moved to `web/js/repo-discovery.js`, Activity to `web/js/social-feed.js`, and the library's
+  drawing layer to `web/js/library.js`; the rest is one block. A further split is a separate
   change: a classic script cannot use a `const` from a later script at load time, so
   load-time wiring stays in `index.html` after `const SVG`.
 - **Semantic class names.** `.st`, `.sartist`, `.salbum`, `.sdur`, `.send` and `.idx` are

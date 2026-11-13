@@ -1,7 +1,10 @@
 // Sorting the song table: one order at a time, a direction per column, votes in
 // two readings, and the select kept in step with the header.
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
-const html = fs.readFileSync('web/index.html', 'utf8');
+// The drawing layer lives in web/js/library.js (JS-032) and the state it reads is still
+// inline, so the page's JavaScript is assembled rather than read from one file. Only the
+// JS is needed here: a slice that ran into markup would not parse.
+const html = require('./_page.cjs').js();
 
 const start = html.indexOf('const SORT_KEYS');
 const end = html.indexOf('function renderSongs(');
