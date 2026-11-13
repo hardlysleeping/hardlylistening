@@ -1,7 +1,7 @@
 # Client SDK
 
 Purpose: let another program — a player, a script, a test — talk to this server without
-importing it. Three small modules, Python 3 standard library only, no build step and no
+importing it. Four small modules, Python 3 standard library only, no build step and no
 dependencies:
 
 | module | answers |
@@ -9,13 +9,15 @@ dependencies:
 | `sdk.subsonic` | a device's library, playlists, search, stars, bookmarks, stream URLs and byte ranges |
 | `sdk.capabilities` | which optional domains this server advertises, and how to degrade when it will not say |
 | `sdk.social` | the Activity feed, comments, votes, likes and boosts — or a refusal naming the flag that is missing |
+| `sdk.repo` | the Repository: the snapshot, a followed artist's releases and tracks, an artist page, subscriptions — or a refusal naming the domain that is missing |
 
 `subsonic.py` is the authority on what the surface answers, and the client is written against
 it: endpoints it implements are here, and endpoints it refuses raise `NotSupported` rather than
 returning an empty result that looks like success. The JSON envelope is the only form parsed
 (`f=json`), because a caller that asks for JSON never needs the XML branch. Social follows the
 same rule with its own authorities: `api/v1.py` for the three versioned reads, `social/api.py`
-and `server.py` for the writes they never versioned.
+and `server.py` for the writes they never versioned. Repository does the same with `api/v1.py`
+for all five of its reads, and `repo/service.py` for the rows.
 
 ## Using it
 
@@ -96,12 +98,65 @@ Boosts are the one thing the document has no flag for: `server.py` advertises th
 every call, because a client that guesses "surely it has that" is what `sdk.capabilities` exists
 to prevent.
 
+## Repository
+
+`/api/v1/repo/*` is the server's Repository — the shared catalogue, not anyone's library.
+`api/v1.py` registers five reads and nothing else, and that is the whole of this module:
+
+| call | route | answers |
+| --- | --- | --- |
+| `snapshot()` | `GET /api/v1/repo/snapshot` | `Snapshot`: follows (`Subscription` rows), the queue's `stats`, `current`, `feed_new` |
+| `releases(watch, offset=0, limit=60)` | `GET /api/v1/repo/releases?watch=&offset=&limit=` | `ReleasePage`: `releases`, a page of `tracks`, `track_total`, `offset`, `page`, `fetched` |
+| `tracks(url)` | `GET /api/v1/repo/tracks?url=` | the songs inside one album page, as `Track` rows |
+| `artist(name)` | `GET /api/v1/repo/artist?name=` | `ArtistPage`: `providers`, `subscribed`, `watches`, `feed`, `tracks`, `downloaded` |
+| `subscriptions()` | `GET /api/v1/repo/subscriptions` | every followed artist, each with the server's `mine` |
+
+```python
+from sdk import RepoClient, Session, probe
+
+caps = probe('http://10.0.0.20:8460')
+repo = RepoClient('http://10.0.0.20:8460', caps, Session.from_cookie(session_value))
+
+follows = repo.subscriptions()            # row.mine is the server's answer, not this client's
+page = repo.releases(follows[0].id, offset=0, limit=60)
+songs = repo.tracks(page.releases[0].source_url)
+```
+
+Nothing here decides anything. Which releases exist, whether a follow is yours, what a
+subscription entitles a member to and whether a source page is readable are all
+`repo/service.py`'s answers, carried through unchanged; `limit` is the server's to clamp
+(1–200), and an unknown `watch` is its `400`.
+
+**This is the module the player must never import.** The player is a streaming client, and
+acquisition code in a store build is what PLAYER-007 prevents, so the rule is asserted rather
+than promised: `tests/test_player_store_safe.py` reads the five routes out of `api/v1.py`, then
+requires that no assembled file — and no file reachable from the player's entry documents —
+names one of them or this module, and that the build refuses `sdk/repo.py` outright. That proves
+what the player serves and loads; it cannot prove a player script would never build a route by
+string concatenation or fetch a `.js` at runtime, and an edit to `assemble.mjs` is outside it.
+Nothing under `sdk/` may be imported by `web/` or `player/shell/` for the same reason.
+
+Against this server every call refuses, and that is the honest answer rather than a bug. The
+capability document `server.py` publishes names `accounts`, `library`, `playback`, `party`,
+`social` and `discovery` (`search`, `sonic_analysis`) — and **no `repo` domain**, no acquisition
+flag anywhere. Acquisition is reachable over HTTP on those five routes, but it is not in the
+contract, so `Unavailable` says so, quoting `discovery`'s own flags so a caller can see that one
+domain was not quietly translated into another. A server that adds a `repo` section needs no
+change here; a client does not invent the section, and no flag inside it is guessed at.
+
+The refusal classes stay in the module, like Social's: `sdk.repo.Unavailable` (`needed='repo'`),
+`Denied`/`NotFound`/`SignInRequired`/`RateLimited` for an `{"error": "..."}` answer, and
+`ClientError` when the answer was not an answer at all. `Session` is `sdk.social`'s, reused
+rather than defined twice: the reads are shared reads, so in hosted mode they need the member's
+cookie, which travels in a header and never in a URL or in a message.
+
 ## What it deliberately does not do
 
-- **No Repo acquisition.** Searching a provider and queueing a download is Repo's, not the
-  protocol's, and a Subsonic client must keep working against a server that has no queue. The
-  capability document does not advertise a `repo` domain, so `caps.features.repo.available` is
-  `False` and a caller offers no acquisition.
+- **No acquisition of its own.** `sdk.repo` reads `/api/v1/repo/*`; it never searches a
+  provider, queues a download, decides what is downloadable or writes a follow. Following,
+  checking and pausing an artist are Repo's writes, unversioned and deliberately not called here.
+  The capability document names no `repo` domain, so `caps.features.repo.available` is `False`
+  and every Repo call refuses until a server says otherwise.
 - **No federation.** This server does not advertise federation yet — there is no flag in
   `/api/v1/capabilities` — so the client reports `federation = False` and does not invent a
   cross-instance feature from the app's plans.
@@ -120,9 +175,13 @@ to prevent.
   belong to the cards that own them; this module does not call them.
 - **No unversioned discussion reads.** `GET /api/social/<kind>/<target>` answers the same page as
   the versioned route, so only the versioned one is called.
+- **No Repository writes.** `subscribe`, `check`, `set_enabled`, `remove` and `release_seat` are
+  Repo's, and unversioned; this module reads. It also does not re-declare the queue's own fields
+  inside `snapshot().stats`/`current`, because that would be a second definition of acquisition.
 - **No unlike and no DELETE.** `like` toggles on the route `social/api.py` matches, and a comment
   is removed by posting `{"delete": true}` to its edit route — the shapes the adapter defines,
   not the ones a REST client would expect.
 
-Tests: `python3 -m unittest tests.test_sdk` and `python3 -m unittest tests.test_sdk_social` (a stub
-`http.server` on 127.0.0.1 each; no real server, no network).
+Tests: `python3 -m unittest tests.test_sdk`, `tests.test_sdk_social` and `tests.test_sdk_repo`
+(a stub `http.server` on 127.0.0.1 each; no real server, no network), and
+`python3 -m unittest tests.test_player_store_safe` for the player's independence.

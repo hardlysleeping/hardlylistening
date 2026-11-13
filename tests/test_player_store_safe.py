@@ -36,6 +36,18 @@ What is asserted, and where each list comes from:
     the app's own markup says "Download folder" about a member's library, which is Library
     vocabulary and stays until PLAYER-003 replaces the surface. The phrases here are the ones
     that describe turning a source page into a library file.
+  * **The Repository (SDK-004) is unreachable.** The route names are **derived from `api/v1.py`'s
+    `ROUTES` table** at test time — every `/api/v1/repo/<name>` it registers — and no assembled
+    file may name one, or the module (`sdk.repo`, `sdk/repo.py`). The reachability half follows
+    the file graph the WebView loads: `<script src>`/`<link href>` from the entry documents,
+    `@import` in stylesheets, and relative ES-module/worker specifiers, transitively. The build
+    is also asked outright for the module (`--include-web ../sdk/repo.py`) and must refuse it,
+    which is the one assertion that does not depend on the audit being right.
+    What this cannot prove: a player script could rebuild a route by concatenation or fetch a
+    `.js` at runtime, and an edit to `assemble.mjs` itself is outside every assertion here. What
+    it does prove is that the files the player serves, and the files those make it load, carry
+    neither the Repository's routes nor its module. `.py` can never load in a WebView, and the
+    build refuses it by suffix, so the module has two independent barriers rather than one.
 
 Two negative controls prove the assertions bite rather than pass vacuously:
 
@@ -66,6 +78,11 @@ ENTRY = 'index.html'
 MANIFEST = '.assembly.json'
 MODULE = WEB / 'js' / 'repo-discovery.js'
 NODE = shutil.which('node')
+API_SOURCE = APP_DIR / 'api' / 'v1.py'
+#: One Repository route as `api/v1.py` writes it. Only the name is captured; the path is rebuilt.
+REPO_ROUTE = re.compile(r"/api/v1/repo/([a-z]+)")
+#: How a built file could name the Repository: its routes, or the module itself.
+REPOSITORY_MARKERS = ('/api/v1/repo/', 'sdk.repo', 'sdk/repo', 'repo.py')
 
 TEXT_SUFFIXES = {'.html', '.htm', '.js', '.mjs', '.css', '.json', '.svg', '.txt'}
 #: Acquisition's own vocabulary: the phrases that describe turning a source page into a file in
@@ -209,6 +226,64 @@ def css_references(document, rel):
     return wanted
 
 
+#: A relative module, dynamic import or worker a script could load at runtime. Matched so the
+#: closure stays honest if the player ever grows an ES module; today it matches nothing.
+JS_SPECIFIER = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(\s*|\bimportScripts\s*\(\s*|\bnew\s+Worker\s*\(\s*)"""
+    r"""['"]([^'"]+)['"]""")
+
+
+def repo_routes():
+    """Every Repository route `api/v1.py` registers, read from its `ROUTES` table.
+
+    Derived rather than remembered: a sixth read in `api/v1.py` becomes a needle here without an
+    edit, so the assertion keeps following the server instead of a snapshot of it.
+    """
+    names = set(REPO_ROUTE.findall(read(API_SOURCE)))
+    return tuple(sorted('/api/v1/repo/' + name for name in names))
+
+
+def repository_markers():
+    return tuple(repo_routes()) + REPOSITORY_MARKERS
+
+
+def reachable(root, entries=(ENTRY, 'connect.html')):
+    """Every file the player's documents make the WebView load, transitively.
+
+    Documents contribute `<script src>`/`<link href>`, stylesheets contribute `@import`, and a
+    script contributes the relative specifiers of an import, a dynamic import, an
+    `importScripts` or a `new Worker` — the four ways a built tree can ask for another file. A
+    specifier that is external, absolute, or names nothing in the tree is simply not followed;
+    `audit` is what reports a dangling reference.
+    """
+    root = Path(root)
+    present = set(tree_files(root))
+    seen, pending = set(), list(entries)
+    while pending:
+        rel = pending.pop()
+        if rel in seen or rel not in present:
+            continue
+        seen.add(rel)
+        suffix = Path(rel).suffix
+        wanted = []
+        if suffix in ('.html', '.htm'):
+            wanted = references(read(root / rel), rel)
+        elif suffix == '.css':
+            wanted = css_references(read(root / rel), rel)
+        elif suffix in ('.js', '.mjs'):
+            for match in JS_SPECIFIER.finditer(markup_only(read(root / rel))):
+                value = match.group(1)
+                if is_external(value) or value.startswith('/'):
+                    continue
+                path = value.split('#')[0].split('?')[0]
+                if not path:
+                    continue
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
+                wanted.append((value, target))
+        pending.extend(target for _, target in wanted)
+    return seen
+
+
 def audit(root):
     """Everything wrong with one built tree, as a list of sentences. Empty means store-safe."""
     root = Path(root)
@@ -300,6 +375,60 @@ class StoreSafeBuild(unittest.TestCase):
                 if needle in text:
                     leaks.append(f'{rel}: {needle}')
         self.assertEqual(leaks, [], 'acquisition endpoints survived into the assembled tree')
+
+    def test_no_assembled_file_names_a_repository_route(self):
+        # SDK-004: `/api/v1/repo/*` is acquisition, and the player is a streaming client. The
+        # needles are the routes `api/v1.py` registers right now, plus the module's own name.
+        routes = repo_routes()
+        self.assertEqual(routes, ('/api/v1/repo/artist', '/api/v1/repo/releases',
+                                  '/api/v1/repo/snapshot', '/api/v1/repo/subscriptions',
+                                  '/api/v1/repo/tracks'),
+                         'the route list is read from api/v1.py, not remembered')
+        leaks = []
+        for rel in self.files:
+            if rel == MANIFEST or Path(rel).suffix not in TEXT_SUFFIXES:
+                continue
+            text = read(self.out / rel)
+            for needle in repository_markers():
+                if needle in text:
+                    leaks.append(f'{rel}: {needle}')
+        self.assertEqual(leaks, [], 'the Repository survived into the player build')
+
+    def test_the_player_cannot_reach_the_sdk(self):
+        # The stronger half: not just the copied files, but everything those files make the
+        # WebView load. The closure is asserted non-empty first, so a broken follow cannot make
+        # this pass by finding nothing.
+        closure = reachable(self.out)
+        self.assertIn(ENTRY, closure)
+        self.assertIn('connect.html', closure)
+        for rel in ('js/library.js', 'js/playback-queue.js', 'js/social-feed.js',
+                    'styles/app.css', 'connect.js', 'api-bridge.js'):
+            self.assertIn(rel, closure, f'{rel} is what the player loads it from')
+        self.assertEqual(closure - set(self.files), set(),
+                         'the closure stays inside the tree')
+        for rel in sorted(closure):
+            if Path(rel).suffix not in TEXT_SUFFIXES:
+                continue
+            text = read(self.out / rel)
+            for needle in repository_markers():
+                self.assertNotIn(needle, text,
+                                 f'{rel} is reachable from the player and names {needle}')
+
+    def test_the_build_refuses_the_repository_module(self):
+        # Independent of the audit: the build is asked for the module outright. It must fail on
+        # the suffix alone, because no `.py` may ship, and leave no half-built tree behind.
+        self.assertTrue((APP_DIR / 'sdk' / 'repo.py').is_file())
+        self.assertIn('*.py', plan()['forbidden'], 'the player ships no server code')
+        self.assertFalse([rel for rel in self.files if Path(rel).suffix == '.py'])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'www'
+            result = run_node(str(ASSEMBLE), '--out', str(out),
+                              '--include-web', '../sdk/repo.py')
+            self.assertEqual(result.returncode, 1,
+                             'a build that ships the Repository module must not succeed')
+            self.assertIn('repo.py', result.stderr)
+            self.assertIn('server code', result.stderr)
+            self.assertFalse(out.exists(), 'a refusal leaves no half-built tree')
 
     def test_the_entry_document_adds_no_acquisition_endpoint(self):
         source = read(WEB / ENTRY)
