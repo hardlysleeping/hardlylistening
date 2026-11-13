@@ -406,6 +406,14 @@ def loose_files(store, limit: int = 200) -> list[Path]:
     for path in root.rglob("*.mp3"):
         if str(path) in claimed:
             continue
+        # `.trash/` and `.replacements/` are not library media: taking a cover out of a
+        # file someone deleted, or out of a staged swap, would leak a ghost into the art
+        # store and keep the bytes alive.
+        try:
+            if any(part.startswith(".") for part in path.relative_to(root).parts):
+                continue
+        except ValueError:
+            continue
         try:
             stat = path.stat()
         except OSError:

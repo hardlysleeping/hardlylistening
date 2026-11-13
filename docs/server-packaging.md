@@ -106,11 +106,18 @@ database `640` where appropriate.
 ```
 /srv/hardlylistening/music/
 ├── Artist A/Album/01 - Song.opus
-└── Artist B/…
+├── Artist B/…
+└── .trash/                  deleted files, kept until the trash is emptied
 ```
 
 Separating it keeps the FHS meaning intact (`/opt` application, `/etc` configuration, `/var/lib`
 state, `/srv` served media), and makes both Docker volumes and VPS migration honest.
+
+`.trash/` sits inside the media root on purpose (HL-306): a delete renames the file into it, which
+is only atomic and free on the same filesystem. It is hidden, so the library scans skip it, and it
+is not part of a backup — it holds files a person already deleted. It still counts towards the
+disk ceiling: when the drive passes `disk_limit_pct` the oldest trashed files are purged first and
+each purge is logged. Emptying the trash from Settings is the only irreversible delete.
 
 ### Configuration
 

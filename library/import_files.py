@@ -137,6 +137,8 @@ def collect(paths: list[str], limit: int = 5000) -> list[Path]:
             for child in sorted(path.rglob("*")):
                 if len(found) >= limit:
                     break
+                if any(part.startswith(".") for part in child.relative_to(path).parts):
+                    continue
                 if child.is_file() and is_audio(child):
                     found.append(child)
         elif path.is_file() and is_audio(path):

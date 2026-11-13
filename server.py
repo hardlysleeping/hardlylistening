@@ -55,6 +55,8 @@ ROUTES = [
     ("POST", r"^/api/track/(\d+)/move$", "track_move"),
     ("POST", r"^/api/track/(\d+)/delete$", "track_delete"),
     ("POST", r"^/api/track/(\d+)/restore$", "track_restore"),
+    ("POST", r"^/api/trash/empty$", "trash_empty"),
+    ("POST", r"^/api/trash/(\d+)/restore$", "trash_restore"),
     ("POST", r"^/api/playlist/(\d+)/remove$", "playlist_remove"),
     ("POST", r"^/api/release/(\d+)/remove$", "release_remove"),
     ("POST", r"^/api/playlist/(\d+)/requeue$", "playlist_requeue"),
@@ -1730,6 +1732,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         queue.wake()
         self.json(report)
+
+    def do_trash_empty(self) -> None:
+        """Throw the trash away. Admin-only, because it is the end of the undo."""
+        import deletion
+        store, _queue = boot()
+        if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+            self.json({"error": "Administrator required"}, 403)
+            return
+        self.json(deletion.empty_trash(store))
+
+    def do_trash_restore(self, tid: int) -> None:
+        """Put one trashed file back where it came from, playlist and album deletes too."""
+        import deletion
+        store, _queue = boot()
+        if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+            self.json({"error": "Administrator required"}, 403)
+            return
+        try:
+            self.json(deletion.restore_one(store, tid))
+        except ValueError as error:
+            self.json({"error": str(error)}, 404)
 
     def do_track_restore(self, tid: int) -> None:
         import deletion

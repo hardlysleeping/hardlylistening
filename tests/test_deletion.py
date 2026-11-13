@@ -1,12 +1,15 @@
-"""Deleting playlists and albums, who is allowed to, and the disk ceiling.
+"""Deleting playlists and albums, who is allowed to, the trash, and the disk ceiling.
 
-Three rules are being pinned here because each one is a way to lose data:
+Four rules are being pinned here because each one is a way to lose data:
 
 * the drive must never be filled past ``disk_limit_pct`` (95%),
 * a member may only delete what they themselves added; anything unclaimed is
   admin-only, and "no member" (local mode) is the admin case,
-* a delete may only unlink files inside the library root — a wrong root must not
-  turn "delete album" into anything else.
+* a delete may only move/unlink files inside the library root — a wrong root must
+  not turn "delete album" into anything else,
+* a delete moves the file to ``.trash`` instead of erasing it (HL-306), so the
+  only irreversible step is emptying the trash — and the ceiling purges it
+  oldest-first, logging every file it takes.
 """
 import os
 import tempfile
@@ -76,8 +79,15 @@ class PlaylistDelete(Case):
         report = deletion.apply(self.store, "playlist", pid, delete_files=True)
         self.assertEqual(report["deleting"], 2)
         self.assertEqual(report["deleted_files"], 2)
+        self.assertEqual(report["trashed"], 2)
         self.assertEqual(report["bytes"], 4096)
-        self.assertEqual({p.name for p in self.root.rglob("*.mp3")}, set())
+        # Nothing is erased: both files are in `.trash`, and neither is where it was.
+        held = list(self.root.rglob("*.mp3"))
+        self.assertEqual(len(held), 2)
+        for path in held:
+            self.assertIn(deletion.TRASH_NAME, path.parts)
+            self.assertTrue(path.name.endswith(("One.mp3", "Two.mp3")))
+        self.assertFalse((self.root / "Artist" / "Album" / "One.mp3").exists())
         self.assertEqual(self.store.conn.execute(
             "SELECT COUNT(*) c FROM tracks").fetchone()["c"], 0)
         self.assertEqual(self.store.conn.execute(
@@ -148,7 +158,9 @@ class AlbumDelete(Case):
         report = deletion.apply(self.store, "release", rid, delete_files=True)
         self.assertEqual(report["deleting"], 1)
         self.assertEqual(report["kept"], 1)
-        self.assertEqual(len(list(self.root.rglob("*.mp3"))), 1)
+        live = [p for p in self.root.rglob("*.mp3")
+                if deletion.TRASH_NAME not in p.parts]
+        self.assertEqual([p.name for p in live], ["A.mp3"])
 
     def test_unknown_kind_is_refused(self):
         with self.assertRaises(ValueError):
@@ -163,12 +175,14 @@ class TrackDelete(Case):
         path = self.root / "Artist" / "Album" / "One.mp3"
         report = deletion.delete_track(self.store, tid)
         self.assertTrue(report["removed_file"])
+        self.assertTrue(report["trashed"])
         self.assertFalse(path.exists())
         row = self.store.track_by_id(tid)
         self.assertTrue(row["deleted"])
         self.assertEqual(row["title"], "One")
         self.assertEqual(self.store.conn.execute(
             "SELECT COUNT(*) c FROM tracks").fetchone()["c"], 1)
+        self.assertEqual(self.store.stats()["trash_count"], 1)
 
     def test_a_deleted_song_is_invisible_to_the_library_and_the_queue(self):
         tid = self.track("Gone")
@@ -224,6 +238,9 @@ class TrackDelete(Case):
     def test_restore_queues_a_download_when_the_audio_is_gone(self):
         tid = self.track("Again", provider="soundcloud")
         deletion.delete_track(self.store, tid)
+        # The audio is only genuinely gone once the trash is emptied; a file still
+        # sitting there comes back by rename and needs no download.
+        deletion.empty_trash(self.store)
         report = deletion.restore_track(self.store, tid)
         self.assertTrue(report["restored"])
         self.assertTrue(report["queued"])
@@ -240,6 +257,9 @@ class TrackDelete(Case):
             self.store.conn.commit()
         path = Path(self.store.track_by_id(tid)["file"])
         deletion.delete_track(self.store, tid)
+        # With the trash emptied there is nothing to rename back, so the import's own
+        # source is the remaining way home.
+        deletion.empty_trash(self.store)
         report = deletion.restore_track(self.store, tid)
         self.assertTrue(report["copied"])
         self.assertTrue(path.is_file())
@@ -252,10 +272,138 @@ class TrackDelete(Case):
                                     (str(Path(self.dir.name) / "gone.mp3"), tid))
             self.store.conn.commit()
         deletion.delete_track(self.store, tid)
+        deletion.empty_trash(self.store)
         report = deletion.restore_track(self.store, tid)
         self.assertFalse(report["restored"])
         self.assertIn("cannot be restored", report["error"])
         self.assertTrue(self.store.track_by_id(tid)["deleted"])
+
+
+class Trash(Case):
+    """A delete keeps the file until something has to give (HL-306)."""
+
+    def trashed(self):
+        return [dict(r) for r in self.store.conn.execute(
+            "SELECT * FROM library_trash ORDER BY id")]
+
+    def test_a_deleted_file_is_moved_not_erased(self):
+        tid = self.track("Kept")
+        path = Path(self.store.track_by_id(tid)["file"])
+        original = path.read_bytes()
+        deletion.delete_track(self.store, tid)
+        self.assertFalse(path.exists())
+        rows = self.trashed()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["path"], str(path))
+        self.assertEqual(rows[0]["track_id"], tid)
+        self.assertEqual(rows[0]["bytes"], len(original))
+        held = Path(rows[0]["trash_path"])
+        self.assertTrue(held.is_file())
+        self.assertEqual(held.read_bytes(), original)
+        self.assertEqual(self.store.stats()["trash_count"], 1)
+        self.assertEqual(self.store.stats()["trash_bytes"], len(original))
+
+    def test_restoring_a_song_takes_its_own_file_back_without_downloading(self):
+        tid = self.track("Back", provider="soundcloud")
+        path = Path(self.store.track_by_id(tid)["file"])
+        original = path.read_bytes()
+        deletion.delete_track(self.store, tid)
+        report = deletion.restore_track(self.store, tid)
+        self.assertTrue(report["restored"])
+        self.assertTrue(report["from_trash"])
+        self.assertFalse(report["queued"])
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(self.store.stats()["trash_count"], 0)
+        self.assertIsNone(self.store.job_for_track(tid))
+
+    def test_a_playlist_delete_can_be_undone_file_by_file(self):
+        tid = self.track("Gone")
+        path = Path(self.store.track_by_id(tid)["file"])
+        pid = self.playlist("Set", [tid])
+        deletion.apply(self.store, "playlist", pid, delete_files=True)
+        self.assertFalse(path.exists())
+        row = self.trashed()[0]
+        report = deletion.restore_one(self.store, row["id"])
+        self.assertTrue(report["restored"])
+        self.assertEqual(report["path"], str(path))
+        self.assertTrue(path.is_file())
+        self.assertEqual(self.trashed(), [])
+
+    def test_restore_one_refuses_a_path_outside_the_library(self):
+        tid = self.track("Elsewhere")
+        path = Path(self.store.track_by_id(tid)["file"])
+        deletion.delete_track(self.store, tid)
+        row = self.trashed()[0]
+        outside = Path(self.dir.name) / "outside.mp3"
+        with self.store.lock:
+            self.store.conn.execute("UPDATE library_trash SET path=? WHERE id=?",
+                                    (str(outside), row["id"]))
+            self.store.conn.commit()
+        with self.assertRaises(ValueError):
+            deletion.restore_one(self.store, row["id"])
+        self.assertFalse(outside.exists())
+        self.assertFalse(path.exists())
+        self.assertTrue(Path(row["trash_path"]).is_file(), "the file stays where it is")
+
+    def test_emptying_the_trash_is_the_one_irreversible_step(self):
+        first, second = self.track("One"), self.track("Two")
+        deletion.delete_track(self.store, first)
+        deletion.delete_track(self.store, second)
+        report = deletion.empty_trash(self.store)
+        self.assertEqual(report["removed"], 2)
+        self.assertEqual(report["bytes"], 4096)
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(list((self.root / deletion.TRASH_NAME).rglob("*.mp3")), [])
+        self.assertEqual(self.store.stats()["trash_count"], 0)
+        # A second call is harmless and says so.
+        self.assertEqual(deletion.empty_trash(self.store)["removed"], 0)
+
+    def test_a_file_outside_the_root_never_enters_the_trash(self):
+        tid = self.track("Outside", file=False)
+        stray = Path(self.dir.name) / "elsewhere.mp3"
+        stray.write_bytes(b"y" * 10)
+        with self.store.lock:
+            self.store.conn.execute("UPDATE tracks SET file=? WHERE id=?",
+                                    (str(stray), tid))
+            self.store.conn.commit()
+        deletion.delete_track(self.store, tid)
+        self.assertTrue(stray.exists())
+        self.assertEqual(self.trashed(), [])
+
+    def test_the_ceiling_does_nothing_while_the_drive_has_room(self):
+        self.track("Safe")
+        tid = self.store.conn.execute("SELECT id FROM tracks").fetchone()[0]
+        deletion.delete_track(self.store, tid)
+        with mock.patch.object(db, "disk_usage", return_value=(100.0, 10.0, 90.0)):
+            self.assertEqual(deletion.reclaim(self.store, 95.0), 0)
+        self.assertEqual(len(self.trashed()), 1)
+
+    def test_the_ceiling_purges_the_oldest_file_until_the_drive_fits(self):
+        old, new = self.track("Old"), self.track("New")
+        deletion.delete_track(self.store, old)
+        with self.store.lock:                      # one second apart, so the order is real
+            self.store.conn.execute(
+                "UPDATE library_trash SET created=created-10")
+            self.store.conn.commit()
+        deletion.delete_track(self.store, new)
+        readings = [(100.0, 4.0, 96.0), (100.0, 6.0, 94.0)]
+        with mock.patch.object(db, "disk_usage", side_effect=readings):
+            freed = deletion.reclaim(self.store, 95.0)
+        self.assertEqual(freed, 2048)
+        self.assertEqual([row["title"] for row in self.trashed()], ["New"])
+        messages = [r["msg"] for r in self.store.conn.execute(
+            "SELECT msg FROM logs ORDER BY id")]
+        self.assertTrue(any("Old" in message and "ceiling" in message for message in messages))
+
+    def test_a_missing_trashed_file_is_dropped_rather_than_counted_forever(self):
+        tid = self.track("Gone")
+        deletion.delete_track(self.store, tid)
+        row = self.trashed()[0]
+        Path(row["trash_path"]).unlink()
+        with mock.patch.object(db, "disk_usage", return_value=(100.0, 1.0, 99.0)):
+            deletion.reclaim(self.store, 95.0)
+        self.assertEqual(self.trashed(), [])
 
 
 class Permissions(Case):

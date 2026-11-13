@@ -342,6 +342,22 @@ CREATE TABLE IF NOT EXISTS listening_shares (
   hits INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS listening_shares_member ON listening_shares(member_id, created DESC);
+
+-- Files a delete moved out of the library instead of erasing (HL-306). The file is renamed
+-- into `.trash/` under the media root — same filesystem, so the move is atomic and costs no
+-- space — and this row is what makes restoring possible. `path` is where it came from,
+-- `trash_path` where it is now. A row whose file has gone is stale and is dropped on use.
+CREATE TABLE IF NOT EXISTS library_trash (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  path TEXT NOT NULL,
+  trash_path TEXT NOT NULL,
+  track_id INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'track',
+  bytes INTEGER NOT NULL DEFAULT 0,
+  created REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS library_trash_created ON library_trash(created, id);
 """
 
 
@@ -961,6 +977,8 @@ class Store:
                 "SELECT status, COUNT(*) n FROM download_jobs GROUP BY status").fetchall()
             sizes = self.conn.execute("SELECT COALESCE(SUM(size),0) s FROM tracks WHERE deleted=0").fetchone()["s"]
             tracks = self.conn.execute("SELECT COUNT(*) n FROM tracks WHERE deleted=0").fetchone()["n"]
+            trash = self.conn.execute(
+                "SELECT COUNT(*) n, COALESCE(SUM(bytes),0) b FROM library_trash").fetchone()
         counts = {r["status"]: r["n"] for r in rows}
         free = disk_free_gb(self.setting("root"))
         floor = self.setting_float("min_free_gb", 2.0)
@@ -985,6 +1003,10 @@ class Store:
             "unavailable": counts.get("unavailable", 0),
             "review": counts.get("review", 0),
             "bytes": sizes,
+            # Files a delete kept in `.trash/` instead of erasing. They still occupy the
+            # library disk, which is why the ceiling empties them oldest-first (HL-306).
+            "trash_count": trash["n"],
+            "trash_bytes": trash["b"],
         }
 
     # -- following / discovery --

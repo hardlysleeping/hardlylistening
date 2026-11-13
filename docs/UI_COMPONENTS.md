@@ -184,6 +184,18 @@ album that comes back short of its declared `trackCount` is read on its own thro
 is bounded by `ALBUM_FETCH_CAP` albums. DJ mixes are the exception: Apple returns the
 collection row and no track rows at all, so they stay counted but unlisted.
 
+## Settings — the trash
+
+A delete moves the file into the library's `.trash/` folder instead of erasing it (HL-306). The
+Settings dialog is the only surface that says how much is in there and the only place it can be
+thrown away.
+
+| Piece | Owner |
+| --- | --- |
+| `#trash-status` in the Settings dialog | `fillSettings()` paints `stats.trash_count` / `stats.trash_bytes` as `N files · X MB`, or `Empty`. It is read when the dialog opens, so it is a snapshot, not a live counter |
+| Empty trash | `emptyTrash()` → `POST /api/trash/empty` behind a `confirm()` that says this is the delete that cannot be undone; it refreshes and repaints the field. Erasing frees the bytes; the disk ceiling will do it on its own, oldest-first and one log line per file |
+| Restoring instead | "Show deleted songs" (`openDeleted()`) restores the tombstone, and that restore now renames the file straight out of the trash — no download, even for an import whose source is gone |
+
 ## CSS ownership
 
 The main app loads exactly one stylesheet, `web/styles/app.css`, which imports one file per

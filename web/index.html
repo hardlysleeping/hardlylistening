@@ -714,6 +714,12 @@
         <span class="hint">A song deleted from its menu is kept here without its audio, so it will not download itself again — restore it, or let it fetch a fresh copy.</span>
       </div>
       <div class="field">
+        <label>Trash</label>
+        <span class="hint" id="trash-status">—</span>
+        <button type="button" onclick="emptyTrash()">Empty trash</button>
+        <span class="hint">A deleted file is moved to the library’s <code>.trash</code> folder instead of being erased, so a delete can be undone. It still uses the disk: when the drive passes its ceiling the oldest trashed files go first, and that is logged. Deleting a song from its own menu puts its file here; restore takes it straight back out.</span>
+      </div>
+      <div class="field">
         <label>People</label>
         <div class="memlist" id="memberlist"><div class="hint">Loading…</div></div>
         <p>Signup links are single use and expire after a week. People choose their own name, icon and password when they join.</p>
@@ -1582,8 +1588,35 @@ async function removePlaylist(id){
 }
 
 // -- settings --
+async function emptyTrash(){
+  // The one delete that cannot be undone, so it says so before it does it.
+  if (!confirm("Erase everything in the trash? This is the only delete that cannot be undone.")) return;
+  try {
+    const out = await api("/api/trash/empty", {});
+    showToast(out.removed
+      ? `${out.removed} file${out.removed === 1 ? "" : "s"} erased`
+      : "The trash was already empty");
+    await refresh();
+    if (last) fillSettings(last);
+  } catch (e){ showToast(e.message); }
+}
+function fmtBytes(n){
+  n = Number(n) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(0)} MB`;
+  return `${(n / 1024 ** 3).toFixed(1)} GB`;
+}
 function fillSettings(st){
   const s = st.settings || {};
+  const trashCount = Number((st.stats || {}).trash_count || 0);
+  const trashBytes = Number((st.stats || {}).trash_bytes || 0);
+  const trashStatus = $("#trash-status");
+  if (trashStatus){
+    trashStatus.textContent = trashCount
+      ? `${trashCount} file${trashCount === 1 ? "" : "s"} · ${fmtBytes(trashBytes)}`
+      : "Empty";
+  }
   $("#s-ai-enabled").value = s.ai_apple_enabled || "0";
   $("#s-ai-model").value = s.ai_model || "";
   $("#s-ai-base").value = s.ai_base_url || "https://openrouter.ai/api/v1";

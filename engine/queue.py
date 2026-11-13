@@ -760,6 +760,12 @@ class Queue:
                     time.sleep(min(2.0, deadline - time.time()))
                     continue
             if self.disk_blocked():
+                # The trash is the only space that can be reclaimed without taking a
+                # song away from somebody: everything in it was deleted already. Purge
+                # the oldest until the drive is back under its ceiling, then look again.
+                import deletion
+                if deletion.reclaim(self.store):
+                    continue
                 # Refuse to start rather than die halfway through a file with
                 # ENOSPC. Re-checked on every pass, so freeing space resumes it.
                 stats = self.store.stats()
