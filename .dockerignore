@@ -15,6 +15,8 @@ tmp
 deploy
 tests
 docs
+# The image is the server; the desktop window is a client of it and is not in it.
+desktop
 node_modules
 __pycache__
 *.pyc

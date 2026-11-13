@@ -94,11 +94,37 @@ Then a hash manifest of the whole core (everything except `desktop/` and `.git`)
 after staging. No file added, removed or rewritten. That is the empirical half of "nothing in
 `desktop/` writes into the core's files".
 
-The static half covers what cannot be run on a machine without `webkit2gtk-4.1`: no desktop Python
-writes to a path derived from the application root (`parents[n]`, `bin/`, the launcher name), and
-the Rust contains no `fs::write`, `fs::copy`, `File::create`, `fs::remove`, `fs::rename`,
-`fs::create_dir` or `OpenOptions` at all — it reads the config file and spawns/polls the launcher,
-nothing more.
+The static half covers what cannot be run on a machine without `webkit2gtk-4.1`. It is a **write
+target** scan, not a ban on write calls: HOST-003 writes the handoff record `lifecycle.json` into the
+config directory and HOST-005 writes `host.json` and the autostart entry, and all of those are the
+shell's own state. The earlier blanket rule — no `fs::write` anywhere in `desktop/` — was narrowed
+for exactly that reason, after HOST-003 landed, and the scan now makes two separate assertions over
+every write target in every `.py` and `.rs` file under `desktop/`:
+
+* **Nothing it targets may be reachable from the server's tree.** The target expression is expanded
+  into a *cone*: the expression itself, every local it is built from, and — for a parameter — every
+  argument it is handed at its call sites in the same file, to a depth of three frames. A cone
+  containing `app_dir`, `APP_DIR`, `parents[...]`, `resource_dir`, `current_exe`, `launcher`,
+  `LAUNCHER_NAME`, the launcher's `bin/` path, `server.py`, `cli.py`, `web/`, `index.html`,
+  `HARDLYLISTENING_DB`/`_DATA_DIR`/`_MUSIC_DIR`/`_SERVER`, `music_dir` or `.db` fails.
+* **Everything it targets must resolve to a location the shell owns**: `config_path()`,
+  `state_path()`, `autostart_path()`, `HANDOFF_FILE`, `desktop/`'s own build directory, or an
+  operator-supplied `--out`. This half keeps the exception reviewable: a write to a literal path or a
+  bare environment variable fails even when it would be harmless.
+
+HOST-003's collision is pinned separately: in both `lifecycle.rs` and `host/lifecycle.py` every write
+target resolves to `state_path(config)`, every `let config = …` in the crate is `host::config_path()`,
+and that resolver reads `XDG_STATE_HOME` or `HARDLYLISTENING_DESKTOP_CONFIG` and never `app_dir`,
+`resource_dir`, `current_exe` or `launcher`. A negative control feeds synthetic writes into the app
+root, into `bin/…/server.py`, into `web/index.html` and into the database path, and requires each to
+trip the scan; another requires a write to `/var/tmp/scratch.json` to fail the ownership rule. If a
+later edit loosens the classifier, those controls stop failing.
+
+The honest limit: this is text, not a compiler. Python is parsed with `ast`; Rust is scanned, because
+the standard library has no Rust parser. Locals are followed through single-name assignments and
+parameters through same-file call sites only, so a path aliased three functions away in another file
+is not traced. `stage_sidecar.py --out` is an operator choice the scan cannot bound: staging into the
+core would satisfy the ownership rule, and is caught, if at all, by the before/after manifest above.
 
 ### 2.4 `ThePackagedInstallsCarryNoShell` — the artefacts
 
@@ -106,6 +132,8 @@ The Dockerfile is parsed into instructions (comments and continuations joined), 
 instruction is scanned. `ENTRYPOINT ["/app/bin/hardlylistening-server"]` and `CMD ["run"]` are
 asserted literally, and the entrypoint path is resolved back into the tree — the image cannot name a
 runtime that is not there. The single `COPY` is `COPY . /app`, and no `RUN` fetches a toolchain.
+`.dockerignore` is parsed too, with comments stripped: it must list `desktop`, because that one line
+is the only thing keeping the shell out of an image built from `COPY . /app`.
 
 `deploy/hardlylistening.service` is parsed into `Key=Value` settings: `ExecStart` is
 `/opt/hardlylistening/bin/hardlylistening-server run`, and every path it runs or enters
@@ -151,15 +179,14 @@ Stated plainly, because a green suite that overstates itself is worse than a red
 
 * **Nothing is compiled.** The machine this was written on has no `webkit2gtk-4.1`, `gtk+-3.0` or
   `libsoup-3.0` development packages, so `cargo build` has never run. The Rust claims here are
-  text-level (no write calls, no server import) plus `rustfmt --check` elsewhere; "the crate builds"
-  is untested.
+  text-level (no write whose target reaches the server, no server import) plus `rustfmt --check`
+  elsewhere; "the crate builds" is untested.
 * **No bundle has been produced.** The sidecar's location inside a `.deb`/AppImage is inferred, not
   measured. The byte comparison pins what would be shipped, not where Tauri puts it.
-* **`COPY . /app` carries the build context.** `.dockerignore` does not exclude `desktop/`, so an
-  image built from a checkout that has the shell would contain it as inert data. No instruction
-  uses it, the entrypoint is the server, and the server never reads it — but "the image contains no
-  desktop files" is not what the test asserts, because it is not true. Excluding `desktop` in
-  `.dockerignore` would make the stronger claim possible; that file is outside this card.
+* **`COPY . /app` carries the build context.** `.dockerignore` now lists `desktop`, so an image
+  built from this checkout contains no shell, and the test asserts that line is present with no
+  negation. It has not built an image: the exclusion is checked as text, not by inspecting a layer.
+  No instruction uses the shell either way, and the server never reads it.
 * **`os.stat` is not audited.** A `Path.exists()` probe under `desktop/` is invisible to the
   tripwire. In the copy it is answered `False`, which is the correct desktop-free behaviour; the
   hook covers opens, listings and creation.
@@ -171,7 +198,7 @@ Stated plainly, because a green suite that overstates itself is worse than a red
 ## 5. Re-running it
 
 ```sh
-TMPDIR=/tmp/opencode PYTHONPATH=.:tests python3 -m unittest tests.test_host_dependency
+TMPDIR=/tmp/opencode PYTHONPATH=.:tests python3 -m unittest tests.test_host_dependency tests.test_headless
 ```
 
 The boot test copies the tree and starts one server on a loopback port with a temporary data
