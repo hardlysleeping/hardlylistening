@@ -43,6 +43,53 @@ def _inside(path: Path, root: Path) -> bool:
         return False
 
 
+def _actor(store, actor) -> tuple[str, str]:
+    """(member id, name) for the audit row. Local mode has no member and says "local"."""
+    if not actor:
+        return "", "local"
+    member_id = str(actor.get("id") or actor.get("member_id") or "")
+    name = str(actor.get("display_name") or actor.get("name") or actor.get("email") or "")
+    if member_id and not name:
+        with store.lock:
+            row = store.conn.execute(
+                "SELECT display_name,email FROM members WHERE id=?", (member_id,)).fetchone()
+        if row:
+            name = row["display_name"] or row["email"] or ""
+    return member_id, name[:80]
+
+
+def _audit(store, actor, kind: str, target_id: int, title: str, *, tracks: int = 0,
+           files: int = 0, byte_count: int = 0, detail: str = "") -> None:
+    """Append the durable record of a delete. A failure here must not undo the delete."""
+    try:
+        member_id, name = _actor(store, actor)
+        with store.lock:
+            store.conn.execute(
+                "INSERT INTO library_deletions"
+                "(ts,member_id,member_name,kind,target_id,title,tracks,files,bytes,detail)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (time.time(), member_id, name, kind, int(target_id or 0),
+                 (title or "")[:200], int(tracks or 0), int(files or 0),
+                 int(byte_count or 0), (detail or "")[:300]))
+            store.conn.commit()
+    except Exception:
+        try:
+            store.conn.rollback()
+        except Exception:
+            pass
+
+
+def history(store, limit: int = 200) -> list[dict]:
+    """Newest first. The Settings page's answer to "who deleted that?"."""
+    try:
+        count = max(1, min(int(limit), 1000))
+    except (TypeError, ValueError):
+        count = 200
+    with store.lock:
+        return [dict(row) for row in store.conn.execute(
+            "SELECT * FROM library_deletions ORDER BY id DESC LIMIT ?", (count,))]
+
+
 def _trash_dir(store) -> Path:
     return _root(store) / TRASH_NAME
 
@@ -280,7 +327,8 @@ def plan(store, kind: str, target_id: int) -> dict:
     }
 
 
-def apply(store, kind: str, target_id: int, *, delete_files: bool = True) -> dict:
+def apply(store, kind: str, target_id: int, *, delete_files: bool = True,
+          actor: dict | None = None) -> dict:
     """Carry the plan out. Rows always go; files only with `delete_files`."""
     report = plan(store, kind, target_id)
     rows, files = report.pop("_rows"), report["files"]
@@ -334,10 +382,14 @@ def apply(store, kind: str, target_id: int, *, delete_files: bool = True) -> dic
         f"{report['bytes'] / (1024 ** 2):.0f} MB", "warn", f"{kind}:{target_id}")
     report.update({"ok": True, "deleted_files": len(removed), "trashed": trashed,
                    "failed": failed, "delete_files": delete_files})
+    _audit(store, actor, kind, target_id, report["title"],
+           tracks=report["deleting"], files=len(removed), byte_count=report["bytes"],
+           detail=f"{trashed} in the trash")
     return report
 
 
-def delete_track(store, track_id: int, *, delete_files: bool = True) -> dict:
+def delete_track(store, track_id: int, *, delete_files: bool = True,
+                 actor: dict | None = None) -> dict:
     """Delete one song: its file, its job, and its visibility — not its identity.
 
     The row stays as a tombstone. Keeping it means the next playlist refresh finds
@@ -355,7 +407,12 @@ def delete_track(store, track_id: int, *, delete_files: bool = True) -> dict:
     raw = (track.get("file") or "").strip()
     path = Path(raw).expanduser() if raw else None
     removed, kept_by, trashed = False, None, None
+    size = 0
     if path and path.is_file():
+        try:
+            size = path.stat().st_size        # the disk's number, not the row's guess
+        except OSError:
+            size = 0
         with store.lock:
             shared = store.conn.execute(
                 "SELECT id FROM tracks WHERE id<>? AND file=? AND deleted=0",
@@ -383,6 +440,10 @@ def delete_track(store, track_id: int, *, delete_files: bool = True) -> dict:
         store.conn.commit()
     store.log(f"deleted “{track.get('title') or ''}” from the library"
               + (" (in the trash)" if trashed else ""), "warn", "library")
+    _audit(store, actor, "track", track_id, track.get("title") or "", tracks=1,
+           files=1 if removed and not kept_by else 0,
+           byte_count=size if removed and not kept_by else 0,
+           detail="in the trash" if trashed else "")
     return {"id": track_id, "deleted": True, "title": track.get("title") or "",
             "removed_file": removed, "kept_by": kept_by, "trashed": bool(trashed)}
 

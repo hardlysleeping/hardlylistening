@@ -105,11 +105,12 @@ owns a shared playlist), `download_jobs`, `watches`, `watch_items`, `feed_items`
 `genre_labels`, `source_picks`, `source_replacements`, `match_decisions`,
 `listening_podcast_channels`, `listening_podcast_episodes`
 
-**Library (19)** — `listening_tracks`, `listening_playlists`, `listening_playlist_tracks`,
+**Library (21)** — `listening_tracks`, `listening_playlists`, `listening_playlist_tracks`,
 `listening_folders`, `listening_folder_tracks`, `listening_favorites`, `listening_album_likes`,
 `listening_pins`, `listening_theme`, `listening_ui`, `listening_bookmarks`, `listening_plays`,
 `listening_ratings`, `listening_now`, `listening_devices`, `library_intents`,
-`listening_radio_stations`, `listening_shares`, `swipe_swipes`
+`listening_radio_stations`, `listening_shares`, `swipe_swipes`, `library_trash` (files a delete
+moved aside), `library_deletions` (who deleted what; never pruned)
 
 **Playback (1)** — `lyrics_cache`
 
@@ -125,8 +126,8 @@ Created lazily on first use, so absent from a quiet database: `listening_plays`,
 
 ### Schema-creation sites do not match ownership yet
 
-`db.py` creates `listening_bookmarks`, `listening_shares` (Library), `activity` and `song_boosts`
-(Social). `security.py` creates `member_items` and `member_playlists` (Repo). `shares.py` also
+`db.py` creates `listening_bookmarks`, `listening_shares`, `library_trash` and `library_deletions`
+(Library), `activity` and `song_boosts` (Social). `security.py` creates `member_items` and `member_playlists` (Repo). `shares.py` also
 creates `listening_bookmarks`/`listening_shares` defensively. All of it is `CREATE TABLE IF NOT
 EXISTS`, so moving the statements is a code move, not a migration — do it when the owning service
 is created, not as a sweep.

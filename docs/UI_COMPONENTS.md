@@ -195,6 +195,7 @@ thrown away.
 | `#trash-status` in the Settings dialog | `fillSettings()` paints `stats.trash_count` / `stats.trash_bytes` as `N files · X MB`, or `Empty`. It is read when the dialog opens, so it is a snapshot, not a live counter |
 | Empty trash | `emptyTrash()` → `POST /api/trash/empty` behind a `confirm()` that says this is the delete that cannot be undone; it refreshes and repaints the field. Erasing frees the bytes; the disk ceiling will do it on its own, oldest-first and one log line per file |
 | Restoring instead | "Show deleted songs" (`openDeleted()`) restores the tombstone, and that restore now renames the file straight out of the trash — no download, even for an import whose source is gone |
+| Who deleted what | the same dialog, `#deleted-audit` → `loadDeletionAudit()` → `GET /api/deletions` (admin only). One line per delete: the name, what was deleted, how many tracks/files/bytes, and when. The list is not trimmed like the log, so it answers "who deleted that?" long after the tombstones are restored |
 
 ## CSS ownership
 

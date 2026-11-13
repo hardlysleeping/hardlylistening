@@ -11,6 +11,7 @@ Four rules are being pinned here because each one is a way to lose data:
   only irreversible step is emptying the trash — and the ceiling purges it
   oldest-first, logging every file it takes.
 """
+import json
 import os
 import tempfile
 import unittest
@@ -20,6 +21,7 @@ from unittest import mock
 import db
 import deletion
 import security
+from test_security import SecurityHTTP
 
 
 class Case(unittest.TestCase):
@@ -404,6 +406,125 @@ class Trash(Case):
         with mock.patch.object(db, "disk_usage", return_value=(100.0, 1.0, 99.0)):
             deletion.reclaim(self.store, 95.0)
         self.assertEqual(self.trashed(), [])
+
+
+class Audit(Case):
+    """Who deleted what survives the log being trimmed (the member-delete audit trail)."""
+
+    def rows(self):
+        return deletion.history(self.store)
+
+    def test_a_track_delete_names_the_person(self):
+        tid = self.track("One")
+        deletion.delete_track(self.store, tid,
+                              actor={"id": "m-alice", "display_name": "Alice"})
+        row = self.rows()[0]
+        self.assertEqual((row["member_id"], row["member_name"]), ("m-alice", "Alice"))
+        self.assertEqual((row["kind"], row["target_id"], row["title"]),
+                         ("track", tid, "One"))
+        self.assertEqual((row["tracks"], row["files"], row["bytes"]), (1, 1, 2048))
+
+    def test_a_playlist_delete_records_the_whole_report(self):
+        a, b = self.track("One"), self.track("Two")
+        pid = self.playlist("Set", [a, b])
+        deletion.apply(self.store, "playlist", pid, delete_files=True,
+                       actor={"id": "m-admin", "display_name": "Owner"})
+        row = self.rows()[0]
+        self.assertEqual((row["kind"], row["target_id"], row["title"]),
+                         ("playlist", pid, "Set"))
+        self.assertEqual((row["tracks"], row["files"], row["bytes"]), (2, 2, 4096))
+        self.assertIn("trash", row["detail"])
+
+    def test_local_mode_says_local_instead_of_inventing_a_member(self):
+        tid = self.track("Solo")
+        deletion.delete_track(self.store, tid)
+        row = self.rows()[0]
+        self.assertEqual((row["member_id"], row["member_name"]), ("", "local"))
+
+    def test_a_name_is_looked_up_when_only_the_id_is_known(self):
+        with self.store.lock:
+            self.store.conn.execute(
+                "INSERT INTO members(id,email,role,display_name)"
+                " VALUES('m-nia','nia@example.com','member','Nia')")
+            self.store.conn.commit()
+        tid = self.track("Named")
+        deletion.delete_track(self.store, tid, actor={"id": "m-nia"})
+        self.assertEqual(self.rows()[0]["member_name"], "Nia")
+
+    def test_deleting_again_is_not_a_second_delete(self):
+        tid = self.track("Once")
+        deletion.delete_track(self.store, tid, actor={"id": "m-a", "display_name": "A"})
+        deletion.delete_track(self.store, tid, actor={"id": "m-a", "display_name": "A"})
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_history_is_newest_first(self):
+        first, second = self.track("First"), self.track("Second")
+        deletion.delete_track(self.store, first, actor={"id": "m", "display_name": "M"})
+        deletion.delete_track(self.store, second, actor={"id": "m", "display_name": "M"})
+        self.assertEqual([row["title"] for row in self.rows()], ["Second", "First"])
+
+    def test_emptying_the_trash_does_not_erase_the_record(self):
+        tid = self.track("Remembered")
+        deletion.delete_track(self.store, tid, actor={"id": "m", "display_name": "M"})
+        deletion.empty_trash(self.store)
+        row = self.rows()[0]
+        self.assertEqual((row["title"], row["files"]), ("Remembered", 1))
+
+    def test_a_delete_without_files_still_records_the_act(self):
+        tid = self.track("Kept file")
+        deletion.delete_track(self.store, tid, delete_files=False,
+                              actor={"id": "m", "display_name": "M"})
+        self.assertEqual(self.rows()[0]["files"], 0)
+
+
+class DeleteRouteAudit(unittest.TestCase):
+    """The same record, through the route an admin actually presses.
+
+    The helpers come from SecurityHTTP without inheriting its test methods, which
+    would otherwise run a second time against this fixture.
+    """
+
+    request = SecurityHTTP.request
+    token = SecurityHTTP.token
+    user = SecurityHTTP.user
+    tearDown = SecurityHTTP.tearDown
+
+    def setUp(self):
+        import server
+        SecurityHTTP.setUp(self)
+        self.queue = mock.Mock()
+        boot = mock.patch.object(server, "boot",
+                                 return_value=(self.store, self.queue))
+        boot.start()
+        self.addCleanup(boot.stop)
+        self.identity = self.user("admin")
+        self.root = Path(self.tmp.name) / "library"
+        self.root.mkdir()
+        self.store.set_settings({"root": str(self.root)})
+        self.path = self.root / "Artist" / "Song.mp3"
+        self.path.parent.mkdir(parents=True)
+        self.path.write_bytes(b"x" * 2048)
+        self.tid = self.store.track("local", "audit-fixture", "Song", artist_name="Artist")
+        with self.store.lock:
+            self.store.conn.execute("UPDATE tracks SET file=?,size=? WHERE id=?",
+                                    (str(self.path), 2048, self.tid))
+            self.store.conn.commit()
+        self.headers = {"Authorization": "Bearer fixture", "Origin": "https://music.example"}
+
+    def test_the_admin_sees_who_deleted_the_song(self):
+        code, _, raw = self.request(f"/api/track/{self.tid}/delete", "POST",
+                                    self.headers, "{}")
+        self.assertEqual(code, 200, raw)
+        code, _, raw = self.request("/api/deletions", headers=self.headers)
+        self.assertEqual(code, 200, raw)
+        row = json.loads(raw)["deletions"][0]
+        self.assertEqual((row["member_name"], row["kind"], row["title"]),
+                         ("Friend", "track", "Song"))
+
+    def test_a_member_cannot_read_the_audit_trail(self):
+        self.identity = self.user("member")
+        code, _, raw = self.request("/api/deletions", headers=self.headers)
+        self.assertEqual(code, 403, raw)
 
 
 class Permissions(Case):

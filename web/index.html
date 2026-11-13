@@ -737,6 +737,9 @@
   <div class="dlg-body">
     <div class="hint">Deleting keeps the song’s identity so a playlist refresh cannot download it again. Restore puts it back in its playlists; a song with no audio left is queued to download again.</div>
     <div class="memlist" id="deleted-list"><div class="hint">Loading…</div></div>
+    <h4>Who deleted what</h4>
+    <div class="hint">Every delete is recorded with the person, the item and how much went with it, and this list is never trimmed like the log. A track is still restorable from the list above; a playlist or album file can be brought back from the trash.</div>
+    <div class="memlist" id="deleted-audit"><div class="hint">Loading…</div></div>
   </div>
 </dialog>
 
@@ -1838,6 +1841,41 @@ function openDeleted(){
   const dialog = document.getElementById("dlg-deleted");
   if (!dialog.open) dialog.showModal();
   loadDeleted();
+  loadDeletionAudit();
+}
+async function loadDeletionAudit(){
+  const host = document.getElementById("deleted-audit");
+  if (!host) return;
+  host.innerHTML = '<div class="hint">Loading…</div>';
+  try {
+    const response = await fetch("/api/deletions", {cache: "no-store"});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const rows = data.deletions || [];
+    if (!rows.length){
+      host.innerHTML = '<div class="hint">Nothing deleted yet.</div>';
+      return;
+    }
+    host.replaceChildren(...rows.map(row => {
+      const line = document.createElement("div"); line.className = "memrow";
+      const text = document.createElement("div"); text.style.minWidth = "0";
+      const title = document.createElement("b");
+      title.textContent = row.title || `(${row.kind})`;
+      const meta = document.createElement("small"); meta.className = "hint";
+      meta.style.display = "block";
+      const what = row.kind === "track" ? "song" : row.kind === "playlist" ? "playlist" : "album";
+      meta.textContent = [
+        `${row.member_name || "local"} deleted a ${what}`,
+        row.kind === "track" ? "" : `${row.tracks} track${row.tracks === 1 ? "" : "s"}`,
+        `${row.files} file${row.files === 1 ? "" : "s"}`,
+        fmtBytes(row.bytes),
+        row.ts ? new Date(row.ts * 1000).toLocaleString() : "",
+      ].filter(Boolean).join(" · ");
+      text.append(title, meta);
+      line.append(text);
+      return line;
+    }));
+  } catch (err) { host.textContent = err.message; }
 }
 async function loadDeleted(){
   const host = document.getElementById("deleted-list");

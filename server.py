@@ -839,6 +839,15 @@ class Handler(BaseHTTPRequestHandler):
                 "playlists": row.get("playlists") or 0,
             } for row in rows]})
             return
+        if path == "/api/deletions":
+            # The durable half of "who deleted what". Admin-only, like deleting itself,
+            # and not the tombstones: this is the record of the act, not the songs.
+            if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+                self.json({"error": "Administrator required"}, 403)
+                return
+            import deletion
+            self.json({"deletions": deletion.history(store)})
+            return
         if path == "/api/library":
             from social import annotate
             try:
@@ -1725,8 +1734,9 @@ class Handler(BaseHTTPRequestHandler):
             self.json({"error": "Administrator required"}, 403)
             return
         try:
-            report = deletion.delete_track(store, tid,
-                                           delete_files=self.body().get("delete_file") is not False)
+            report = deletion.delete_track(
+                store, tid, delete_files=self.body().get("delete_file") is not False,
+                actor=self.member)
         except ValueError as error:
             self.json({"error": str(error)}, 404)
             return
@@ -1789,7 +1799,8 @@ class Handler(BaseHTTPRequestHandler):
             report.pop("_rows", None)
             self.json(report)
             return
-        report = deletion.apply(store, "playlist", pid, delete_files=delete_files)
+        report = deletion.apply(store, "playlist", pid, delete_files=delete_files,
+                                actor=self.member)
         queue.wake()
         self.json(report)
 
@@ -1807,7 +1818,8 @@ class Handler(BaseHTTPRequestHandler):
             report.pop("_rows", None)
             self.json(report)
             return
-        report = deletion.apply(store, "release", rid, delete_files=delete_files)
+        report = deletion.apply(store, "release", rid, delete_files=delete_files,
+                                actor=self.member)
         queue.wake()
         self.json(report)
 

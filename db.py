@@ -358,6 +358,25 @@ CREATE TABLE IF NOT EXISTS library_trash (
   created REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS library_trash_created ON library_trash(created, id);
+
+-- Who deleted what, and how much went with it. Unlike `logs` (trimmed to 400) and
+-- `activity` (trimmed to 4000, and a view of people's doings), this table is not pruned:
+-- a delete is rare and it is the one action that can take a file away, so its record
+-- outlives the noise. Written from deletion.py, which is the only code allowed to delete.
+CREATE TABLE IF NOT EXISTS library_deletions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  member_id TEXT NOT NULL DEFAULT '',
+  member_name TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL,
+  target_id INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL DEFAULT '',
+  tracks INTEGER NOT NULL DEFAULT 0,
+  files INTEGER NOT NULL DEFAULT 0,
+  bytes INTEGER NOT NULL DEFAULT 0,
+  detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS library_deletions_ts ON library_deletions(ts DESC, id DESC);
 """
 
 
