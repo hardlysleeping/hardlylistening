@@ -1,6 +1,6 @@
 // Actual Feed renderer slice: no network, DB, audio or live account.
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
-const html=fs.readFileSync('web/index.html','utf8');
+const html=fs.readFileSync('web/js/social-feed.js','utf8');
 const start=html.indexOf('function ago(ts)');
 const end=html.indexOf('async function loadActivity()',start);
 assert(start>=0&&end>start,'Feed renderer anchors exist');

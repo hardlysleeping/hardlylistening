@@ -6,13 +6,14 @@ Read this before changing the player, the queue, or anything they share.
 
 | File | Size | Owns |
 | --- | --- | --- |
-| `web/index.html` | ~420 KB | All markup and ~352 KB of inline script. No component CSS |
+| `web/index.html` | ~388 KB | All markup and the remaining inline script. No component CSS |
 | `web/styles/app.css` | small | The one stylesheet entry point: layer order and imports only |
 | `web/styles/*.css` | — | `tokens`, `base`, `layout`, `motion`, `utilities` (see `docs/frontend-css.md`) |
 | `web/styles/components/*.css` | — | One file per surface; the ownership contract is `docs/frontend-css.md` |
 | `web/preferences.js` | small | Likes/pins wrappers around the cards' controls |
 | `web/genres.js`, `web/lyrics.js`, `web/lifecycle.js` | small | Genre chips, lyrics, reload-on-new-version |
 | `web/js/repo-discovery.js` | ~30 KB | Releases, the follows and the artist/release pages (`JS-030`). A plain classic script loaded before the inline one; every name stays global, so nothing else had to change |
+| `web/js/social-feed.js` | ~12 KB | Feed = Activity: the day cards, the boost pin, the member profile dialog (`JS-031`). Same shape as the file above |
 
 There is no build step: the files above are what the server serves. A change is live on
 reload; there is nothing to compile. Components read the entry point's imports; never add a
@@ -115,6 +116,20 @@ is Activity only — what people did — because a release is catalogue, not act
 | The personal Library | one list, so the row and the two extra panes do not exist there (`activeRepoTab()` answers `browse`) |
 
 The new-releases badge (`#feedcount`) rides on the Repo tab, not on Feed.
+
+## Feed — Activity
+
+What people did: plays, additions, playlist edits, joins and renames. One collapsed card per
+member per day, five entries inside it, plus a boost pinned at the top for 24 hours.
+
+| Piece | Owner |
+| --- | --- |
+| Day card (one per member per day) | `actDayCard()`, `actDayLabel()`, `actDaySummary()`, `actGroup()`, `actSongLine()` in `web/js/social-feed.js`; `ACT_REVEAL` is the 5-entry reveal |
+| Boost pin | `actCard()` — the expiry countdown is computed from `expires_at`, and the list re-reads itself when the nearest one lapses |
+| List and its poll | `loadActivity()`; `#activitylist` is repainted, `activityExpiryTimer` is the boost's re-read |
+| Open cards survive a repaint | `openDays` (a `Set` of `member|day`) is re-applied by `bindActivityCards()` |
+| Member links, card toggles, "Show n more" | `bindActivityCards()`; a member name opens `openMember()` and `#memberdlg` |
+| Boosting | `boostTrack()` → `POST /api/boost`, then the list re-reads |
 
 ## Artist catalogue page
 
@@ -255,7 +270,8 @@ Changed states write `<state>.actual.png` next to the baseline for inspection.
 
 - **`index.html` is still a large inline script.** Markup, styling and behaviour can be
   reviewed independently now that the CSS has left, and the release/follow/artist half has
-  moved to `web/js/repo-discovery.js`; the rest is one block. A further split is a separate
+  moved to `web/js/repo-discovery.js`, and Activity to `web/js/social-feed.js`; the rest is one
+  block. A further split is a separate
   change: a classic script cannot use a `const` from a later script at load time, so
   load-time wiring stays in `index.html` after `const SVG`.
 - **Semantic class names.** `.st`, `.sartist`, `.salbum`, `.sdur`, `.send` and `.idx` are

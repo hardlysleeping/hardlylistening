@@ -1,6 +1,8 @@
 // Activity Feed day cards: collapsed by default, five at a time, no flooding.
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
-const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
+const html=fs.readFileSync('web/js/social-feed.js','utf8');const css=require('./_css.cjs').appCss();
+const indexHtml=fs.readFileSync('web/index.html','utf8');
+assert(indexHtml.includes('/js/social-feed.js'),'the page must load the file this test slices');
 const slice=html.slice(html.indexOf('function actWho(item){'),html.indexOf('async function loadActivity(){'));
 const helpers=[
   'const openDays=new Set(); const openedMembers=[];',
