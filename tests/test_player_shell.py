@@ -266,8 +266,12 @@ class Assembly(unittest.TestCase):
         self.assertFalse(target.exists())
 
     def test_the_output_directory_is_gitignored(self):
-        ignored = (APP_DIR / '.gitignore').read_text().splitlines()
-        self.assertIn('player/www/', [line.strip() for line in ignored])
+        # A deployed copy of the tree is not a git checkout and carries no ignore file, so
+        # this is a property of the repository, not of the running server.
+        ignore = APP_DIR / '.gitignore'
+        if not ignore.is_file():
+            self.skipTest('not a git checkout: no .gitignore to read')
+        self.assertIn('player/www/', [line.strip() for line in ignore.read_text().splitlines()])
 
 
 class Independence(unittest.TestCase):
