@@ -397,15 +397,28 @@ async function main() {
   // ---- a hostile id never reaches the store ----------------------------
   {
     const device = sandbox(base);
-    const before = device.store.tree().length;
+    /* What "nothing was written" has to mean: the sandbox is unchanged, and its parent gained no
+     * entry. The earlier version checked `root/../../etc`, which resolves to `/etc` whenever the
+     * temp directory is only one level deep -- an assertion that fails for the wrong reason and
+     * proves nothing wherever it passes. A traversal out of the account directory lands in one of
+     * these two places, so both are measured. */
+    const beforeTree = device.store.tree().join(",");
+    const parent = path.dirname(device.root);
     let refused = 0;
     for (const id of ["../../etc/passwd", "a/b", "..", "C:\\evil.mp3", "", "x".repeat(65)]) {
       const result = await device.api.download({ id: id, suffix: "mp3" });
       if (!result.ok) refused += 1;
     }
     check("a download for a hostile id is refused", refused === 6, String(refused));
-    check("and nothing was written", device.store.tree().length === before &&
-      !fs.existsSync(path.join(device.root, "..", "..", "etc")), device.store.tree().join(","));
+    check("and nothing was written inside the sandbox",
+      device.store.tree().join(",") === beforeTree, device.store.tree().join(","));
+    /* One level up is where a traversal can actually land unprivileged: `../../etc/passwd` from
+     * the account directory is two up, i.e. `/etc`, which no unprivileged write can create. Two
+     * targeted `existsSync` calls, not a listing -- the parent of the sandbox can hold thousands
+     * of entries and listing it proves nothing the two names do not. */
+    check("and nothing escaped next to the sandbox",
+      !fs.existsSync(path.join(parent, "etc")) && !fs.existsSync(path.join(parent, "passwd")),
+      parent);
     let threw = false;
     try {
       await device.store.invoke("offline_begin", { account: ACCOUNT_KEY, key: "../escape", suffix: "mp3" });
