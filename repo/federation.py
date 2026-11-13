@@ -19,15 +19,23 @@ Three rules, because the descriptor is untrusted in both directions:
 
 `dumps` is canonical — sorted keys, no whitespace, no NaN, UTF-8 — so two nodes that agree on the
 descriptor agree on its bytes. `parse` re-checks everything, because a descriptor off the wire is
-input, not truth. Nothing here writes to disk and nothing here reads a credential.
+input, not truth. Nothing here writes to disk and nothing here reads a credential — except the node
+identity at the end of this file, which is generated once under `paths.IDENTITY_DIR` and is never
+part of a descriptor.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import math
+import os
 import re
+import secrets
 from collections.abc import Mapping
+from pathlib import Path
+
+import paths
 
 #: Bumped when the carried fields or their meaning change; a reader refuses what it does not know.
 VERSION = 1
@@ -214,3 +222,94 @@ def parse(text) -> dict:
     except (TypeError, ValueError) as error:
         raise ValueError(f"not a descriptor: {error}") from None
     return validate(payload)
+
+
+# -- node identity (`FED-001`) --------------------------------------------------------------------
+#
+# The storage half of this lives in `paths.py`: `IDENTITY_DIR`, 0700, in the backup boundary and
+# carried across a move by the migration test. What was missing was the format and the rule, which
+# are here. Nothing calls these at boot: a fresh install gains its identity the first time
+# federation needs it, and an install that never federates never has key material to lose.
+
+#: Files under `paths.IDENTITY_DIR`. `node-id` is public — a peer has to be able to name this node,
+#: and the migration test already carries a hand-written one. `node-secret` is not.
+NODE_ID_FILE = "node-id"
+NODE_SECRET_FILE = "node-secret"
+
+#: 256 bits, the same length a symmetric signature would need, so a scheme can be chosen later
+#: without rotating every node's identity.
+SECRET_BYTES = 32
+
+
+def _read(path: Path) -> str:
+    """The file's text, or empty when it is not there. Anything else is the caller's problem."""
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def _create(path: Path, text: str, mode: int) -> bool:
+    """Write a file once, or leave the existing one alone. False means it already existed.
+
+    `O_EXCL` is the whole point: two processes starting together agree on one identity, and an
+    existing file is never rewritten — a node that regenerated its secret on every boot would not
+    be the same node two restarts in a row. `O_CREAT`'s mode is masked by the umask, so the last
+    word on permissions is an explicit `chmod`.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        handle = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    except FileExistsError:
+        return False
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        os.chmod(path, mode)
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return True
+
+
+def _ensure(name: str, make, mode: int) -> str:
+    """The file's contents: read if it exists, generated once if it does not.
+
+    An existing but empty file is not an invitation to write: it is a truncated identity (or
+    another process's half-written first start), and overwriting it would quietly re-key the node.
+    The readers turn that into an error instead.
+    """
+    path = paths.IDENTITY_DIR / name
+    value = _read(path)
+    if value:
+        return value
+    made = make()
+    if _create(path, made + "\n", mode):
+        return made
+    return _read(path)
+
+
+def _identity(name: str, make, mode: int) -> str:
+    text = _ensure(name, make, mode)
+    if not text:
+        raise RuntimeError(f"{name} is empty — restore it, or remove it to re-key")
+    return text
+
+
+def node_id() -> str:
+    """This node's public name: 32 lowercase hex characters, generated once, safe to log."""
+    return _identity(NODE_ID_FILE, lambda: secrets.token_hex(16), 0o644)
+
+
+def node_secret() -> bytes:
+    """The node's opaque key material: 32 random bytes, `0600`, generated once, never printed.
+
+    Never log it, never put it in a descriptor, never send it to a peer. It is a shared secret, not
+    half a keypair: the stdlib has no asymmetric signature and inventing one would be worse than
+    saying plainly that peer authentication is still open (`docs/federation.md` §3). An empty
+    secret file is an error rather than a regeneration — a lost secret is a lost identity, and
+    replacing it silently would let this node keep answering under a name it no longer proves.
+    """
+    text = _identity(NODE_SECRET_FILE, lambda: base64.urlsafe_b64encode(
+        secrets.token_bytes(SECRET_BYTES)).decode().rstrip("="), 0o600)
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))

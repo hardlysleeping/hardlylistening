@@ -18,7 +18,7 @@ separation → *Runtime boundary*; this document is the operational detail for t
 | ~ | 005 systemd unit — `deploy/hardlylistening.{service,env.example}` committed, never installed |
 | ✓ | 006 `deploy/install.sh` — user, directories, code copy, env file, `check`, unit, enable |
 | ✓ | 009 storage half — `IDENTITY_DIR` declared, created `0700`, in the backup boundary; Docker health in the image |
-| — | 009 key half — node-id/keypair generation and format are FED-001, not packaging |
+| ~ | 009 key half — node identity generated once by `repo/federation.py` (`FED-001`); peer signatures not built, see `docs/federation.md` §3 |
 
 The rule everything else follows from:
 
@@ -85,7 +85,7 @@ Application code is treated as read-only. **Never store user data inside it.**
 ```
 /var/lib/hardlylistening/
 ├── hardlylistening.db
-├── identity/                node-id, private-key, public-key          (0700)
+├── identity/                node-id, node-secret                        (0700)
 ├── cache/                   artwork/, browser-downloads/, artist-art/,
 │                            metadata/, federation/
 ├── podcasts/                one directory per member; episodes they chose to keep
@@ -445,9 +445,15 @@ node. This is why identity is in the backup boundary even though federation is n
 **Built (SERVER-PKG-009, storage half):** `IDENTITY_DIR = DATA_DIR/identity`, created by
 `ensure()` with mode `0700`, reported by `check`, named by `backup`, and carried across a move by
 `tests/test_migration.py` — which seeds a `node-id` file, migrates the instance the way §11 says
-to, and asserts the file arrived under the data directory unchanged. **Not built:** the key
-material itself. `node-id`, `private-key` and `public-key` in the diagram above are the intended
-contents, not files that exist.
+to, and asserts the file arrived under the data directory unchanged.
+
+**Built (FED-001, identity half):** `repo/federation.py` generates `node-id` (32 hex characters,
+`0644`) and `node-secret` (32 random bytes, base64url, `0600`) on first use, once, with `O_EXCL`
+creation that never rewrites an existing file; an empty secret is an error rather than a silent
+re-key. Nothing generates them at boot, so a fresh install's `identity/` stays empty until
+federation is actually used. **Not built:** an asymmetric keypair and peer signatures. The stdlib
+has no signature scheme and no dependency was added, so the secret is opaque symmetric material of
+the right size and the scheme is still open — `docs/federation.md` §3 says so plainly.
 
 ---
 

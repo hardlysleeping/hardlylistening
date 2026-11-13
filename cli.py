@@ -150,10 +150,10 @@ def check() -> int:
     add("database", db_ok, db_detail)
 
     # -- identity -----------------------------------------------------------------
-    # Federation identity is not implemented (FED-001 owns the format), so this checks the
-    # directory, not keys. It is reported only for a declared install: a checkout has no
-    # `identity/` and `ensure()` deliberately creates nothing there. A group- or world-listable
-    # identity directory is a warning, not a failure — the files inside are what must be 600.
+    # The node identity exists only once federation has asked for it (`repo/federation.py`), so
+    # this checks the directory and creates nothing — a checkout has no `identity/` at all. A
+    # group- or world-listable identity directory is a warning, not a failure — the files inside
+    # are what must be 600.
     if paths.DECLARED:
         if paths.IDENTITY_DIR.is_dir():
             mode = stat.S_IMODE(paths.IDENTITY_DIR.stat().st_mode)

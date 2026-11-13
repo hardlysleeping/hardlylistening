@@ -150,3 +150,13 @@ def descriptor_json(descriptor: dict) -> str:
 def parse_descriptor(text: str) -> dict:
     """A descriptor from a peer: input, not truth, so it is fully re-checked before use."""
     return _federation.parse(text)
+
+
+def node_id() -> str:
+    """This node's public federation name — generated once, safe to log.
+
+    The secret answers the same question and is deliberately **not** on this facade: nothing
+    outside `repo/federation.py` has a reason to hold it, and the only way to leak it is to hand
+    it to code that does not need it.
+    """
+    return _federation.node_id()

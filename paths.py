@@ -52,10 +52,10 @@ PODCAST_DIR = DATA_DIR / "podcasts"
 STATE_DIR = DATA_DIR / "state"
 TMP_DIR = DATA_DIR / "tmp"
 
-#: Node identity for federation. **Storage only**: nothing generates or reads key material here
-#: yet — FED-001 owns the format — but the directory is in the backup boundary and has to survive
-#: an application replacement, so it is declared and created with the rest of the mutable state.
-#: Private: 0700, because the day keys appear they must not be world-listable.
+#: Node identity for federation. **Storage**: `repo/federation.py` generates `node-id` and
+#: `node-secret` here on first use, never at boot, and never rewrites a file that already exists
+#: (FED-001; `docs/federation.md` §3). The directory is in the backup boundary and has to survive
+#: an application replacement. Private: 0700, and `node-secret` is 0600.
 IDENTITY_DIR = DATA_DIR / "identity"
 
 #: The database file: an explicit path wins, otherwise it sits in the data directory.

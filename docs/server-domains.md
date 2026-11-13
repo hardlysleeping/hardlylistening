@@ -89,7 +89,7 @@ Packages:
 | `engine/` | Repo | acquisition queue and scheduler |
 | `downloaders/` | Repo | yt-dlp invocation and AI match helpers |
 | `providers/` | Repo | provider adapters (SoundCloud, Apple Music, generic) |
-| `repo/` | Repo | `service.py`: the entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue, and the acquisition descriptor (`federation.py`, which nothing outside the package may import except `service.py`) |
+| `repo/` | Repo | `service.py`: the entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue; `federation.py` holds the acquisition descriptor and the node identity, and nothing outside the package may import it except `service.py` |
 | `discovery/` | Repo | artist profile, subscriptions, tracklist — the provider-facing reads `repo/service.py` delegates to |
 | `library/` | **Repo today, Library tomorrow** | artwork, art store, id3 art, imports, import rules, metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser export, playlist views — see §7 |
 | `tools/` | none | operator scripts, not imported by the server |
