@@ -59,6 +59,21 @@ DESKTOP = APP_DIR / 'desktop'
 LAUNCHER = APP_DIR / 'bin' / 'hardlylistening-server'
 ENTRY_MODULE = 'cli'                       # what `bin/hardlylistening-server` execs
 
+
+def _host_module(name: str):
+    """A shell module, loaded by path — the shell is not a package on `sys.path` here."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(f'host_{name}_under_test',
+                                                  DESKTOP / 'host' / f'{name}.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+resolve = _host_module('resolve')
+setup = _host_module('setup')
+mode = _host_module('mode')
+
 #: A host's vocabulary. Each pattern is a *mention*, in code or in a comment: a docstring that
 #: says "copied to `desktop/tools`" is still the server knowing a shell exists.
 #:
@@ -920,24 +935,48 @@ class TheOnlyEdgeIsTheLauncher(unittest.TestCase):
     def test_the_wizards_writes_are_the_state_file_and_the_answered_folder(self):
         """HOST-002's two writes: `setup.json` beside `host.json`, and the folder the person chose.
 
-        The wizard is a *third* resolver, not a reuse of HOST-003's or HOST-005's: `setup.py` has
-        its own `setup_path()` and `wizard.rs` its own `state_path()`, both mirroring
-        `resolve.config_path().parent`. That mirroring is the drift risk, so it is compared here
-        rather than trusted, and the Python writer's bare `path` parameter — its only caller is the
-        Rust command — is what `CALLER_CHOSEN` exempts; this test is the reason it may be exempt.
+        HOST-008 collapsed the Python resolvers: `setup_path()` is `resolve.state_dir()` plus its
+        own file name, so it carries no override, XDG base or directory constant of its own. The
+        Rust twin still resolves the same directory by hand — it cannot import Python — and this
+        test keeps the two agreeing, which is what makes the Python copy the spec rather than a
+        third opinion. The Python writer's bare `path` parameter — its only caller is the Rust
+        command — is what `CALLER_CHOSEN` exempts; this test is the reason it may be exempt.
         """
-        setup = (DESKTOP / 'host' / 'setup.py').read_text()
-        resolve = (DESKTOP / 'host' / 'resolve.py').read_text()
-        # The wizard's producer builds the same directory as the shell's config file: same
-        # override, same XDG base, and the shared CONFIG_NAME constant rather than a second copy.
-        producer = setup[setup.index('def setup_path'):]
+        setup_path = DESKTOP / 'host' / 'setup.py'
+        resolve_path = DESKTOP / 'host' / 'resolve.py'
+        setup_source = setup_path.read_text()
+        resolve_source = resolve_path.read_text()
+        producer = setup_source[setup_source.index('def setup_path'):]
         producer = producer[:producer.index('\ndef ')]
-        for shared in ('HARDLYLISTENING_DESKTOP_CONFIG', 'XDG_STATE_HOME', 'CONFIG_NAME'):
-            self.assertIn(shared, producer, f'setup_path() no longer mirrors config_path(): {shared}')
-        self.assertIn("CONFIG_NAME = 'hardlylistening-desktop'", setup)
-        self.assertIn("CONFIG_NAME = 'hardlylistening-desktop'", resolve)
-        self.assertIn('resolve.config_path', setup,
-                      'setup.py should say which resolver it mirrors')
+        # One resolver: the wizard names it and copies none of its rules.
+        self.assertIn('resolve.state_dir(', producer,
+                      'setup_path() should call the resolver, not rebuild it')
+        for copied in ('XDG_STATE_HOME', 'HARDLYLISTENING_DESKTOP_CONFIG', 'CONFIG_NAME',
+                       "'.local'"):
+            self.assertNotIn(copied, producer,
+                             f'setup_path() copied {copied} instead of asking the resolver')
+        # And the resolver is where those rules do live.
+        state_dir = resolve_source[resolve_source.index('def state_dir'):]
+        state_dir = state_dir[:state_dir.index('\ndef ')]
+        for rule in ('HARDLYLISTENING_DESKTOP_CONFIG', 'XDG_STATE_HOME', 'CONFIG_NAME'):
+            self.assertIn(rule, state_dir, f'resolve.state_dir() lost {rule}')
+        # Behaviour, not shape: the three files land in one directory, under every override.
+        cases = ({}, {'XDG_STATE_HOME': '/tmp/hl-state'},
+                 {'HARDLYLISTENING_DESKTOP_CONFIG': '/tmp/hl-other/host.json'})
+        for env in cases:
+            directory = resolve.state_dir(env)
+            self.assertEqual(setup.setup_path(env), directory / 'setup.json', env)
+            self.assertEqual(mode.mode_path(env), directory / 'mode.json', env)
+            self.assertEqual(resolve.config_path(env), directory / 'host.json', env)
+        self.assertEqual(setup.setup_path({}, Path('/tmp/hl-config/host.json')),
+                         Path('/tmp/hl-config/setup.json'),
+                         'a caller that already resolved the config must move the wizard with it')
+        self.assertIn("CONFIG_NAME = 'hardlylistening-desktop'", resolve_source)
+        self.assertIn('MUSIC_SUFFIX = resolve.MUSIC_SUFFIX', setup_source,
+                      'the installer folders should alias the resolver, not repeat it')
+        for copied in ("MUSIC_SUFFIX = '", "XDG_DATA_SUFFIX = '", "DATA_LEAF = 'hardlylistening'"):
+            self.assertNotIn(copied, setup_source,
+                             f'setup.py still holds its own {copied.strip()}')
         # The Rust twin resolves the same directory to the same file.
         wizard = (DESKTOP / 'src-tauri' / 'src' / 'wizard.rs').read_text()
         resolver = wizard[wizard.index('fn state_path()'):]
@@ -962,9 +1001,43 @@ class TheOnlyEdgeIsTheLauncher(unittest.TestCase):
         self.assertIn('let path = state_path();', save)
         self.assertIn('write_state(&path,', save)
         # The other write is the data folder, and it comes from the wizard's own answer.
-        self.assertIn('prepare_data_dir', setup)
-        self.assertIn('validate_data_dir(', setup)
+        self.assertIn('prepare_data_dir', setup_source)
+        self.assertIn('validate_data_dir(', setup_source)
         self.assertIn('data_dir_of(&checked)', save)
+
+    def test_the_shell_has_one_path_resolver_in_python(self):
+        """HOST-008: `resolve.py`, or a file that says why it is not.
+
+        Three modules used to build the same XDG directory by hand — `setup.py` for `setup.json`,
+        `mode.py` for `mode.json`, `resolve.py` for `host.json` — and the accepted cost was a
+        test keeping three copies equal. They are one call now, so the assertion can be the
+        stronger one: the expressions that decode `XDG_STATE_HOME` exist in exactly one place.
+        A module that needs a *different* location (the autostart entry is XDG config, not state)
+        is outside this rule by being a different variable, not by being excused.
+        """
+        host = DESKTOP / 'host'
+        rules = {
+            "env.get('XDG_STATE_HOME')": {'resolve.py'},
+            "Path.home() / '.local' / 'state'": {'resolve.py'},
+            "env.get('XDG_DATA_HOME')": {'resolve.py'},
+        }
+        for needle, expected in rules.items():
+            found = {path.name for path in sorted(host.glob('*.py'))
+                     if needle in path.read_text()}
+            self.assertEqual(found, expected,
+                             f'{needle} is decoded in {sorted(found) or "nowhere"}')
+        # Every caller that needs the directory asks for it rather than rebuilding it.
+        # `lifecycle.py` is the third shape and already right: it takes a config path that
+        # `resolve.config_path()` produced and writes beside it, which the handoff test pins.
+        for name in ('setup.py', 'mode.py'):
+            text = (host / name).read_text()
+            self.assertIn('resolve.state_dir(', text,
+                          f'{name} should ask resolve for the state directory')
+        # The aliases exist so the Rust mirror test has one name to compare, and they are aliases.
+        setup_source = (host / 'setup.py').read_text()
+        for shared in ('CONFIG_NAME', 'MUSIC_SUFFIX', 'XDG_DATA_SUFFIX', 'DATA_LEAF'):
+            self.assertIn(f'{shared} = resolve.{shared}', setup_source,
+                          f'setup.py lost the alias for {shared}')
 
     def test_the_write_scan_bites(self):
         """Negative controls: the narrowed rule still fails on the writes it exists for.

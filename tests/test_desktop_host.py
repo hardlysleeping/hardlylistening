@@ -217,6 +217,19 @@ class RustMirrorsTheTestedRules(unittest.TestCase):
             expected = getattr(resolve, name)
             self.assertEqual(str(value), str(expected), f'{name} drifted between Rust and Python')
 
+    def test_the_rust_state_directory_is_the_python_one(self):
+        """HOST-008: `resolve.py` is the resolver, so its two file names are the spec.
+
+        `host.rs` cannot import it, so the directory and file names are its own constants —
+        pinned here rather than trusted, and pinned to the module the wizard's aliases also
+        point at, which is what makes one resolver mean one name everywhere.
+        """
+        for name, expected in (('CONFIG_DIR', resolve.CONFIG_NAME),
+                               ('CONFIG_FILE', resolve.CONFIG_FILE)):
+            match = re.search(rf'const {name}: &str = "([^"]+)";', self.rust)
+            self.assertIsNotNone(match, f'{name} is not declared in host.rs')
+            self.assertEqual(match.group(1), expected, f'{name} drifted from resolve.py')
+
     def test_the_rust_launcher_name_is_the_python_one(self):
         match = re.search(r'pub const LAUNCHER_NAME: &str = "([^"]+)"', self.rust)
         self.assertIsNotNone(match)

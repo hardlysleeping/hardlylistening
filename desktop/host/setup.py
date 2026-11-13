@@ -28,11 +28,31 @@ noticing; this module keeps that true by importing nothing but the standard libr
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import tempfile
 from pathlib import Path
 from typing import Mapping
+
+
+def _resolve_module():
+    """`resolve.py` is the tested spec for this install's paths; borrow it, never copy it.
+
+    Loaded as a sibling so this file works when imported as `host.setup` *and* when it is loaded
+    by path, as the tests do. The same shim, for the same reason, is in `lifecycle.py`.
+    """
+    try:
+        from . import resolve as module
+    except ImportError:
+        path = Path(__file__).resolve().parent / 'resolve.py'
+        spec = importlib.util.spec_from_file_location('hardlylistening_desktop_resolve', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return module
+
+
+resolve = _resolve_module()
 
 #: The state file's own schema version. A file this module did not write is reported, not guessed
 #: at, and a newer version is left alone rather than silently downgraded.
@@ -64,15 +84,15 @@ NAME_MAX = 64
 
 DEFAULT_SERVER_NAME = 'HardlyListening'
 
-#: Relative to the person's home, and both mirror a server default: `db.DEFAULTS['root']` for the
-#: media root, and the XDG data layout for an install that is not a checkout.
-MUSIC_SUFFIX = 'Music/HardlyListening'
-XDG_DATA_SUFFIX = '.local/share'
-DATA_LEAF = 'hardlylistening'
+#: The installer's folders and the state directory belong to `resolve.py`, which is the one
+#: resolver: `host.json`, `setup.json` and `mode.json` come from the same place. These are aliases
+#: rather than copies, and `wizard.rs` is held to them by `tests/test_host_wizard.py`.
+MUSIC_SUFFIX = resolve.MUSIC_SUFFIX
+XDG_DATA_SUFFIX = resolve.XDG_DATA_SUFFIX
+DATA_LEAF = resolve.DATA_LEAF
+CONFIG_NAME = resolve.CONFIG_NAME
 
-#: The shell's state directory. The same name `resolve.CONFIG_NAME` uses, so `setup.json` and
-#: `host.json` sit beside each other; the test compares the two constants rather than trusting it.
-CONFIG_NAME = 'hardlylistening-desktop'
+#: The one name that is the wizard's own: the file it writes into that directory.
 SETUP_FILE = 'setup.json'
 DB_NAME = 'hardlylistening.db'
 
@@ -246,41 +266,29 @@ def check_value(field: str, value) -> str:
 
 # ---- defaults ------------------------------------------------------------
 def default_music_dir(home: Path | str | None = None) -> str:
-    """`~/Music/HardlyListening` — the server's own default root (`db.DEFAULTS['root']`)."""
-    return str((Path(home) if home is not None else Path.home()) / MUSIC_SUFFIX)
+    """`~/Music/HardlyListening` — `resolve.default_music_dir`, which is where the rule lives."""
+    return resolve.default_music_dir(home)
 
 
 def default_data_dir(env: Mapping[str, str] | None = None,
                      home: Path | str | None = None) -> str:
-    """The XDG data location for this app: `~/.local/share/hardlylistening` by default."""
-    env = os.environ if env is None else env
-    declared = _text(env.get('XDG_DATA_HOME'))
-    base = Path(declared).expanduser() if declared else (
-        Path(home) if home is not None else Path.home()) / XDG_DATA_SUFFIX
-    return str(base / DATA_LEAF)
+    """The XDG data location — `resolve.default_data_dir`, not a second copy of the layout."""
+    return resolve.default_data_dir(env, home)
 
 
 def defaults(env: Mapping[str, str] | None = None, home: Path | str | None = None) -> dict:
     """What the window pre-fills. A suggestion, never a saved answer."""
-    return {'music_dir': default_music_dir(home), 'data_dir': default_data_dir(env, home)}
+    return resolve.install_defaults(env, home)
 
 
 # ---- the state file ------------------------------------------------------
 def setup_path(env: Mapping[str, str] | None = None, config: Path | None = None) -> Path:
-    """`setup.json`, beside the shell's `host.json` and behind the same override.
+    """`setup.json`, in the directory `resolve.state_dir()` names — beside `host.json`.
 
-    `HARDLYLISTENING_DESKTOP_CONFIG` names the shell's config *file*; the wizard's state is its
-    sibling. The test compares this with `resolve.config_path(...).parent` so the two cannot drift.
+    The override, the XDG base and the directory name are the resolver's, so the wizard's state
+    cannot end up somewhere the shell's config is not. Only the file name is this module's.
     """
-    env = os.environ if env is None else env
-    declared = _text(env.get('HARDLYLISTENING_DESKTOP_CONFIG'))
-    if declared:
-        return Path(declared).expanduser().parent / SETUP_FILE
-    if config is not None:
-        return Path(config).parent / SETUP_FILE
-    state = _text(env.get('XDG_STATE_HOME'))
-    base = Path(state).expanduser() if state else Path.home() / '.local' / 'state'
-    return base / CONFIG_NAME / SETUP_FILE
+    return resolve.state_dir(env, config) / SETUP_FILE
 
 
 def read_state(path: Path) -> tuple[dict, str]:

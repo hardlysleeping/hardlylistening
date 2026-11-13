@@ -121,13 +121,21 @@ Two writes are pinned by name rather than by the generic rule. HOST-003's: in bo
 `host/lifecycle.py` every write target resolves to `state_path(config)`, every `let config = …` in the
 crate is `host::config_path()`, and that resolver reads `XDG_STATE_HOME` or
 `HARDLYLISTENING_DESKTOP_CONFIG` and never `app_dir`, `resource_dir`, `current_exe` or `launcher`.
-HOST-002's: the wizard is a **third resolver, not a reuse of the other two** — `host/setup.py` has its
-own `setup_path()` and `wizard.rs` its own `state_path()`, each mirroring
-`resolve.config_path().parent` instead of calling it. That duplication is a drift risk, so the test
-compares the constants and the override names rather than trusting them, and `setup.py`'s `write_state`
-— a library function whose caller is the Rust command, not another Python module — is exempted only
-because that test also proves it has no caller inside `desktop/` and that the Rust twin binds
-`let path = state_path()` before writing. Add a Python caller and the exemption fails first.
+HOST-002's: the wizard writes `setup.json` beside `host.json`, and since HOST-008 that is not a
+second resolver — `setup_path()` is `resolve.state_dir()` plus its own file name, and `mode_path()`
+is the same call plus `mode.json`. `host.json`, `setup.json` and `mode.json` therefore cannot land
+in different directories, and the override that moves one moves all three. The test asserts the
+stronger thing now: the expressions that decode `XDG_STATE_HOME` and `XDG_DATA_HOME` exist in
+exactly one module, `resolve.py`, and the install defaults are aliases (`MUSIC_SUFFIX =
+resolve.MUSIC_SUFFIX`) rather than copies. `settings.py` keeps `XDG_CONFIG_HOME`, which is the
+autostart entry's own location — a different variable, not an exception.
+
+The Rust cannot import Python, so `wizard.rs` still decodes `XDG_STATE_HOME` itself; that copy is
+pinned to the Python constants by `tests/test_host_wizard.py` and to the override names here, which
+is the honest limit of a mirror. `setup.py`'s `write_state` — a library function whose caller is the
+Rust command, not another Python module — is exempted only because the test also proves it has no
+caller inside `desktop/` and that the Rust twin binds `let path = state_path()` before writing. Add
+a Python caller and the exemption fails first.
 
 A negative control feeds synthetic writes into the app root, into `bin/…/server.py`, into
 `web/index.html` and into the database path, and requires each to trip the scan; another requires a

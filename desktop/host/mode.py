@@ -24,12 +24,32 @@ opens a socket or writes a file.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import socket
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
+
+
+def _resolve_module():
+    """`resolve.py` owns this install's paths; borrow it, never copy it.
+
+    Loaded as a sibling so this file works when imported as `host.mode` *and* when it is loaded
+    by path, as the tests do. The same shim is in `lifecycle.py` and `setup.py`.
+    """
+    try:
+        from . import resolve as module
+    except ImportError:
+        path = Path(__file__).resolve().parent / 'resolve.py'
+        spec = importlib.util.spec_from_file_location('hardlylistening_desktop_resolve', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return module
+
+
+resolve = _resolve_module()
 
 #: The two axes' defaults. A first run is the ordinary install: one local server, used here.
 DEFAULT_RUN_LOCAL_SERVER = True
@@ -44,10 +64,10 @@ TARGETS = ('local', 'remote')
 SCHEMES = ('https', 'http')
 PREFERRED_SCHEME = 'https'
 
-#: The same XDG state directory `resolve.py` uses, and its own file: `host.json` is the address
-#: the local server lives at (HOST-005 writes it), `mode.json` is the two choices below. Keeping
-#: them apart means a settings write cannot lose the mode choice, and vice versa.
-CONFIG_NAME = 'hardlylistening-desktop'
+#: Its own file in the resolver's state directory: `host.json` is the address the local server
+#: lives at (HOST-005 writes it), `mode.json` is the two choices below. Keeping them apart means a
+#: settings write cannot lose the mode choice, and vice versa.
+CONFIG_NAME = resolve.CONFIG_NAME
 MODE_FILE = 'mode.json'
 MODE_VERSION = 1
 
@@ -408,16 +428,14 @@ def with_target(current: Mode, target: str, remote_origin: Origin | None = None)
 # --------------------------------------------------------------------------------------
 
 def mode_path(env: Mapping[str, str] | None = None) -> Path:
-    """`<XDG_STATE_HOME>/hardlylistening-desktop/mode.json`.
+    """`<XDG_STATE_HOME>/hardlylistening-desktop/mode.json`, from `resolve.state_dir()`.
     `HARDLYLISTENING_DESKTOP_MODE` overrides it, as its sibling variable does for `host.json`.
     """
     env = os.environ if env is None else env
     declared = (env.get('HARDLYLISTENING_DESKTOP_MODE') or '').strip()
     if declared:
         return Path(declared).expanduser()
-    state = (env.get('XDG_STATE_HOME') or '').strip()
-    base = Path(state).expanduser() if state else Path.home() / '.local' / 'state'
-    return base / CONFIG_NAME / MODE_FILE
+    return resolve.state_dir(env) / MODE_FILE
 
 
 def read_mode(path: Path) -> tuple[dict, str]:

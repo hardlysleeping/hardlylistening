@@ -44,6 +44,14 @@ DEFAULT_PORT = 8470
 CONFIG_NAME = 'hardlylistening-desktop'
 CONFIG_FILE = 'host.json'
 
+#: The two folders the first-run wizard suggests: the server's own default media root, and the
+#: XDG data location for an install that is not a checkout. They are here, next to the address
+#: rules, because they are the same kind of decision — where this install keeps its things — and
+#: `setup.py` used to resolve them a second time.
+MUSIC_SUFFIX = 'Music/HardlyListening'
+XDG_DATA_SUFFIX = '.local/share'
+DATA_LEAF = 'hardlylistening'
+
 #: Hosts that mean "this machine". `0.0.0.0` and `::` are listen-anywhere addresses: they are
 #: not reachable as written, so the probe (and the browser) uses loopback.
 _LOOPBACK = {'127.0.0.1', 'localhost', '::1', '[::1]'}
@@ -159,15 +167,49 @@ def _is_loopback_v6(host: str) -> bool:
     return host in ('::1', '0:0:0:0:0:0:0:1')
 
 
-def config_path(env: Mapping[str, str] | None = None) -> Path:
-    """Where the shell remembers host/port. `HARDLYLISTENING_DESKTOP_CONFIG` overrides it."""
+def state_dir(env: Mapping[str, str] | None = None, config: Path | str | None = None) -> Path:
+    """The one directory the shell's own files live in: `host.json`, `setup.json`, `mode.json`.
+
+    This is the resolver. `config_path()`, `setup.setup_path()` and `mode.mode_path()` all call
+    it, so the three files cannot end up in different places, and the override that moves one
+    moves all of them. `config` is what a caller already resolved (`resolve(..., path=…)`),
+    so a test or a future command can point the whole set at one temporary directory.
+    """
+    if config is not None:
+        return Path(config).expanduser().parent
     env = os.environ if env is None else env
     declared = (env.get('HARDLYLISTENING_DESKTOP_CONFIG') or '').strip()
     if declared:
-        return Path(declared).expanduser()
+        return Path(declared).expanduser().parent
     state = (env.get('XDG_STATE_HOME') or '').strip()
     base = Path(state).expanduser() if state else Path.home() / '.local' / 'state'
-    return base / CONFIG_NAME / CONFIG_FILE
+    return base / CONFIG_NAME
+
+
+def config_path(env: Mapping[str, str] | None = None) -> Path:
+    """Where the shell remembers host/port. `HARDLYLISTENING_DESKTOP_CONFIG` overrides it."""
+    return state_dir(env) / CONFIG_FILE
+
+
+def default_music_dir(home: Path | str | None = None) -> str:
+    """`~/Music/HardlyListening` — the server's own default root (`db.DEFAULTS['root']`)."""
+    return str((Path(home) if home is not None else Path.home()) / MUSIC_SUFFIX)
+
+
+def default_data_dir(env: Mapping[str, str] | None = None,
+                     home: Path | str | None = None) -> str:
+    """The XDG data location for this app: `~/.local/share/hardlylistening` by default."""
+    env = os.environ if env is None else env
+    declared = (env.get('XDG_DATA_HOME') or '').strip()
+    base = Path(declared).expanduser() if declared else (
+        Path(home) if home is not None else Path.home()) / XDG_DATA_SUFFIX
+    return str(base / DATA_LEAF)
+
+
+def install_defaults(env: Mapping[str, str] | None = None,
+                     home: Path | str | None = None) -> dict:
+    """What the wizard pre-fills. A suggestion, never a saved answer."""
+    return {'music_dir': default_music_dir(home), 'data_dir': default_data_dir(env, home)}
 
 
 def read_config(path: Path) -> tuple[dict, str]:
