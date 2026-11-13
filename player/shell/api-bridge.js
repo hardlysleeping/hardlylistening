@@ -87,8 +87,8 @@
     [/^\/api\/add$/, "the player never acquires music: it asks a server you already have"],
     [/^\/api\/import(\/.*)?$/, "importing files is a host feature; the player has nothing to "
       + "import them into"],
-    [/^\/api\/search$/, "the player does not download songs, so the acquisition search has "
-      + "nothing to queue"],
+    [/^\/api\/search$/, "the player never acquires music: every song it plays comes from the "
+      + "server you already have, so an acquisition search has nothing to queue"],
     [/^\/api\/library\/(grab|move|verify|export|tempo|titles)$/, "that changes the host's own "
       + "library; this player only reads from your server"],
     [/^\/api\/track\/[^/]+\/(source|skip|retry|move|delete|unpick|restore|candidates)$/,
