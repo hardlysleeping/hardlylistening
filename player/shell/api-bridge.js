@@ -105,8 +105,12 @@
       "the download queue and its history are the host's"],
     [/^\/api\/subscriptions(\/.*)?$/, "podcast subscriptions are the host's own feed store; "
       + "this player reads one music server and has none to subscribe to"],
-    [/^\/api\/listening\/(devices|ui|theme|preferences|pin-order|export)\b.*$/,
-      "that is the host's own member state, not something Subsonic carries"],
+    [/^\/api\/listening\/(devices|ui|theme|preferences|pin-order|export|eq|playback|cues)\b.*$/,
+      "that is the host's own member state — the equaliser, the playback session and a track's "
+      + "cue points live in the host's database, and Subsonic carries none of them"],
+    [/^\/api\/stats(\/.*)?$/,
+      "listening statistics are counted by the host's own database; the server this player talks "
+      + "to keeps no such history to count"],
   ];
 
   /* ------------------------------------------------------------------ state */

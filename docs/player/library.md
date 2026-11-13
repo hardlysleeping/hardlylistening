@@ -102,7 +102,8 @@ something true instead of quietly doing nothing:
 | `/api/boost`, `/api/social*`, `/api/activity*`, `/api/feed*` | the activity feed arrives with its own card |
 | `/api/{settings,preferences,profile,members,member,account,admin,auth,signup-invite}*` | accounts and server settings are the host backend's |
 | `/api/{queue,pause,cooldown,decisions,deletions,deleted,trash}*` | the download queue and its history |
-| `/api/listening/{devices,ui,theme,preferences,pin-order,export}*` | the host's own member state, which Subsonic does not carry |
+| `/api/listening/{devices,ui,theme,preferences,pin-order,export,eq,playback,cues}*` | the host's own member state — the equaliser, the playback session and a track's cue points are rows in the host's database |
+| `/api/stats*` | listening statistics are counted by the host's database; a Subsonic server keeps no such history |
 
 `tests/test_player_library.cjs` reads every `/api/…` literal out of `web/index.html`,
 `web/js/library.js`, `web/js/playback-queue.js`, `web/js/social-feed.js` and `web/lifecycle.js`
