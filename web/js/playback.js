@@ -27,8 +27,8 @@
    again. That is what makes a suspended page resume in the right place instead of replaying a
    queue of stale decisions: there is no queue of decisions to replay. What this cannot fix is the
    process itself — if the platform freezes the WebView, audio stops with it; keeping audio alive
-   in the background is the platform project's job (an audio session / foreground service in
-   `src-tauri/`), not a script's. See `docs/player/playback.md`.
+   in the background is the wrapper's job (an audio session or a foreground service, declared
+   outside the web assets), not a script's. See `docs/player/playback.md`.
 
    Loaded as a classic script with no build step, like the rest of the app: `PlayerPlayback` is
    the API, and nothing runs until `attach()` is called with the app's own element and queue, so
