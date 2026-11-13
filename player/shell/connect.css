@@ -1,0 +1,117 @@
+/* The connect screen's layout only. Colours, radii, element defaults and focus rings come
+   from the app's assembled tokens.css and base.css; what is missing there is the page frame
+   (the app's index.html supplies its own) and the password field.
+
+   Nothing here is a new visual language: same panel, same line, same accent, same radius. */
+html {
+  height: 100%;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  touch-action: manipulation;
+}
+
+.connect-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+
+.brand {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brand span {
+  color: var(--accent);
+}
+
+h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 18px 0 6px;
+}
+
+p {
+  margin: 0 0 14px;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin: 12px 0 6px;
+}
+
+/* base.css names text and number inputs; a password field is the same control. */
+input[type=password] {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font: inherit;
+  width: 100%;
+  min-height: 42px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+input:focus {
+  border-color: var(--accent);
+}
+
+button[type=submit] {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.msg {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 1em;
+}
+
+.msg.err {
+  color: var(--err);
+}
+
+.msg.ok {
+  color: var(--ok);
+}
+
+.fine {
+  margin: 18px 0 0;
+  color: var(--dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  body {
+    touch-action: pan-x pan-y;
+  }
+}

@@ -1,0 +1,28 @@
+[package]
+name = "hardlylistening-player"
+version = "0.1.0"
+description = "A player for any Subsonic / OpenSubsonic server: a Tauri 2 shell around the app's own web UI"
+edition = "2021"
+rust-version = "1.77.2"
+
+# The library is what iOS and Android link against (staticlib for Apple, cdylib for Android),
+# and `rlib` is what the desktop binary here uses. One crate, three targets, no per-platform
+# copy of the code.
+[lib]
+name = "hardlylistening_player"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# No plugins: the window, the asset protocol and the OS WebView are the whole surface. A
+# fetcher, a keychain and an audio background mode are each a later card with a named need.
+tauri = { version = "2", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

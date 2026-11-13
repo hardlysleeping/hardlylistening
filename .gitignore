@@ -15,5 +15,10 @@ __pycache__/
 node_modules/
 edge-fallback/.wrangler/
 
+# player build output: `player/www/` is assembled from web/ by player/assemble.mjs
+player/www/
+player/src-tauri/target/
+player/src-tauri/gen/
+
 # visual snapshot failures
 *.actual.png

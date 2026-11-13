@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HardlyListening Player",
+  "version": "0.1.0",
+  "identifier": "ing.hardlysleep.listening.player",
+  "build": {
+    "frontendDist": "../www",
+    "beforeDevCommand": "node assemble.mjs",
+    "beforeBuildCommand": "node assemble.mjs"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HardlyListening Player",
+        "url": "connect.html",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 360,
+        "minHeight": 520,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "A player for any Subsonic server",
+    "longDescription": "HardlyListening Player is a client for a Subsonic or OpenSubsonic server you already run. The library stays on that server; this is the window onto it.",
+    "iOS": {
+      "minimumSystemVersion": "13.0"
+    },
+    "android": {
+      "minSdkVersion": 24
+    }
+  }
+}

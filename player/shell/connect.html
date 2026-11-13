@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connect a server · HardlyListening</title>
+<!-- The app's own values and element defaults, assembled from web/styles by assemble.mjs.
+     The gate is meant to look like the thing behind it, so there is no second palette here. -->
+<link rel="stylesheet" href="./styles/tokens.css">
+<link rel="stylesheet" href="./styles/base.css">
+<link rel="stylesheet" href="./connect.css">
+</head>
+<body>
+<main class="connect-card">
+  <div class="brand">Hardly<span>Listening</span></div>
+  <h1>Connect your server</h1>
+  <p>This player asks a Subsonic or OpenSubsonic server for your music. Your library stays
+    on that server: nothing is downloaded here, and no second catalogue is kept.</p>
+
+  <form id="connect-form" novalidate>
+    <label for="server">Server address</label>
+    <input id="server" name="server" type="text" inputmode="url" autocomplete="url"
+      spellcheck="false" autocapitalize="off" placeholder="https://music.example.com" required>
+
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" autocomplete="username"
+      spellcheck="false" autocapitalize="off" required>
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+    <button type="submit" id="connect-go" class="primary">Connect</button>
+  </form>
+
+  <div id="connect-msg" class="msg" role="status" aria-live="polite"></div>
+
+  <p class="fine">The address, username and password are held in memory for this session and
+    nowhere else — no file, no cookie, no browser storage. Remembering them in the system
+    keychain is the next card, PLAYER-002.</p>
+</main>
+<script src="./connect.js"></script>
+</body>
+</html>

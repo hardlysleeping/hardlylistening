@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The one window the player opens, with the core defaults and nothing else: no filesystem, no shell, no Rust-side HTTP. Requests to a music server come from the assembled front end's own fetch.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
