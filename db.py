@@ -441,6 +441,12 @@ ADDED_COLUMNS = {
         # have to re-create anything; every read path filters these out.
         "deleted": "REAL DEFAULT 0",
     },
+    "listening_podcast_episodes": {
+        # HL-209: a downloaded episode is a file this member owns, with its own bytes.
+        "file": "TEXT NOT NULL DEFAULT ''",
+        "bytes": "INTEGER NOT NULL DEFAULT 0",
+        "downloaded": "REAL NOT NULL DEFAULT 0",
+    },
     "listening_shares": {
         # HL-207: the plaintext token, so the listing can show the URL again. Rows created
         # before this column existed stay '' and are reported as recreate-it.

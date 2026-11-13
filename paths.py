@@ -12,6 +12,7 @@ modules that create it once a data directory is declared.
         artist art          /var/lib/hardlylistening/cache/artist-art
         metadata cache      /var/lib/hardlylistening/cache/metadata
         federation cache    /var/lib/hardlylistening/cache/federation
+        podcast downloads   /var/lib/hardlylistening/podcasts           (per member, capped)
         identity            /var/lib/hardlylistening/identity          (0700)
         state               /var/lib/hardlylistening/state
         tmp                 /var/lib/hardlylistening/tmp
@@ -39,6 +40,11 @@ CACHE_DIR = (DATA_DIR / "cache") if DECLARED else (APP_DIR / ".cache")
 ARTIST_ART_DIR = (DATA_DIR / "cache" / "artist-art") if DECLARED else (APP_DIR / "artist-art")
 METADATA_CACHE_DIR = CACHE_DIR / "metadata"
 FEDERATION_CACHE_DIR = CACHE_DIR / "federation"
+
+#: Podcast episodes a member downloaded (HL-209). Not a cache: it survives a cache clear and
+#: belongs in a backup, which is exactly why it sits beside the database rather than in
+#: `cache/`. One directory per member; the 5 GB budget is enforced per member by podcasts.py.
+PODCAST_DIR = DATA_DIR / "podcasts"
 
 #: Persistent state that is not the database. `state/` and `tmp/` are part of the documented
 #: layout (`docs/server-packaging.md` §2) and are created now so the layout is real rather than
@@ -69,5 +75,5 @@ def ensure() -> None:
     # identity is created separately rather than in the loop below.
     IDENTITY_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     for directory in (CACHE_DIR, ARTIST_ART_DIR, METADATA_CACHE_DIR, FEDERATION_CACHE_DIR,
-                      STATE_DIR, TMP_DIR):
+                      PODCAST_DIR, STATE_DIR, TMP_DIR):
         directory.mkdir(parents=True, exist_ok=True)

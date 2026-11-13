@@ -96,7 +96,9 @@ class SubsonicSurface(unittest.TestCase):
         self.assertEqual(self.response('getLyrics', title='Song 0', artist='Artist 0')['status'], 'ok')
 
     def test_unimplemented_endpoints_say_so(self):
-        for endpoint in ('jukeboxControl', 'downloadPodcastEpisode', 'addChatMessage'):
+        # `downloadPodcastEpisode` left this list with HL-209: it stores the episode under
+        # the member's cap instead of refusing, so it is covered by its own suite.
+        for endpoint in ('jukeboxControl', 'addChatMessage'):
             response = self.response(endpoint)
             self.assertEqual(response['status'], 'failed')
             self.assertEqual(response['error']['code'], 30)

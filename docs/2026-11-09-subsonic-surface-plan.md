@@ -122,9 +122,13 @@ bpm_source/bpm_at` columns). This phase adds the sonic half, with numpy allowed.
   published, duration, audio_url, file, state)`; the list is shared like radio.
 - "Podcasts" in the More menu: subscribe by URL, newest-first episodes, explicit per-episode download,
   progress, play through the deck.
-- Storage: own `member_podcast_gb` cap (5 GB default) with oldest-first pruning; quota checked before queueing.
-- Subsonic: `getPodcasts`, `getNewestPodcasts`, `getPodcastEpisode`, `downloadPodcastEpisode`, `refreshPodcasts`,
-  `createPodcastChannel`, `deletePodcastChannel`, `deletePodcastEpisode`.
+- Storage: **5 GB per member** (`HARDLYLISTENING_PODCAST_CAP_MB`), counted over the files this server holds
+  for that member and checked before and during the copy. **No automatic pruning**: at the cap the download is
+  refused with the numbers, and the member deletes a downloaded episode to make room. Deleting an episode
+  unlinks its file, so the space really comes back; `getPodcasts.storage` reports the budget and the files.
+- Subsonic: `getPodcasts`, `getNewestPodcasts`, `getPodcastEpisode`, `downloadPodcastEpisode`,
+  `streamPodcastEpisode` (Range, only for a held copy), `refreshPodcasts`, `createPodcastChannel`,
+  `deletePodcastChannel`, `deletePodcastEpisode`.
 
 ## Phase 7 — Chat (party room, not Discuss)
 

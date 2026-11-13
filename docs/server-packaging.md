@@ -88,13 +88,15 @@ Application code is treated as read-only. **Never store user data inside it.**
 ├── identity/                node-id, private-key, public-key          (0700)
 ├── cache/                   artwork/, browser-downloads/, artist-art/,
 │                            metadata/, federation/
+├── podcasts/                one directory per member; episodes they chose to keep
 ├── tmp/
 └── state/
 ```
 
 Every one of those directories is declared in `paths.py` and created by `paths.ensure()`; the
-layout in this document and the layout on disk are the same eight paths, not a diagram and an
-approximation. `identity/` is created `0700` because the files that will live in it are private.
+layout in this document and the layout on disk are the same paths, not a diagram and an
+approximation. `podcasts/` is state, not a cache: it is in the backup boundary, and each member's
+budget (5 GB by default) is enforced against it. `identity/` is created `0700` because the files that will live in it are private.
 
 Owner `hardlylistening:hardlylistening`. Directories `750`, secrets and private keys `600`,
 database `640` where appropriate.

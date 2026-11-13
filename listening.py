@@ -506,6 +506,13 @@ def rest(handler, store, security):
                 return
             handler.stream_audio(selected['id'])
             return
+        if endpoint == 'streamPodcastEpisode':
+            # Only a kept copy is served here: the original enclosure is already handed to
+            # the client as `streamUrl`, so the reason to ask this server is that it holds it.
+            import podcasts
+            held, kind = podcasts.held_file(store, uid, params.get('id', ''))
+            handler.stream_path(held, kind)
+            return
         if endpoint == 'getTranscodeStream':
             # Two kinds of decision lead here: direct play, which serves the stored file byte
             # for byte, and a re-encode, which is produced on demand and then served with the

@@ -46,7 +46,6 @@ EXTENSIONS = [{'name': 'formPost', 'versions': [1]},
 
 NOT_IMPLEMENTED = {
     'jukeboxControl', 'hls',
-    'downloadPodcastEpisode',
     'addChatMessage', 'getChatMessages',
     'getSonicSimilarTracks', 'findSonicPath', 'getVideos', 'getVideoInfo', 'getCaptions',
     'changePassword', 'createUser', 'updateUser', 'deleteUser', 'tokenInfo',
@@ -809,6 +808,10 @@ def handle(endpoint, params, multi, ctx):
     if endpoint == 'deletePodcastEpisode':
         podcasts.delete_episode(store, uid, identity)
         return {}
+    if endpoint == 'downloadPodcastEpisode':
+        # Bounded by the member's 5 GB budget; a full budget is a refusal with the numbers,
+        # never a silent delete of someone else's file (HL-209).
+        return {'podcastEpisode': podcasts.download_episode(store, uid, identity)}
 
     # ---- info, lyrics, plumbing ------------------------------------------
     if endpoint in ('getArtistInfo', 'getArtistInfo2', 'getAlbumInfo', 'getAlbumInfo2'):

@@ -247,14 +247,17 @@ class RadioAndPodcasts(unittest.TestCase):
         self.assertEqual((channel['status'], channel['errorMessage']), ('completed', ''))
         self.assertEqual(len(channel['episode']), 2)
 
-    def test_podcast_download_still_answers_error_30(self):
+    def test_podcast_download_from_an_unreachable_origin_fails_cleanly(self):
+        # These episodes point at audio.example, which does not resolve: the failure has
+        # to be a refusal with a message, not a half-held file. The cap itself is exercised
+        # in tests/test_podcast_downloads.py against a loopback origin.
         self.response('createPodcastChannel', url=self.feed_url)
         self.response('refreshPodcasts')
         episode_id = self.channels()[0]['episode'][0]['id']
         reply = self.response('downloadPodcastEpisode', id=episode_id)
         self.assertEqual(reply['status'], 'failed')
-        self.assertEqual(reply['error']['code'], 30)
-        self.assertIn('does not implement', reply['error']['message'])
+        self.assertIn('downloaded', reply['error']['message'].lower())
+        self.assertEqual(self.response('getPodcasts')['podcasts']['storage']['usedBytes'], 0)
         for endpoint in ('jukeboxControl', 'getSonicSimilarTracks', 'hls', 'addChatMessage'):
             self.assertEqual(self.response(endpoint)['error']['code'], 30, endpoint)
 

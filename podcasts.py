@@ -6,9 +6,12 @@ fetch per channel at request time — there is no background loop. Feed URLs are
 logged, redirects are re-validated, and (unless HARDLYLISTENING_ALLOW_LOCAL_FEEDS=1 is
 set for tests) non-public hosts are refused so a feed cannot be used to probe the LAN.
 
-`downloadPodcastEpisode` is deliberately still unsupported (Subsonic error 30): the
-storage cap and pruning policy that make downloads safe are a separate feature. The
-episode's `streamUrl` is handed to clients, which stream it directly.
+`downloadPodcastEpisode` stores the episode on this server, under a **5 GB per-member
+cap** (HL-209). Nothing is ever pruned automatically: when a member's budget is full the
+download is refused with the numbers, and the member deletes a downloaded episode to make
+room. A silent delete of someone's file to make space for another file is not a policy this
+server gets to invent. The cap counts only files held here, per member, and `deletePodcastEpisode`
+unlinks the file so deleting is what actually frees the space.
 """
 from __future__ import annotations
 
@@ -17,12 +20,15 @@ import hashlib
 import ipaddress
 import os
 import socket
+import threading
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import timezone
+from pathlib import Path
 from urllib.parse import urlsplit
 
+import paths
 from security import Denied
 
 MAX_URL = 2048
@@ -34,6 +40,16 @@ FEED_TIMEOUT = 5
 MAX_CHANNELS_PER_REFRESH = 10
 REFRESH_DEADLINE = 12
 MAX_DURATION = 10 ** 7
+
+#: How much podcast audio one member may keep on this server. Read once so the message a
+#: member is refused with is the same number the accounting uses.
+CAP_BYTES = int(os.getenv('HARDLYLISTENING_PODCAST_CAP_MB', '5120')) * 1024 * 1024
+DOWNLOAD_CHUNK = 256 * 1024
+DOWNLOAD_TIMEOUT = 30
+
+AUDIO_TYPES = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'audio/mp4',
+               'aac': 'audio/aac', 'ogg': 'audio/ogg', 'oga': 'audio/ogg',
+               'opus': 'audio/ogg', 'wav': 'audio/wav', 'flac': 'audio/flac'}
 
 
 def iso(seconds):
@@ -67,6 +83,9 @@ def schema(store):
           duration INTEGER NOT NULL DEFAULT 0,
           stream_url TEXT NOT NULL,
           size INTEGER NOT NULL DEFAULT 0,
+          file TEXT NOT NULL DEFAULT '',
+          bytes INTEGER NOT NULL DEFAULT 0,
+          downloaded REAL NOT NULL DEFAULT 0,
           created REAL NOT NULL,
           UNIQUE(channel_id, guid));
         CREATE INDEX IF NOT EXISTS listening_podcast_member
@@ -74,6 +93,16 @@ def schema(store):
         CREATE INDEX IF NOT EXISTS listening_podcast_episode_channel
           ON listening_podcast_episodes(channel_id, publish_date);
         ''')
+        # A store created before downloads existed has the table without the held-file
+        # columns. This mirror is the only schema path podcasts.py owns, so it adds them.
+        present = {row[1] for row in store.conn.execute(
+            'PRAGMA table_info(listening_podcast_episodes)')}
+        for name, ddl in (('file', "TEXT NOT NULL DEFAULT ''"),
+                          ('bytes', 'INTEGER NOT NULL DEFAULT 0'),
+                          ('downloaded', 'REAL NOT NULL DEFAULT 0')):
+            if name not in present:
+                store.conn.execute(
+                    f'ALTER TABLE listening_podcast_episodes ADD COLUMN {name} {ddl}')
         store.conn.commit()
 
 
@@ -389,10 +418,174 @@ def refresh(store, uid, identity=''):
 
 
 def episode_payload(row):
+    held = row.get('file') or ''
     return {'id': str(row['id']), 'channelId': str(row['channel_id']),
             'title': row['title'], 'description': row['description'] or '',
             'publishDate': iso(row['publish_date']), 'duration': int(row['duration'] or 0),
-            'streamUrl': row['stream_url'], 'size': int(row['size'] or 0), 'status': 'new'}
+            'streamUrl': row['stream_url'], 'size': int(row['size'] or 0),
+            # What this server holds for this member, if anything. `status` says completed
+            # exactly when a local copy exists, so a client can show it without another call.
+            'bytes': int(row.get('bytes') or 0), 'downloaded': bool(held),
+            'status': 'completed' if held else 'new'}
+
+
+#: One download at a time per member. Two parallel requests would each read the same
+#: headroom and both write, which turns a hard cap into a suggestion.
+_MEMBER_GATE = threading.Lock()
+_MEMBER_LOCKS = {}
+
+
+def _member_lock(uid):
+    with _MEMBER_GATE:
+        return _MEMBER_LOCKS.setdefault(str(uid), threading.Lock())
+
+
+def human_bytes(count):
+    value = float(count or 0)
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if value < 1024 or unit == 'TB':
+            return ('%d %s' % (value, unit)) if unit == 'B' else ('%.1f %s' % (value, unit))
+        value /= 1024.0
+    return '%.1f TB' % value
+
+
+def _member_dir(uid):
+    """One directory per member, named from their id and nothing else reachable."""
+    safe = ''.join(ch for ch in str(uid) if ch.isalnum() or ch in '-_') or 'member'
+    return paths.PODCAST_DIR / safe
+
+
+def _suffix(url):
+    tail = urlsplit(url).path.rsplit('/', 1)[-1]
+    ext = tail.rsplit('.', 1)[-1].lower() if '.' in tail else ''
+    return ext if ext in AUDIO_TYPES else 'mp3'
+
+
+def _remove_file(row):
+    held = row.get('file') or ''
+    if held:
+        try:
+            Path(held).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def used_bytes(store, uid):
+    """How much podcast audio this member holds, in bytes. The cap counts this."""
+    with store.lock:
+        row = store.conn.execute(
+            'SELECT COALESCE(SUM(e.bytes),0) AS total FROM listening_podcast_episodes e '
+            'JOIN listening_podcast_channels c ON c.id=e.channel_id WHERE c.member_id=?',
+            (uid,)).fetchone()
+    return int(row['total'] or 0)
+
+
+def usage(store, uid):
+    """The member's budget and the files inside it, so deleting is a choice, not a guess."""
+    used = used_bytes(store, uid)
+    with store.lock:
+        rows = [dict(r) for r in store.conn.execute(
+            'SELECT e.*, c.title AS channel_title FROM listening_podcast_episodes e '
+            'JOIN listening_podcast_channels c ON c.id=e.channel_id '
+            'WHERE c.member_id=? AND e.bytes>0 ORDER BY e.downloaded DESC,e.id DESC', (uid,))]
+    return {'usedBytes': used, 'capBytes': CAP_BYTES,
+            'used': human_bytes(used), 'cap': human_bytes(CAP_BYTES),
+            'episodes': [{'id': str(r['id']), 'title': r['title'],
+                          'channel': r['channel_title'], 'bytes': int(r['bytes']),
+                          'downloaded': iso(r['downloaded'])} for r in rows]}
+
+
+def _full_message(used):
+    return ('Podcast storage is full: %s of %s used. '
+            'Delete a downloaded episode to make room.' % (human_bytes(used), human_bytes(CAP_BYTES)))
+
+
+def _episode(store, uid, identity):
+    try:
+        episode_id = int(identity)
+    except (TypeError, ValueError):
+        raise Denied(400, 'Invalid episode id')
+    with store.lock:
+        row = store.conn.execute(
+            'SELECT e.* FROM listening_podcast_episodes e JOIN listening_podcast_channels c '
+            'ON c.id=e.channel_id WHERE e.id=? AND c.member_id=?',
+            (episode_id, uid)).fetchone()
+    if row is None:
+        raise Denied(404, 'Not found')
+    return dict(row)
+
+
+def _save(url, target, limit):
+    """Copy one episode's audio to `target`, refusing to cross `limit`. Returns bytes."""
+    clean_url(url)
+    _public_host(url)
+    request = urllib.request.Request(url, headers={
+        'User-Agent': 'HardlyListening/1.0 (+podcast download)',
+        'Accept': 'audio/*,application/octet-stream;q=0.9,*/*;q=0.1'})
+    opener = urllib.request.build_opener(_Redirects())
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(target.name + '.part')
+    written = 0
+    try:
+        with opener.open(request, timeout=DOWNLOAD_TIMEOUT) as response, open(partial, 'wb') as out:
+            kind = (response.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+            if kind.startswith('text/') or kind in ('application/xml', 'application/rss+xml'):
+                raise Denied(400, 'That link is not an audio file')
+            while True:
+                chunk = response.read(DOWNLOAD_CHUNK)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > limit:
+                    raise Denied(507, 'That episode is larger than the space left. '
+                                      'Delete a downloaded episode to make room.')
+                out.write(chunk)
+    except Denied:
+        partial.unlink(missing_ok=True)
+        raise
+    except Exception:
+        partial.unlink(missing_ok=True)
+        raise Denied(400, 'Episode could not be downloaded')
+    if written == 0:
+        partial.unlink(missing_ok=True)
+        raise Denied(400, 'Episode was empty')
+    partial.replace(target)
+    return written
+
+
+def download_episode(store, uid, identity):
+    """Keep one episode for this member. Refuses at the cap; never prunes someone's file."""
+    episode = _episode(store, uid, identity)
+    with _member_lock(uid):
+        held = episode.get('file') or ''
+        if held and Path(held).is_file():
+            return episode_payload(episode)      # already kept: the same answer, no refetch
+        used = used_bytes(store, uid)
+        headroom = CAP_BYTES - used
+        if headroom <= 0:
+            raise Denied(507, _full_message(used))
+        # The feed's `length` is not trusted here: a wrong one would refuse a file that
+        # fits. `_save` stops at the headroom, which is the only number that must be right.
+        target = _member_dir(uid) / ('%s.%s' % (episode['id'], _suffix(episode['stream_url'])))
+        written = _save(episode['stream_url'], target, headroom)
+        now = time.time()
+        with store.lock:
+            store.conn.execute(
+                'UPDATE listening_podcast_episodes SET file=?, bytes=?, downloaded=? WHERE id=?',
+                (str(target), written, now, episode['id']))
+            store.conn.commit()
+        episode.update({'file': str(target), 'bytes': written, 'downloaded': now})
+        return episode_payload(episode)
+
+
+def held_file(store, uid, identity):
+    """The local copy for an episode, or a refusal: there is nothing to stream until kept."""
+    episode = _episode(store, uid, identity)
+    held = episode.get('file') or ''
+    path = Path(held) if held else None
+    if path is None or not path.is_file():
+        raise Denied(404, 'Episode is not downloaded')
+    return path, AUDIO_TYPES.get(path.suffix.lstrip('.').lower(), 'audio/mpeg')
 
 
 def _episodes_for(store, channel_id):
@@ -417,7 +610,9 @@ def get_podcasts(store, uid, params):
         if include:
             entry['episode'] = _episodes_for(store, row['id'])
         channels.append(entry)
-    return {'podcasts': {'channel': channels}}
+    # The cap is per member, so the budget belongs on the member's own listing. Additive:
+    # a client that does not know the key ignores it; one that does can show the bar.
+    return {'podcasts': {'channel': channels, 'storage': usage(store, uid)}}
 
 
 def newest(store, uid, params):
@@ -467,11 +662,19 @@ def delete_episode(store, uid, identity):
         episode_id = int(identity)
     except (TypeError, ValueError):
         raise Denied(400, 'Invalid episode id')
+    # Deleting the episode is the member's act; its file must go with it, or the bytes
+    # would count against the cap forever with nothing left to point at them.
     with store.lock:
+        row = store.conn.execute(
+            'SELECT e.* FROM listening_podcast_episodes e JOIN listening_podcast_channels c '
+            'ON c.id=e.channel_id WHERE e.id=? AND c.member_id=?',
+            (episode_id, uid)).fetchone()
         changed = store.conn.execute(
             'DELETE FROM listening_podcast_episodes WHERE id=? AND channel_id IN '
             '(SELECT id FROM listening_podcast_channels WHERE member_id=?)',
             (episode_id, uid)).rowcount
         store.conn.commit()
+    if row is not None:
+        _remove_file(dict(row))
     if not changed:
         raise Denied(404, 'Not found')
