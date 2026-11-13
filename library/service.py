@@ -55,6 +55,34 @@ def catalog(store, uid):
     return [dict(r) for r in rows]
 
 
+def albums(store, uid) -> list:
+    """The member's albums, grouped from the same scope the song list uses.
+
+    A projection of `catalog`, not another query definition: the union lives in `SCOPE`, so an
+    album can never contain a song the song list would not return.
+    """
+    schema(store)
+    with store.lock:
+        rows = store.conn.execute(
+            'SELECT artist_name AS artist, album, COUNT(*) AS song_count,'
+            ' COALESCE(SUM(duration),0) AS duration, MAX(added) AS added'
+            ' FROM (' + SCOPE + ') GROUP BY artist_name, album'
+            ' ORDER BY artist_name, album', (uid, uid, uid, uid)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def artists(store, uid) -> list:
+    """The member's artists, with the album count the artist wall sorts by."""
+    schema(store)
+    with store.lock:
+        rows = store.conn.execute(
+            'SELECT artist_name AS name, COUNT(*) AS song_count,'
+            ' COUNT(DISTINCT album) AS album_count, COALESCE(SUM(duration),0) AS duration'
+            ' FROM (' + SCOPE + ') GROUP BY artist_name'
+            ' ORDER BY artist_name', (uid, uid, uid, uid)).fetchall()
+    return [dict(r) for r in rows]
+
+
 def in_scope(store, uid, track_id) -> bool:
     """One id through the same union, so a caller never has to fetch the whole catalogue."""
     with store.lock:
@@ -212,6 +240,25 @@ def playlist_tracks(store, uid) -> list:
         return [dict(r) for r in store.conn.execute(
             'SELECT playlist_id,track_id,position FROM listening_playlist_tracks '
             'WHERE member_id=? ORDER BY position,track_id', (uid,))]
+
+
+def playlist(store, uid, playlist_id) -> dict | None:
+    """One playlist the member saved, with its tracks in listening order.
+
+    `None` means "not saved by this member", which is the same answer as "does not exist":
+    a playlist somebody else saved is not theirs to read here.
+    """
+    with store.lock:
+        row = store.conn.execute(
+            'SELECT p.id,p.title FROM playlists p JOIN listening_playlists s ON p.id=s.playlist_id'
+            ' WHERE s.member_id=? AND p.id=?', (uid, int(playlist_id))).fetchone()
+        if not row:
+            return None
+        tracks = [dict(r) for r in store.conn.execute(
+            'SELECT t.* FROM listening_playlist_tracks l JOIN tracks t ON t.id=l.track_id'
+            ' WHERE l.member_id=? AND l.playlist_id=? AND t.deleted=0'
+            ' ORDER BY l.position,t.id', (uid, int(playlist_id))).fetchall()]
+    return {'id': row['id'], 'title': row['title'], 'tracks': tracks}
 
 
 def favorites(store, uid) -> list:

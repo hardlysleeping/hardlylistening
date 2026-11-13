@@ -134,6 +134,111 @@ def repo_subscriptions(handler, store, security, query):
     envelope(handler, 'repo.subscriptions', rows, len(rows))
 
 
+# -- Library: the member's own rows ---------------------------------------------------------------
+
+def library_songs(handler, store, security, query):
+    from library import service
+    member = _member(handler, store, security)
+    rows = service.catalog(store, member['id'])
+    envelope(handler, 'library.songs', rows, len(rows))
+
+
+def library_albums(handler, store, security, query):
+    from library import service
+    member = _member(handler, store, security)
+    rows = service.albums(store, member['id'])
+    envelope(handler, 'library.albums', rows, len(rows))
+
+
+def library_artists(handler, store, security, query):
+    from library import service
+    member = _member(handler, store, security)
+    rows = service.artists(store, member['id'])
+    envelope(handler, 'library.artists', rows, len(rows))
+
+
+def library_playlists(handler, store, security, query):
+    from library import service
+    member = _member(handler, store, security)
+    rows = service.playlists(store, member['id'])
+    envelope(handler, 'library.playlists', rows, len(rows))
+
+
+def library_playlist(handler, store, security, query, playlist_id):
+    from library import service
+    member = _member(handler, store, security)
+    row = service.playlist(store, member['id'], int(playlist_id))
+    if row is None:
+        raise Denied(404, 'No such saved playlist')
+    envelope(handler, 'library.playlist', row)
+
+
+def library_favorites(handler, store, security, query):
+    from library import service
+    member = _member(handler, store, security)
+    rows = service.favorites(store, member['id'])
+    envelope(handler, 'library.favorites', rows, len(rows))
+
+
+def library_bookmarks(handler, store, security, query):
+    from library import service
+    member = _member(handler, store, security)
+    rows = service.bookmark_rows(store, member['id'])
+    envelope(handler, 'library.bookmarks', rows, len(rows))
+
+
+# -- Playback: where the member is, and where the bytes are ---------------------------------------
+
+def playback_state(handler, store, security, query):
+    import nowplaying
+    member = _member(handler, store, security)
+    envelope(handler, 'playback.state', nowplaying.get(store, member['id']))
+
+
+def playback_save(handler, store, security, query):
+    import nowplaying
+    member = _member(handler, store, security)
+    security.limit(member['id'], 'now-write', 120)
+    envelope(handler, 'playback.state', nowplaying.put(store, member['id'], handler.body()))
+
+
+def playback_queue(handler, store, security, query):
+    import nowplaying
+    member = _member(handler, store, security)
+    state = nowplaying.get(store, member['id'])
+    queue = None if not state else {
+        'track_ids': state.get('queue') or [],
+        'current': state.get('id'),
+        'index': state.get('index', -1),
+        'position': state.get('time') or 0,
+        'updated': state.get('updated'),
+    }
+    envelope(handler, 'playback.queue', queue)
+
+
+def playback_now(handler, store, security, query):
+    import nowplaying
+    member = _member(handler, store, security)
+    state = nowplaying.get(store, member['id'])
+    now = None if not state else {
+        'track_id': state.get('id'),
+        'position': state.get('time') or 0,
+        'updated': state.get('updated'),
+    }
+    envelope(handler, 'playback.now', now)
+
+
+def playback_stream(handler, store, security, query, track_id):
+    from library import playback
+    _member(handler, store, security)
+    track_id = int(track_id)
+    envelope(handler, 'playback.stream', {
+        'track_id': track_id,
+        'url': '/api/track/%d/audio' % track_id,
+        'available': playback.available(store, track_id),
+    })
+
+
 # -- the table ------------------------------------------------------------------------------------
 
 ROUTES = (
@@ -142,6 +247,18 @@ ROUTES = (
     ('GET', r'/api/v1/repo/tracks', repo_tracks),
     ('GET', r'/api/v1/repo/artist', repo_artist),
     ('GET', r'/api/v1/repo/subscriptions', repo_subscriptions),
+    ('GET', r'/api/v1/library/songs', library_songs),
+    ('GET', r'/api/v1/library/albums', library_albums),
+    ('GET', r'/api/v1/library/artists', library_artists),
+    ('GET', r'/api/v1/library/playlists', library_playlists),
+    ('GET', r'/api/v1/library/playlist/([1-9][0-9]*)', library_playlist),
+    ('GET', r'/api/v1/library/favorites', library_favorites),
+    ('GET', r'/api/v1/library/bookmarks', library_bookmarks),
+    ('GET', r'/api/v1/playback/state', playback_state),
+    ('POST', r'/api/v1/playback/state', playback_save),
+    ('GET', r'/api/v1/playback/queue', playback_queue),
+    ('GET', r'/api/v1/playback/now', playback_now),
+    ('GET', r'/api/v1/playback/stream/([1-9][0-9]*)', playback_stream),
 )
 
 
