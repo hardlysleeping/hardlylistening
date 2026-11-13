@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The window's commands are Rust functions registered with invoke_handler, which capabilities do not gate; no plugin command is called from JavaScript, so the grant is the core default set and nothing else.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

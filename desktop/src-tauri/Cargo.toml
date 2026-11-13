@@ -1,0 +1,31 @@
+[package]
+name = "hardlylistening-desktop"
+version = "0.1.0"
+description = "The optional desktop window for a HardlyListening server: a client, not a second runtime"
+edition = "2021"
+rust-version = "1.77"
+license = "PolyForm-Noncommercial-1.0.0"
+publish = false
+
+[lib]
+name = "hardlylistening_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Deliberately short. The window renders HTML the OS already provides (WebView), talks to the
+# server over `std::net` on loopback, and opens URLs with the platform's own handler, so no HTTP
+# client, no async runtime of our own and no shell plugin is needed. Every dependency here is one
+# that cannot be avoided: the Tauri runtime, and JSON for the two API responses.
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

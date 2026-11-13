@@ -1,0 +1,8 @@
+# The staged sidecar lands here. It is a build artefact, not source.
+#
+# `tools/stage_sidecar.py` copies `bin/hardlylistening-server` to
+# `hardlylistening-server-<target-triple>`, which is the name Tauri's `externalBin` resolves at
+# build time. Committing it would put the same launcher in git twice and let the two drift.
+*
+!.gitignore
+!README.md

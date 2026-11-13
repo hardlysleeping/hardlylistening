@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>HardlyListening</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="bar">
+    <div class="brand">Hardly<span>Listening</span><span class="tag">desktop</span></div>
+    <div class="status" id="status-pill" data-state="pending" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span><span id="status-text">Checking…</span>
+    </div>
+  </header>
+
+  <section class="card server" aria-labelledby="server-title">
+    <p class="eyebrow" id="server-title">Server</p>
+    <p class="url" id="address">—</p>
+    <p class="hint" id="address-hint"></p>
+    <p class="reason" id="health-error" hidden></p>
+    <div class="actions">
+      <button id="start" type="button" class="primary">Start local server</button>
+      <button id="stop" type="button">Stop</button>
+      <button id="open" type="button">Open in browser</button>
+      <span class="spacer"></span>
+      <button id="quit" type="button" class="quiet">Quit</button>
+    </div>
+    <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+  </section>
+
+  <div class="columns">
+    <section class="card" aria-labelledby="facts-title">
+      <p class="eyebrow" id="facts-title">What the server says</p>
+      <dl class="facts">
+        <div><dt>Version</dt><dd id="fact-version">—</dd></div>
+        <div><dt>API</dt><dd id="fact-api">—</dd></div>
+        <div><dt>Subsonic</dt><dd id="fact-protocol">—</dd></div>
+        <div><dt>Members</dt><dd id="fact-members">—</dd></div>
+      </dl>
+      <p class="foot">Read from <code>/api/health</code> and <code>/api/v1/capabilities</code>.
+        This window keeps no library, queue or account of its own.</p>
+    </section>
+
+    <section class="card" aria-labelledby="about-title">
+      <p class="eyebrow" id="about-title">This window</p>
+      <dl class="facts">
+        <div><dt>Shell</dt><dd id="fact-shell">—</dd></div>
+        <div><dt>Launcher</dt><dd id="fact-launcher">—</dd></div>
+        <div><dt>Sidecar</dt><dd id="fact-sidecar">—</dd></div>
+        <div><dt>Config</dt><dd id="fact-config">—</dd></div>
+      </dl>
+      <p class="foot">Closing this window stops the server it started, and only that one.
+        A server systemd, Docker or a terminal is running keeps running.</p>
+    </section>
+  </div>
+</main>
+<script src="state.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

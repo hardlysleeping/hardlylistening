@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HardlyListening",
+  "version": "0.1.0",
+  "identifier": "app.hardlylistening.desktop",
+  "build": {
+    "frontendDist": "../ui",
+    "beforeBuildCommand": "python3 ../tools/stage_sidecar.py"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "HardlyListening",
+        "width": 960,
+        "height": 620,
+        "minWidth": 720,
+        "minHeight": 520,
+        "resizable": true,
+        "center": true,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost; form-action 'none'; base-uri 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "The desktop window for a HardlyListening server",
+    "longDescription": "Starts, stops and points at a HardlyListening server. The server itself is the same headless runtime systemd and Docker use; this window is a client of its HTTP API.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "externalBin": ["bin/hardlylistening-server"]
+  }
+}
