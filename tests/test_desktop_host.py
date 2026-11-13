@@ -291,6 +291,13 @@ class TheShellImportsNothingFromTheServer(unittest.TestCase):
             if not path.is_file():
                 continue
             text = path.read_text(encoding='utf-8', errors='replace')
+            if path.name == '.dockerignore':
+                # The one file where naming the shell is the opposite of needing it: an entry
+                # here keeps it out of the image. Asserted as an exclusion, not as a mention.
+                self.assertIn('desktop', [line.strip() for line in text.splitlines()],
+                              'the image must exclude the shell')
+                self.assertNotIn('!desktop', text, 'nothing may pull the shell back in')
+                continue
             self.assertNotIn('desktop', text, f'{path.name} must not need the shell')
 
     def test_the_launcher_stays_the_plain_interpreter(self):
