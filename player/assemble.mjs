@@ -18,6 +18,7 @@
 
    Standard library only: no bundler, no package.json, nothing to install. */
 import { createHash } from 'node:crypto';
+import { readdirSync } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,10 +66,15 @@ const WEB_ALLOW = [
   'styles/components/status.css',
 ];
 
-/* The shell's own two files and nothing else. `connect.html` is the window's first page; it
-   links the assembled stylesheets above, so the gate looks like the app rather than like a
-   second design. */
-const SHELL_ALLOW = ['connect.html', 'connect.css', 'connect.js'];
+/* The shell is the player's own code, so the shell directory *is* the list: whatever sits in
+   `player/shell/` ships, and an allow-list over it would only be a way to write a file that is
+   then silently missing from the build. The gate looks like the app rather than a second design
+   because `connect.html` links the assembled stylesheets above it. What must never ship is
+   stated in EXCLUDED instead, because that is the list where absence is a decision. */
+const SHELL_ALLOW = readdirSync(SHELL, { withFileTypes: true })
+  .filter(entry => entry.isFile() && !entry.name.startsWith('.'))
+  .map(entry => entry.name)
+  .sort();
 
 /* Stated so the exclusion is checkable, not merely implied by absence. The entry document is
    assembled from the app's markup, so a reference to one of these would be a request for a

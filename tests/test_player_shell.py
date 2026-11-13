@@ -265,6 +265,13 @@ class Assembly(unittest.TestCase):
         self.assertIn('web/', result.stderr)
         self.assertFalse(target.exists())
 
+    def test_the_shell_directory_is_what_ships(self):
+        # The shell is the player's own code: a file written there is in the build, so a
+        # feature module cannot be added and then silently left out of the bundle.
+        on_disk = sorted(p.name for p in (PLAYER / 'shell').iterdir() if p.is_file())
+        self.assertEqual(self.plan['shell'], on_disk)
+        self.assertIn('connect.html', self.plan['shell'])
+
     def test_the_output_directory_is_gitignored(self):
         # A deployed copy of the tree is not a git checkout and carries no ignore file, so
         # this is a property of the repository, not of the running server.
