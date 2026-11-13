@@ -96,35 +96,52 @@ after staging. No file added, removed or rewritten. That is the empirical half o
 
 The static half covers what cannot be run on a machine without `webkit2gtk-4.1`. It is a **write
 target** scan, not a ban on write calls: HOST-003 writes the handoff record `lifecycle.json` into the
-config directory and HOST-005 writes `host.json` and the autostart entry, and all of those are the
-shell's own state. The earlier blanket rule — no `fs::write` anywhere in `desktop/` — was narrowed
-for exactly that reason, after HOST-003 landed, and the scan now makes two separate assertions over
-every write target in every `.py` and `.rs` file under `desktop/`:
+config directory, HOST-005 writes `host.json` and the autostart entry, and HOST-002 writes the
+wizard's `setup.json` beside them — all of those are the shell's own state. The earlier blanket rule
+— no `fs::write` anywhere in `desktop/` — was narrowed for exactly that reason, after HOST-003
+landed, and the scan now makes two separate assertions over every write target in every `.py` and
+`.rs` file under `desktop/`:
 
 * **Nothing it targets may be reachable from the server's tree.** The target expression is expanded
   into a *cone*: the expression itself, every local it is built from, and — for a parameter — every
   argument it is handed at its call sites in the same file, to a depth of three frames. A cone
   containing `app_dir`, `APP_DIR`, `parents[...]`, `resource_dir`, `current_exe`, `launcher`,
   `LAUNCHER_NAME`, the launcher's `bin/` path, `server.py`, `cli.py`, `web/`, `index.html`,
-  `HARDLYLISTENING_DB`/`_DATA_DIR`/`_MUSIC_DIR`/`_SERVER`, `music_dir` or `.db` fails.
-* **Everything it targets must resolve to a location the shell owns**: `config_path()`,
-  `state_path()`, `autostart_path()`, `HANDOFF_FILE`, `desktop/`'s own build directory, or an
-  operator-supplied `--out`. This half keeps the exception reviewable: a write to a literal path or a
-  bare environment variable fails even when it would be harmless.
+  `HARDLYLISTENING_DB`/`_DATA_DIR`/`_MUSIC_DIR`/`_SERVER`, `music_dir` or `.db` fails. This half was
+  not widened for any of the writes below: a validator that passes a server path through still fails
+  it, and a control proves that.
+* **Everything it targets must be a location the shell owns, or one the person chose.** The shell
+  owns `config_path()`, `state_path()`, `setup_path()`, `autostart_path()`, `HANDOFF_FILE` and
+  `desktop/`'s own build directory. The person owns two: `stage_sidecar.py --out`, and the wizard's
+  music/data answers (`validate_data_dir(`, `data_dir_of(`, the `data_dir` key), which the wizard
+  creates on first run. A write naming neither fails even when it would be harmless — that is what
+  keeps the exception reviewable.
 
-HOST-003's collision is pinned separately: in both `lifecycle.rs` and `host/lifecycle.py` every write
-target resolves to `state_path(config)`, every `let config = …` in the crate is `host::config_path()`,
-and that resolver reads `XDG_STATE_HOME` or `HARDLYLISTENING_DESKTOP_CONFIG` and never `app_dir`,
-`resource_dir`, `current_exe` or `launcher`. A negative control feeds synthetic writes into the app
-root, into `bin/…/server.py`, into `web/index.html` and into the database path, and requires each to
-trip the scan; another requires a write to `/var/tmp/scratch.json` to fail the ownership rule. If a
-later edit loosens the classifier, those controls stop failing.
+Two writes are pinned by name rather than by the generic rule. HOST-003's: in both `lifecycle.rs` and
+`host/lifecycle.py` every write target resolves to `state_path(config)`, every `let config = …` in the
+crate is `host::config_path()`, and that resolver reads `XDG_STATE_HOME` or
+`HARDLYLISTENING_DESKTOP_CONFIG` and never `app_dir`, `resource_dir`, `current_exe` or `launcher`.
+HOST-002's: the wizard is a **third resolver, not a reuse of the other two** — `host/setup.py` has its
+own `setup_path()` and `wizard.rs` its own `state_path()`, each mirroring
+`resolve.config_path().parent` instead of calling it. That duplication is a drift risk, so the test
+compares the constants and the override names rather than trusting them, and `setup.py`'s `write_state`
+— a library function whose caller is the Rust command, not another Python module — is exempted only
+because that test also proves it has no caller inside `desktop/` and that the Rust twin binds
+`let path = state_path()` before writing. Add a Python caller and the exemption fails first.
+
+A negative control feeds synthetic writes into the app root, into `bin/…/server.py`, into
+`web/index.html` and into the database path, and requires each to trip the scan; another requires a
+write to `/var/tmp/scratch.json` to fail the ownership rule; a third launders a server path through
+`validate_data_dir(` and still requires it to trip. If a later edit loosens the classifier, those
+controls stop failing.
 
 The honest limit: this is text, not a compiler. Python is parsed with `ast`; Rust is scanned, because
 the standard library has no Rust parser. Locals are followed through single-name assignments and
 parameters through same-file call sites only, so a path aliased three functions away in another file
-is not traced. `stage_sidecar.py --out` is an operator choice the scan cannot bound: staging into the
-core would satisfy the ownership rule, and is caught, if at all, by the before/after manifest above.
+is not traced. The two person-chosen locations are exactly that — a person may point `--out` at the
+core or answer the data step with the application root, and the scan cannot bound either. Staging into
+the core is caught, if at all, by the before/after manifest above; a data folder inside the core is a
+configuration, not a dependency.
 
 ### 2.4 `ThePackagedInstallsCarryNoShell` — the artefacts
 

@@ -30,9 +30,9 @@ Four assertions, all over the tree rather than over intentions:
     `bin/hardlylistening-server`, and a hash manifest of the whole core is compared before and
     after staging: the shell reads the core and writes into its own `src-tauri/bin`, nowhere in
     the core. The static companion judges write *targets* rather than write calls — the shell owns
-    its config/state directory, which HOST-003 and HOST-005 write, and may not write anywhere
-    reachable from the server's tree; the rule and its negative controls are in
-    `docs/desktop/dependency.md` §2.3.
+    its config/state directory, which HOST-003, HOST-005 and HOST-002 write, and may not write
+    anywhere reachable from the server's tree; the rule, its exceptions and its negative controls
+    are in `docs/desktop/dependency.md` §2.3.
   * **The packaged installs carry no shell.** The Dockerfile's instructions and both systemd units
     (the committed one and the one `install-service.sh` writes) are parsed; every `ExecStart` is
     resolved back into the tree, so a unit cannot name a runtime that is not the server.
@@ -309,18 +309,19 @@ def unit_sections(text):
 
 # -- write targets: where the shell is allowed to put a file ------------------------------------
 #
-# The shell owns files: `host.json`, `lifecycle.json`, the autostart entry, a staged sidecar. What
-# it may not do is write into the server's tree — the application directory, the database, the
-# music root or `web/`. A blanket "no filesystem writes in `desktop/`" cannot say that: HOST-003
-# legitimately writes its handoff record into the *config* directory, and HOST-005 writes the
-# address file and the autostart entry. So writes are classified by their target instead of
-# forbidden outright, and the two halves are separate assertions:
+# The shell owns files: `host.json`, `lifecycle.json`, `setup.json`, the autostart entry, a staged
+# sidecar. What it may not do is write into the server's tree — the application directory, the
+# database, the music root or `web/`. A blanket "no filesystem writes in `desktop/`" cannot say
+# that: HOST-003 writes its handoff record into the *config* directory, HOST-005 writes the address
+# file and the autostart entry, and HOST-002 writes the wizard's answers beside them. So writes are
+# classified by their target instead of forbidden outright, and the two halves are separate
+# assertions:
 #
 #   * nothing a write targets may be reachable from the server's tree (SERVER_TREE markers);
-#   * everything a write targets must be reachable from a location the shell owns
-#     (SHELL_RESOLVERS) — a write to a bare parameter counts only when every call site in the same
-#     file hands that parameter such a location, which is what makes "the shell reads a path and
-#     writes it" checkable without a type system.
+#   * everything a write targets must be a location the shell owns (SHELL_RESOLVERS) or one the
+#     person chose (OPERATOR_CHOSEN) — a write to a bare parameter counts only when every call site
+#     in the same file hands that parameter such a location, or when the function is one of the few
+#     in CALLER_CHOSEN, whose caller is named in a test of its own.
 #
 # Text-level, not a compiler: locals are followed through single-name assignments, and a parameter
 # is followed into its call sites in the same file, up to `CALL_DEPTH` frames. An alias built
@@ -337,12 +338,30 @@ SERVER_TREE = (
     'HARDLYLISTENING_SERVER', 'music_dir', '.db',
 )
 
-#: Resolvers that produce a location the shell owns: XDG state/config (where `host.json` and
-#: `lifecycle.json` live), the autostart entry, and `desktop/`'s own build directory.
+#: Resolvers that produce a location the shell owns: XDG state/config (where `host.json`,
+#: `lifecycle.json` and the wizard's `setup.json` live), the autostart entry, and `desktop/`'s own
+#: build directory. `state_path(` covers both the handoff record and the wizard's state in Rust;
+#: `setup_path(` is the wizard's own producer on the Python side.
 SHELL_RESOLVERS = (
-    'state_path(', 'config_path(', 'autostart_path(', '.config_path', '.autostart_path',
-    'HANDOFF_FILE', 'DESKTOP', 'args.out', 'src-tauri',
+    'state_path(', 'config_path(', 'setup_path(', 'autostart_path(', '.config_path',
+    '.autostart_path', 'HANDOFF_FILE', 'DESKTOP', 'src-tauri',
 )
+
+#: Locations the *person* named, not the shell and not the server: the operator's `--out`, and the
+#: wizard's music/data answers. The wizard creates the data folder on first run, and that folder is
+#: whatever was typed into it — pointing it at the application root is a configuration, not a
+#: dependency. Kept separate from SHELL_RESOLVERS so the two kinds of exception stay distinguishable;
+#: the negative half still runs over these, so a value derived from `HARDLYLISTENING_DATA_DIR` or
+#: the app tree fails regardless of which validator it passed through.
+OPERATOR_CHOSEN = (
+    'args.out', 'validate_data_dir(', 'data_dir_of(', "'data_dir'", '"data_dir"',
+)
+
+#: Writers whose destination is a bare parameter with no caller inside `desktop/`: the wizard's
+#: Python side is a rules library, and the caller that binds the path is the Rust twin
+#: (`wizard.rs`'s `state_path()`). Exempt from the generic rule only because a dedicated test pins
+#: that pairing — `test_the_wizards_writes_are_the_state_file_and_the_answered_folder`.
+CALLER_CHOSEN = {('desktop/host/setup.py', 'write_state')}
 
 #: How many parameter frames a target is followed through, per file.
 CALL_DEPTH = 3
@@ -613,12 +632,14 @@ def tree_offenders(sources):
 
 
 def unowned_offenders(sources):
-    """Writes whose target's cone names no location the shell owns, as report lines."""
+    """Writes whose target is neither the shell's nor the person's, as report lines."""
     offenders = []
     for source in sources:
         for function, destination, _args in source.writes:
+            if (source.label, function) in CALLER_CHOSEN:
+                continue                     # the caller is pinned by its own test
             text = ' '.join(source.cone(destination, function))
-            if not any(resolver in text for resolver in SHELL_RESOLVERS):
+            if not any(resolver in text for resolver in SHELL_RESOLVERS + OPERATOR_CHOSEN):
                 offenders.append(
                     f'{source.label}:{function or "<module>"} {destination!r} -> {text[:120]}')
     return offenders
@@ -857,7 +878,9 @@ class TheOnlyEdgeIsTheLauncher(unittest.TestCase):
         `write_state(config, …)` counts only because its callers pass a config path. A write with
         no such ancestry (a literal path, an environment variable, a helper that names nothing) is
         a failure here even when it happens to be harmless — it is the one rule that keeps the
-        exceptions reviewable.
+        exceptions reviewable. The two admitted exceptions are named in the module: a location the
+        shell owns (`SHELL_RESOLVERS`), a folder the person answered (`OPERATOR_CHOSEN`), and the
+        one writer whose caller is the Rust twin (`CALLER_CHOSEN`, pinned by the test below).
         """
         offenders = unowned_offenders(source for source, _path in shell_sources())
         self.assertEqual(offenders, [], 'every shell write must name a location it owns')
@@ -893,6 +916,55 @@ class TheOnlyEdgeIsTheLauncher(unittest.TestCase):
         self.assertIn('HARDLYLISTENING_DESKTOP_CONFIG', resolver)
         for server in ('app_dir', 'resource_dir', 'current_exe', 'launcher'):
             self.assertNotIn(server, resolver, f'config_path() reaches {server}')
+
+    def test_the_wizards_writes_are_the_state_file_and_the_answered_folder(self):
+        """HOST-002's two writes: `setup.json` beside `host.json`, and the folder the person chose.
+
+        The wizard is a *third* resolver, not a reuse of HOST-003's or HOST-005's: `setup.py` has
+        its own `setup_path()` and `wizard.rs` its own `state_path()`, both mirroring
+        `resolve.config_path().parent`. That mirroring is the drift risk, so it is compared here
+        rather than trusted, and the Python writer's bare `path` parameter — its only caller is the
+        Rust command — is what `CALLER_CHOSEN` exempts; this test is the reason it may be exempt.
+        """
+        setup = (DESKTOP / 'host' / 'setup.py').read_text()
+        resolve = (DESKTOP / 'host' / 'resolve.py').read_text()
+        # The wizard's producer builds the same directory as the shell's config file: same
+        # override, same XDG base, and the shared CONFIG_NAME constant rather than a second copy.
+        producer = setup[setup.index('def setup_path'):]
+        producer = producer[:producer.index('\ndef ')]
+        for shared in ('HARDLYLISTENING_DESKTOP_CONFIG', 'XDG_STATE_HOME', 'CONFIG_NAME'):
+            self.assertIn(shared, producer, f'setup_path() no longer mirrors config_path(): {shared}')
+        self.assertIn("CONFIG_NAME = 'hardlylistening-desktop'", setup)
+        self.assertIn("CONFIG_NAME = 'hardlylistening-desktop'", resolve)
+        self.assertIn('resolve.config_path', setup,
+                      'setup.py should say which resolver it mirrors')
+        # The Rust twin resolves the same directory to the same file.
+        wizard = (DESKTOP / 'src-tauri' / 'src' / 'wizard.rs').read_text()
+        resolver = wizard[wizard.index('fn state_path()'):]
+        resolver = resolver[:resolver.index('\n}')]
+        self.assertIn('HARDLYLISTENING_DESKTOP_CONFIG', resolver)
+        self.assertIn('XDG_STATE_HOME', resolver)
+        self.assertIn('SETUP_FILE', resolver)
+        for server in ('app_dir', 'resource_dir', 'current_exe', 'launcher'):
+            self.assertNotIn(server, resolver, f'wizard state_path() reaches {server}')
+        # Which earns the exemption: `setup.py`'s writer has no caller inside `desktop/` — the
+        # window's writer is the Rust twin — and that twin binds its path from `state_path()`.
+        callers = []
+        for source, _path in shell_sources():
+            if source.label == 'desktop/host/setup.py':
+                continue
+            text = (APP_DIR / source.label).read_text()
+            if 'setup.write_state' in text or 'setup import write_state' in text:
+                callers.append(source.label)
+        self.assertEqual(callers, [], 'setup.write_state gained a caller: resolve it, do not exempt it')
+        save = wizard[wizard.index('fn setup_save'):]
+        save = save[:save.index('\n}\n')]
+        self.assertIn('let path = state_path();', save)
+        self.assertIn('write_state(&path,', save)
+        # The other write is the data folder, and it comes from the wizard's own answer.
+        self.assertIn('prepare_data_dir', setup)
+        self.assertIn('validate_data_dir(', setup)
+        self.assertIn('data_dir_of(&checked)', save)
 
     def test_the_write_scan_bites(self):
         """Negative controls: the narrowed rule still fails on the writes it exists for.
@@ -946,6 +1018,18 @@ fn write_state(config: &Path) {
 ''', 'rust')
         self.assertEqual(tree_offenders([owned]), [])
         self.assertEqual(unowned_offenders([owned]), [])
+
+        # And the widening for HOST-002 does not reach the negative half: a write whose path went
+        # through the wizard's own validator is still a server dependency when the value came from
+        # the server's environment.
+        laundered = Source('synthetic.py', '''
+import os
+def prepare_data_dir(state):
+    path = Path(validate_data_dir(os.environ['HARDLYLISTENING_DATA_DIR']))
+    path.mkdir(parents=True, exist_ok=True)
+''', 'python')
+        self.assertTrue(tree_offenders([laundered]),
+                        'a validator laundered a server path past the tree rule')
 
 
 # -- 4. the packaged installs carry no shell ----------------------------------------------------
