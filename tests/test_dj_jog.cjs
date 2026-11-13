@@ -40,6 +40,10 @@ function makeContext(duration = 200) {
   const ctx = {
     $: sel => nodes[sel] || null,
     bootAudio() {}, fmt: s => `${Math.floor((s || 0) / 60)}:${String(Math.floor((s || 0) % 60)).padStart(2, "0")}`,
+    // This slice runs through the platter's spin loop, which schedules itself on the
+    // frame clock and looks decks up by id; neither is the subject here.
+    requestAnimationFrame() {}, performance: { now: () => 0 },
+    document: { getElementById: id => (id === "audioA" || id === "jogA" ? nodes["#" + id] : null) },
     console
   };
   vm.createContext(ctx);
