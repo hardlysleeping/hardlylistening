@@ -325,11 +325,14 @@ CREATE TABLE IF NOT EXISTS listening_bookmarks (
 );
 CREATE INDEX IF NOT EXISTS listening_bookmarks_member ON listening_bookmarks(member_id, updated DESC);
 
--- Public share links. Only the SHA-256 of the bearer token is stored, so a
--- database leak cannot mint a working link. Every row expires.
+-- Public share links. The SHA-256 of the bearer token is what lookup uses; the token
+-- itself is kept beside it so a member can be shown their own link again instead of
+-- having to revoke and recreate it (HL-207). Both are member-scoped reads: whoever can
+-- read this row can already read the share's target and the whole catalogue.
 CREATE TABLE IF NOT EXISTS listening_shares (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash TEXT NOT NULL UNIQUE,
+  token TEXT NOT NULL DEFAULT '',
   member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   kind TEXT NOT NULL CHECK (kind IN ('track', 'album', 'playlist')),
   target TEXT NOT NULL,
@@ -437,6 +440,11 @@ ADDED_COLUMNS = {
         # row, its playlists and its provider identity stay so a restore does not
         # have to re-create anything; every read path filters these out.
         "deleted": "REAL DEFAULT 0",
+    },
+    "listening_shares": {
+        # HL-207: the plaintext token, so the listing can show the URL again. Rows created
+        # before this column existed stay '' and are reported as recreate-it.
+        "token": "TEXT NOT NULL DEFAULT ''",
     },
 }
 

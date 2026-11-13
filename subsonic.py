@@ -752,8 +752,12 @@ def handle(endpoint, params, multi, ctx):
         for row in rows:
             entries = [by_id[str(t['id'])] for t in shares.tracks_for(store, row)
                        if str(t['id']) in by_id]
+            # `url` is part of the getShares payload, and now it is true: the token is
+            # kept with the row (HL-207). A share made before that has no URL to show.
+            token = row.get('token') or ''
             out.append({'id': str(row['id']), 'description': row['note'] or '',
                         'username': ctx.get('username') or uid,
+                        'url': shares.public_url(ctx.get('security'), token) if token else '',
                         'created': iso(row['created']), 'expires': iso(row['expires']),
                         'visitCount': int(row['hits']), 'entry': entries})
         return {'shares': {'share': out}}

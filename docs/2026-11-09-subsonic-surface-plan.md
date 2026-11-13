@@ -67,12 +67,16 @@ has saved songs; the full Python suite passes; one release, service restarted, h
 
 ## Phase 2 — Public shares (24 h, members and admins only)
 
-- `listening_shares(id, token_hash, member_id, kind('track'|'album'|'playlist'), target, note, created,
-  expires, hits)`; expiry always `created + 24h`.
+- `listening_shares(id, token_hash, token, member_id, kind('track'|'album'|'playlist'), target, note,
+  created, expires, hits)`; expiry always `created + 24h`.
 - Routes: `POST /api/shares`, `DELETE /api/shares/<id>`, `GET /s/<token>` (no-login player),
   `GET /s/<token>/stream` (Range), `GET /s/<token>/cover`.
-- Token: 32 random bytes, only the hash stored; per-token rate limit; `noindex`, `no-referrer`;
-  the page exposes only the shared item, never the owner's name or their wider library.
+- Token: 32 random bytes, kept beside its SHA-256 so the member who minted it can be shown the
+  same URL again (HL-207); lookup is still by hash. A row from before that has `token=''` and the
+  listing says `recreate` rather than showing a broken `/s/`. Per-token rate limit; `noindex`,
+  `no-referrer`; the page exposes only the shared item, never the owner's name or their wider
+  library. Whoever can read the row could already read its target, so the token adds no reach —
+  it only stops the link from being lost the moment the dialog closes.
 - Guests are refused (403) — the party session cookie is not enough to mint a share.
 - Subsonic: `createShare`, `getShares`, `updateShare` (expiry/description), `deleteShare`.
 - No storage cost: shares stream originals.

@@ -1,9 +1,10 @@
 """Public share links (Phase 2) and their no-login player.
 
-A share is a capability URL: 32 random bytes, only the SHA-256 stored. It exposes
-exactly one track, album or playlist and nothing about its owner or the wider
-library. Every share expires (24 hours by default; the caller may choose a later
-expiry, capped at 30 days). Members and admins may mint links; party guests and
+A share is a capability URL: 32 random bytes, kept beside its SHA-256 so the member
+who made it can be shown the same link again (HL-207). Lookup still goes through the
+hash. It exposes exactly one track, album or playlist and nothing about its owner or
+the wider library. Every share expires (24 hours by default; the caller may choose a
+later expiry, capped at 30 days). Members and admins may mint links; party guests and
 signed-out visitors may not.
 """
 from __future__ import annotations
@@ -35,11 +36,20 @@ def schema(store):
           PRIMARY KEY (member_id, track_id));
         CREATE TABLE IF NOT EXISTS listening_shares (
           id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT NOT NULL UNIQUE,
+          token TEXT NOT NULL DEFAULT '',
           member_id TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('track','album','playlist')),
           target TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
           created REAL NOT NULL, expires REAL NOT NULL,
           hits INTEGER NOT NULL DEFAULT 0);
         ''')
+        # A store opened before HL-207 has the table without the token column; CREATE
+        # TABLE IF NOT EXISTS will not add it, and this mirror is the only schema path
+        # shares.py owns.
+        present = {row[1] for row in store.conn.execute(
+            'PRAGMA table_info(listening_shares)')}
+        if 'token' not in present:
+            store.conn.execute(
+                "ALTER TABLE listening_shares ADD COLUMN token TEXT NOT NULL DEFAULT ''")
         store.conn.commit()
 
 
@@ -171,9 +181,10 @@ def create(store, member, kind, target, note='', expires=None, security=None):
     digest = hashlib.sha256(token.encode()).hexdigest()
     with store.lock:
         cursor = store.conn.execute(
-            'INSERT INTO listening_shares(token_hash,member_id,kind,target,note,created,expires) '
-            'VALUES(?,?,?,?,?,?,?)',
-            (digest, member['id'], kind, target, note.strip(), now, expires_at))
+            'INSERT INTO listening_shares'
+            '(token_hash,token,member_id,kind,target,note,created,expires) '
+            'VALUES(?,?,?,?,?,?,?,?)',
+            (digest, token, member['id'], kind, target, note.strip(), now, expires_at))
         store.conn.commit()
         share_id = cursor.lastrowid
     return {'id': share_id, 'token': token, 'kind': kind, 'target': target,
@@ -251,11 +262,18 @@ def listing(store, member, security):
         rows = [dict(r) for r in store.conn.execute(
             'SELECT * FROM listening_shares WHERE member_id=? AND expires>? ORDER BY created DESC,id DESC',
             (member['id'], now))]
-    # The bearer token exists only in the create response: listings cannot
-    # reconstruct a URL because only its hash is stored.
-    return [{'id': r['id'], 'kind': r['kind'], 'target': r['target'], 'note': r['note'],
-             'created': iso(r['created']), 'expires': iso(r['expires']), 'hits': r['hits']}
-            for r in rows]
+    # The URL comes back for the member who owns the share. A row created before the
+    # token was kept has no URL to show: `recreate` says so instead of handing back
+    # `/s/` and looking broken.
+    out = []
+    for r in rows:
+        token = r.get('token') or ''
+        out.append({'id': r['id'], 'kind': r['kind'], 'target': r['target'],
+                    'note': r['note'], 'created': iso(r['created']),
+                    'expires': iso(r['expires']), 'hits': r['hits'],
+                    'url': public_url(security, token) if token else '',
+                    'recreate': not token})
+    return out
 
 
 def render_page(store, share, rows, token):
