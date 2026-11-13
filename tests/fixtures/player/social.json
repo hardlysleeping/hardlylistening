@@ -1,0 +1,413 @@
+{
+  "activity": {
+    "api": "v1",
+    "count": 2,
+    "data": [
+      {
+        "expires_at": 1760086400.0,
+        "kind": "boost",
+        "member": "Ana",
+        "member_icon": "music",
+        "member_id": "m1",
+        "track": {
+          "artist_name": "Ana Vale",
+          "id": 11,
+          "title": "Night Drive"
+        },
+        "ts": 1760000000.0
+      },
+      {
+        "counts": {
+          "listen": 1
+        },
+        "day": "2026-11-12",
+        "first_ts": 1760000100.0,
+        "groups": {
+          "add": [],
+          "listen": [
+            {
+              "artist_name": "Ana Vale",
+              "id": 11,
+              "title": "Night Drive",
+              "ts": 1760000500.0
+            }
+          ],
+          "other": [],
+          "playlist": []
+        },
+        "kind": "day",
+        "member": "Ana",
+        "member_icon": "music",
+        "member_id": "m1",
+        "ts": 1760000500.0
+      }
+    ],
+    "resource": "social.activity"
+  },
+  "documents": {
+    "empty": {},
+    "hosted": {
+      "features": {
+        "accounts": {
+          "google": false,
+          "invite_only": true,
+          "login_link": true,
+          "password": true
+        },
+        "discovery": {
+          "search": true,
+          "sonic_analysis": false
+        },
+        "library": {
+          "bookmarks": true,
+          "scope": "member"
+        },
+        "party": {
+          "chat": true,
+          "enabled": true,
+          "jukebox": false
+        },
+        "playback": {
+          "hls": false,
+          "range": true,
+          "transcode": true
+        },
+        "social": {
+          "activity": true,
+          "comments": true,
+          "likes": true,
+          "votes": true
+        }
+      },
+      "server": {
+        "api": "v1",
+        "name": "HardlyListening",
+        "requires_members": true,
+        "version": "0.16.6"
+      },
+      "subsonic": {
+        "default_transcode": "mp3",
+        "enabled": true,
+        "extensions": [
+          {
+            "name": "formPost",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "songLyrics",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "transcoding",
+            "versions": [
+              1
+            ]
+          }
+        ],
+        "open_subsonic": true,
+        "server_version": "scoped-1",
+        "transcode_targets": [
+          "aac",
+          "mp3",
+          "opus"
+        ],
+        "version": "1.16.1"
+      }
+    },
+    "local": {
+      "features": {
+        "accounts": {
+          "google": false,
+          "invite_only": true,
+          "login_link": true,
+          "password": true
+        },
+        "discovery": {
+          "search": true,
+          "sonic_analysis": false
+        },
+        "library": {
+          "bookmarks": true,
+          "scope": "member"
+        },
+        "party": {
+          "chat": true,
+          "enabled": true,
+          "jukebox": false
+        },
+        "playback": {
+          "hls": false,
+          "range": true,
+          "transcode": true
+        },
+        "social": {
+          "activity": true,
+          "comments": true,
+          "likes": true,
+          "votes": true
+        }
+      },
+      "server": {
+        "api": "v1",
+        "name": "HardlyListening",
+        "requires_members": false,
+        "version": "0.16.6"
+      },
+      "subsonic": {
+        "default_transcode": "mp3",
+        "enabled": true,
+        "extensions": [
+          {
+            "name": "formPost",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "songLyrics",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "transcoding",
+            "versions": [
+              1
+            ]
+          }
+        ],
+        "open_subsonic": true,
+        "server_version": "scoped-1",
+        "transcode_targets": [
+          "aac",
+          "mp3",
+          "opus"
+        ],
+        "version": "1.16.1"
+      }
+    },
+    "no_activity": {
+      "features": {
+        "accounts": {
+          "google": false,
+          "invite_only": true,
+          "login_link": true,
+          "password": true
+        },
+        "discovery": {
+          "search": true,
+          "sonic_analysis": false
+        },
+        "library": {
+          "bookmarks": true,
+          "scope": "member"
+        },
+        "party": {
+          "chat": true,
+          "enabled": true,
+          "jukebox": false
+        },
+        "playback": {
+          "hls": false,
+          "range": true,
+          "transcode": true
+        },
+        "social": {
+          "comments": true,
+          "likes": true,
+          "votes": true
+        }
+      },
+      "server": {
+        "api": "v1",
+        "name": "HardlyListening",
+        "requires_members": false,
+        "version": "0.16.6"
+      },
+      "subsonic": {
+        "default_transcode": "mp3",
+        "enabled": true,
+        "extensions": [
+          {
+            "name": "formPost",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "songLyrics",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "transcoding",
+            "versions": [
+              1
+            ]
+          }
+        ],
+        "open_subsonic": true,
+        "server_version": "scoped-1",
+        "transcode_targets": [
+          "aac",
+          "mp3",
+          "opus"
+        ],
+        "version": "1.16.1"
+      }
+    },
+    "no_social": {
+      "features": {
+        "accounts": {
+          "google": false,
+          "invite_only": true,
+          "login_link": true,
+          "password": true
+        },
+        "discovery": {
+          "search": true,
+          "sonic_analysis": false
+        },
+        "library": {
+          "bookmarks": true,
+          "scope": "member"
+        },
+        "party": {
+          "chat": true,
+          "enabled": true,
+          "jukebox": false
+        },
+        "playback": {
+          "hls": false,
+          "range": true,
+          "transcode": true
+        },
+        "social": {}
+      },
+      "server": {
+        "api": "v1",
+        "name": "HardlyListening",
+        "requires_members": false,
+        "version": "0.16.6"
+      },
+      "subsonic": {
+        "default_transcode": "mp3",
+        "enabled": true,
+        "extensions": [
+          {
+            "name": "formPost",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "songLyrics",
+            "versions": [
+              1
+            ]
+          },
+          {
+            "name": "transcoding",
+            "versions": [
+              1
+            ]
+          }
+        ],
+        "open_subsonic": true,
+        "server_version": "scoped-1",
+        "transcode_targets": [
+          "aac",
+          "mp3",
+          "opus"
+        ],
+        "version": "1.16.1"
+      }
+    }
+  },
+  "expectations": {
+    "empty": {
+      "available": false,
+      "needed": "social",
+      "sdk_activity": false,
+      "sdk_available": false,
+      "state": "absent"
+    },
+    "hosted": {
+      "available": false,
+      "needed": "members",
+      "sdk_activity": true,
+      "sdk_available": true,
+      "state": "members"
+    },
+    "local": {
+      "available": true,
+      "needed": "",
+      "sdk_activity": true,
+      "sdk_available": true,
+      "state": "activity"
+    },
+    "no_activity": {
+      "available": false,
+      "needed": "social.activity",
+      "sdk_activity": false,
+      "sdk_available": true,
+      "state": "no-activity"
+    },
+    "no_social": {
+      "available": false,
+      "needed": "social",
+      "sdk_activity": false,
+      "sdk_available": false,
+      "state": "absent"
+    }
+  },
+  "paths": {
+    "activity": "/api/v1/social/activity",
+    "capabilities": "/api/v1/capabilities"
+  },
+  "rows": [
+    {
+      "expires_at": 1760086400.0,
+      "kind": "boost",
+      "member": "Ana",
+      "member_icon": "music",
+      "member_id": "m1",
+      "track": {
+        "artist_name": "Ana Vale",
+        "id": 11,
+        "title": "Night Drive"
+      },
+      "ts": 1760000000.0
+    },
+    {
+      "counts": {
+        "listen": 1
+      },
+      "day": "2026-11-12",
+      "first_ts": 1760000100.0,
+      "groups": {
+        "add": [],
+        "listen": [
+          {
+            "artist_name": "Ana Vale",
+            "id": 11,
+            "title": "Night Drive",
+            "ts": 1760000500.0
+          }
+        ],
+        "other": [],
+        "playlist": []
+      },
+      "kind": "day",
+      "member": "Ana",
+      "member_icon": "music",
+      "member_id": "m1",
+      "ts": 1760000500.0
+    }
+  ]
+}
