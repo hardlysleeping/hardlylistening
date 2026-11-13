@@ -62,7 +62,7 @@ def reverse(store, entry_id):
         job = store.conn.execute('SELECT * FROM download_jobs WHERE id=?', (row['job_id'],)).fetchone()
         if not job:
             raise ValueError('Download job no longer exists; history only')
-        if job['status'] in ('resolving', 'downloading'):
+        if job['status'] in ('resolving', 'downloading', 'verifying'):
             raise ValueError('Stop the active job before reversing its decision')
         if job['resolved_url'] != row['chosen_url']:
             raise ValueError('Source has changed since this decision; use the latest entry')

@@ -80,6 +80,10 @@
 
  .dot.downloading{background:var(--accent2)}
 
+/* Verifying is the same in-flight colour as downloading: the file is on disk, the
+   worker is still on that track. Only the label tells them apart. */
+ .dot.verifying{background:var(--accent2)}
+
 .dot.failed{background:var(--err)}
 
  .dot.queued{background:var(--warn)}

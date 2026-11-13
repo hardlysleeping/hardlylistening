@@ -29,9 +29,11 @@ VERSION = (APP_DIR / "VERSION").read_text().strip() if (APP_DIR / "VERSION").exi
 
 # Download-job states. A track's state is its job's state — there is no second
 # copy of it on the track row.
-JOB_STATES = ("queued", "resolving", "downloading", "retry_wait",
+# `verifying` is the gap between yt-dlp exiting 0 and ffprobe agreeing the file is a
+# track. It used to be invisible: the row sat at "downloading 100%", which reads as hung.
+JOB_STATES = ("queued", "resolving", "downloading", "verifying", "retry_wait",
               "completed", "failed", "unavailable", "cancelled", "review")
-OPEN_STATES = ("queued", "resolving", "downloading", "retry_wait")
+OPEN_STATES = ("queued", "resolving", "downloading", "verifying", "retry_wait")
 
 DEFAULTS = {
     "root": str(Path.home() / "Music" / "HardlyListening"),
@@ -627,6 +629,38 @@ class Store:
             return row["cooldown_until"], row["provider"]
         return 0.0, ""
 
+    def cooldowns(self) -> dict[str, float]:
+        """Providers that must not be asked again yet: provider -> deadline.
+
+        A cooldown belongs to the source that issued it, not to the queue. One source
+        answering 429 used to stop every source, so a whole evening of Apple Music work
+        waited on SoundCloud's clock (HL-305).
+        """
+        now = time.time()
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT provider, cooldown_until FROM provider_state"
+                " WHERE cooldown_until > ?", (now,)).fetchall()
+        return {row["provider"]: row["cooldown_until"] for row in rows}
+
+    def blocking_cooldown(self) -> tuple[float, str]:
+        """The soonest cooldown that is actually holding a waiting job back.
+
+        A provider cooling down with nothing queued for it is not a reason to say the
+        queue is waiting: the answer to "why is nothing happening" has to name a source
+        whose work is genuinely parked.
+        """
+        cooling = self.cooldowns()
+        if not cooling:
+            return 0.0, ""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT DISTINCT provider FROM download_jobs"
+                " WHERE status IN ('queued','retry_wait')").fetchall()
+        held = sorted((cooling[row["provider"]], row["provider"]) for row in rows
+                      if row["provider"] in cooling)
+        return held[0] if held else (0.0, "")
+
     # -- artists / releases / tracks --
     def artist(self, provider: str, artist_id: str, name: str, url: str = "",
                artwork: str = "") -> int:
@@ -853,13 +887,22 @@ class Store:
                               (*fields.values(), job_id))
             self.conn.commit()
 
-    def next_job(self) -> dict | None:
+    def next_job(self, blocked=()) -> dict | None:
+        """The next job that may run, skipping providers that asked to be left alone.
+
+        `blocked` is a provider -> deadline map or any container of names. The worker
+        still runs one job at a time; what changes is that a cooling source does not take
+        the other sources down with it.
+        """
         with self.lock:
-            row = self.conn.execute(
+            rows = self.conn.execute(
                 "SELECT * FROM download_jobs WHERE status IN ('queued','retry_wait')"
-                " AND next_retry_at <= ? ORDER BY priority DESC, id LIMIT 1",
-                (time.time(),)).fetchone()
-        return dict(row) if row else None
+                " AND next_retry_at <= ? ORDER BY priority DESC, id",
+                (time.time(),)).fetchall()
+        for row in rows:
+            if row["provider"] not in blocked:
+                return dict(row)
+        return None
 
     def job_for_track(self, track_id: int) -> dict | None:
         with self.lock:
@@ -921,7 +964,8 @@ class Store:
             "tracks": tracks,
             "done": counts.get("completed", 0),
             "queued": counts.get("queued", 0),
-            "running": counts.get("downloading", 0) + counts.get("resolving", 0),
+            "running": (counts.get("downloading", 0) + counts.get("resolving", 0)
+                        + counts.get("verifying", 0)),
             "waiting": counts.get("retry_wait", 0),
             "failed": counts.get("failed", 0),
             "unavailable": counts.get("unavailable", 0),
@@ -1325,7 +1369,7 @@ class Store:
             # What the worker is on right now, so the queue can say what is
             # actually moving instead of just labelling rows "downloading".
             live = [j for j in jobs.values()
-                    if j.get("status") in ("downloading", "resolving")]
+                    if j.get("status") in ("downloading", "resolving", "verifying")]
             current = None
             if live:
                 job = max(live, key=lambda j: j.get("started") or 0)
@@ -1356,7 +1400,7 @@ class Store:
                     "playlist": (owner["title"] if owner else "") or "",
                     "playlist_id": (owner["id"] if owner else 0),
                 }
-        deadline, provider = self.cooldown()
+        deadline, provider = self.blocking_cooldown()
         stats = self.stats()
         stats.update({
             "total": stats["tracks"], "downloading": stats["running"],

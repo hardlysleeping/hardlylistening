@@ -30,7 +30,7 @@ def stage(store, tid, url):
         track, job = store.track_by_id(tid), store.job_for_track(tid)
         if not track or not job or not Path(track['file']).is_file():
             raise ValueError('Replacement requires an existing file and download job')
-        if job['status'] in ('queued', 'retry_wait', 'resolving', 'downloading') or pending(store, job['id']):
+        if job['status'] in ('queued', 'retry_wait', 'resolving', 'downloading', 'verifying') or pending(store, job['id']):
             raise ValueError('Stop the active job before changing its source')
         # Private unique directory inside the canonical root: no collision with old output.
         fmt = store.setting('audio_format', 'mp3')

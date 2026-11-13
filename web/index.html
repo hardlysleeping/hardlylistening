@@ -1098,6 +1098,9 @@ function trackState(t){
       return {cls:"live", text: `${Math.round(t.progress || 0)}%${bits.length ? " · " + bits.join(" · ") : ""}`};
     }
     case "resolving": return {cls:"live", text: "finding a source…"};
+    // Downloaded, now being read to prove it is a real track. It used to read as
+    // "downloading 100%", which looks exactly like a hung queue.
+    case "verifying": return {cls:"live", text: "checking the file…"};
     case "retry_wait": {
       const now = (last && last.stats && last.stats.now) || Date.now() / 1000;
       const left = Math.max(0, Math.round((t.next_try || 0) - now));
@@ -1143,6 +1146,9 @@ function renderNow(st){
     if (cur.eta) bits.push(fmtTime(cur.eta) + " left");
     nums = `<span class="nnum">${bits.join(" · ")}</span>`;
     bar = `<div class="nbar"><i style="width:${pct}%"></i></div>`;
+  } else if (phase === "verifying"){
+    head = `<span class="ndot"></span><b>${esc(cur.title || "unknown track")}</b><span class="ndim">checking the file…</span>`;
+    bar = `<div class="nbar"><i style="width:100%"></i></div>`;
   } else if (phase === "resolving"){
     head = `<span class="ndot"></span><b>${esc(cur.title || "unknown track")}</b><span class="ndim">finding a source…</span>`;
   } else if (phase === "cooldown"){
@@ -1185,7 +1191,7 @@ function trackRow(t, pid){
     if (["pending","queued","retry_wait","failed","downloading","resolving","review"].includes(t.status)) acts += `<button onclick="skipTrack(${t.id})">${t.status === "downloading" ? "Stop" : "Skip"}</button>`;
     // A source picked by hand can be taken back; an automatic one only needs a
     // better search, so there is nothing to undo.
-    if (t.pinned && !["downloading","resolving"].includes(t.status))
+    if (t.pinned && !["downloading","resolving","verifying"].includes(t.status))
       acts += `<button title="Undo this pick and choose again" onclick="undoPick(${t.id},${t.file ? 1 : 0})">Undo pick</button>`;
     acts += `<button title="Change source" onclick="editSource(${t.id})">Source</button>`;
   }
@@ -1202,14 +1208,14 @@ function playlistCard(p){
   // The bar counts work in progress too, so a big playlist does not sit at 0%
   // for the entire first download.
   const all = p.tracks || [];
-  const live = all.filter(t => t.status === "downloading" || t.status === "resolving").length;
+  const live = all.filter(t => ["downloading","resolving","verifying"].includes(t.status)).length;
   const waiting = all.filter(t => t.status === "retry_wait").length;
   const partial = all.reduce((a, t) => a + (t.status === "downloading" ? Math.min(100, t.progress || 0) / 100 : 0), 0);
   const pct = p.count ? Math.round(((p.done + partial) / p.count) * 100) : 0;
   const isOpen = open.has(p.id);
   // The card that is actually being worked on gets a visible live line, so the queue
   // never shows three "1 downloading" badges with no way to tell them apart.
-  const liveNow = all.find(t => t.status === "downloading" || t.status === "resolving");
+  const liveNow = all.find(t => ["downloading","resolving","verifying"].includes(t.status));
   const liveNowPct = liveNow ? Math.max(0, Math.min(100, Math.round(liveNow.progress || 0))) : 0;
   const rows = isOpen ? p.tracks.map(t => trackRow(t, p.id)).join("") : "";
   const failedBtn = adminUI() && p.failed ? `<button onclick="requeuePlaylist(${p.id})">Retry ${p.failed} failed</button>` : "";
@@ -1224,14 +1230,15 @@ function playlistCard(p){
           <span>${p.done}/${p.count} tracks</span>
           ${p.reused ? `<span class="hint" title="Already in your library before this playlist — linked to the existing file, not downloaded twice">${p.reused} already in library</span>` : ""}
           ${p.review ? `<span style="color:var(--warn)" title="A person has to pick the source for these — open Tracks to choose">${p.review} to review</span>` : ""}
-          ${liveNow ? `<span class="livebadge">Downloading now</span>`
+          ${liveNow ? `<span class="livebadge">${liveNow.status === "verifying" ? "Checking the file" : "Downloading now"}</span>`
                     : live ? `<span style="color:var(--accent2)">${live} queued to start</span>` : ""}
           ${waiting ? `<span style="color:var(--warn)">${waiting} retrying</span>` : ""}
           ${p.failed ? `<span style="color:var(--err)">${p.failed} failed</span>` : ""}
           ${p.declared && p.count < p.declared ? `<span style="color:var(--warn)">${p.declared - p.count} missing from source</span>` : ""}
         </div>
         ${liveNow ? `<div class="livenow"><span class="livedot"></span><span class="livename"><b>${esc(liveNow.title)}</b>${
-            liveNow.status === "downloading" ? ` · ${liveNowPct}%` : " · finding a source…"}</span></div>` : ""}
+            liveNow.status === "downloading" ? ` · ${liveNowPct}%`
+              : liveNow.status === "verifying" ? " · checking the file…" : " · finding a source…"}</span></div>` : ""}
         <div class="prog"><i class="${p.failed && p.done === 0 ? 'bad' : ''}" style="width:${pct}%"></i></div>
       </div>
       <div class="actions">

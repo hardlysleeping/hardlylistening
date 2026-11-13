@@ -67,7 +67,7 @@ class Queue:
         with store.lock:
             store.conn.execute(
                 "UPDATE download_jobs SET status='queued' WHERE status IN"
-                " ('downloading','resolving')")
+                " ('downloading','resolving','verifying')")
             store.conn.commit()
 
     # -- lifecycle --
@@ -488,10 +488,20 @@ class Queue:
 
         if rc == 0:
             written = ytdlp.find_output(outtmpl, fmt)
+            # yt-dlp exiting 0 is not proof: ffprobe reads the file to decide. That read is
+            # seconds of a large file, and while it ran the row still said "downloading
+            # 100%", which is indistinguishable from a hung queue.
+            self.store.update_job(job["id"], status="verifying", progress=100, speed=0,
+                                  eta=0)
+            self.current = {"job_id": job["id"], "track_id": track["id"],
+                            "phase": "verifying", "title": track["title"],
+                            "artist": track["artist_name"], "started": time.time(),
+                            "progress": 100, "speed": 0, "eta": 0}
             ok, why = ytdlp.verify_audio(written, expected_seconds=track.get("duration") or 0)
             if not ok:
                 # Exit 0 is not proof of a track: an empty or truncated file used
                 # to be recorded as "completed" and then silently vanished.
+                self.current = None
                 ytdlp.discard_output(outtmpl, stop=root)   # not a track, not a file
                 if "preview" in why and not job.get("pinned") and not job.get("source_url"):
                     # The match itself was a sample; another source may hold the
@@ -500,6 +510,8 @@ class Queue:
                     return
                 self._retry_or_fail(job, why, "retryable")
                 return
+            # The file is a track: from here on the row is finishing, not verifying.
+            self.current = None
             self.store.conn.execute(
                 "UPDATE tracks SET file=?, size=? WHERE id=?",
                 (str(written), written.stat().st_size, track["id"]))
@@ -550,7 +562,7 @@ class Queue:
         # "later", not "no".
         self.store.update_job(job["id"], status="queued", next_retry_at=deadline,
                               error_type="rate", error_message=reason)
-        self.store.log(f"{job['provider']} rate limited — queue paused for"
+        self.store.log(f"{job['provider']} rate limited — that source waits"
                        f" {int(wait // 60)} min ({reason})", "err", f"job:{job['id']}")
 
     def _next_source(self, job: dict, url: str, reason: str) -> None:
@@ -734,12 +746,19 @@ class Queue:
                 self._wake.wait(1.0)
                 self._wake.clear()
                 continue
-            deadline, provider = self.store.cooldown()
-            if deadline > time.time():
-                self.current = {"phase": "cooldown", "provider": provider,
-                                "remaining": round(deadline - time.time())}
-                time.sleep(min(2.0, deadline - time.time()))
-                continue
+            # A cooldown belongs to the provider that issued it. Waiting on the latest
+            # one across all sources blocked the queue for a source nobody was asking
+            # for, so the wait is now per provider and only when nothing else can run.
+            blocked = self.store.cooldowns()
+            with self._pick_lock:
+                job = self.store.next_job(blocked=blocked)
+            if not job and blocked:
+                deadline, provider = self.store.blocking_cooldown()
+                if deadline > time.time():
+                    self.current = {"phase": "cooldown", "provider": provider,
+                                    "remaining": round(deadline - time.time())}
+                    time.sleep(min(2.0, deadline - time.time()))
+                    continue
             if self.disk_blocked():
                 # Refuse to start rather than die halfway through a file with
                 # ENOSPC. Re-checked on every pass, so freeing space resumes it.
@@ -756,8 +775,6 @@ class Queue:
                 self._wake.wait(15)
                 self._wake.clear()
                 continue
-            with self._pick_lock:
-                job = self.store.next_job()
             if not job:
                 self._start_reacquire()
                 self.current = None
