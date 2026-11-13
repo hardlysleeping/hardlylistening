@@ -49,7 +49,8 @@ Three consequences worth stating plainly:
 
 * **Acquisition is excluded.** `web/js/repo-discovery.js` is not in `WEB_ALLOW`, and
   `EXCLUDED` names it with the reason, so the absence is a decision a reader can check.
-  PLAYER-007 turns that into a store-safe assertion over the built tree.
+  PLAYER-007 turns that into a store-safe assertion over the built tree — see
+  [player/store-safe.md](player/store-safe.md) for what it proves and what it cannot.
 * **The player is not a copy.** Files are copied and then hashed against their source; if a
   byte changed on the way in, the script fails. There is nothing to keep in sync by hand.
 * **The entry document is the one file rewritten**, and only to drop references to `EXCLUDED`
