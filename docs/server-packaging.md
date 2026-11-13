@@ -472,8 +472,12 @@ and after the move.
 Not "VPS packaging complete" until all hold:
 
 ```
-✓ runs with no graphical environment
-✓ no Tauri/Electron/Node dependency required
+✓ runs with no graphical environment        (asserted: tests/test_headless.py boots the real
+                                             entry point with no DISPLAY, and parses every core
+                                             module for a GUI toolkit import)
+✓ no Tauri/Electron/Node dependency required (asserted in the same file: no src-tauri,
+                                             package.json or web/dist in the core, and the
+                                             launcher is the plain interpreter)
 ✓ /opt can be read-only
 ✓ database lives outside the source tree
 ✓ music lives outside the source tree
