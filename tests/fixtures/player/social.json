@@ -83,7 +83,7 @@
         "api": "v1",
         "name": "HardlyListening",
         "requires_members": true,
-        "version": "0.16.6"
+        "version": "0.17.0"
       },
       "subsonic": {
         "default_transcode": "mp3",
@@ -155,7 +155,7 @@
         "api": "v1",
         "name": "HardlyListening",
         "requires_members": false,
-        "version": "0.16.6"
+        "version": "0.17.0"
       },
       "subsonic": {
         "default_transcode": "mp3",
@@ -226,7 +226,7 @@
         "api": "v1",
         "name": "HardlyListening",
         "requires_members": false,
-        "version": "0.16.6"
+        "version": "0.17.0"
       },
       "subsonic": {
         "default_transcode": "mp3",
@@ -293,7 +293,7 @@
         "api": "v1",
         "name": "HardlyListening",
         "requires_members": false,
-        "version": "0.16.6"
+        "version": "0.17.0"
       },
       "subsonic": {
         "default_transcode": "mp3",
