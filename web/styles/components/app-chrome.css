@@ -8,16 +8,40 @@ header{position:sticky;top:0;z-index:20;background:rgba(16,16,20,.94);
 
 .bar{display:flex;gap:10px;align-items:center;padding:7px 16px;flex-wrap:wrap;position:relative}
 
-.usermenu{position:absolute;right:16px;top:calc(100% - 2px);z-index:80;display:grid;min-width:150px;padding:6px;
-background:var(--panel);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 34px #000a}
+/* The profile panel hangs off the chip it belongs to, six pixels below it, instead of the
+   bar's right edge: on a phone the chip wraps onto a row of its own at the left, and a
+   panel pinned to the viewport's right edge sat nowhere near the thing that opened it.
+   Which edge it opens from, and the clamp that keeps it on screen when the chip is near an
+   edge, is `placeUserMenu()` in index.html — a chip on the left opens the panel rightward,
+   a chip on the right opens it leftward under itself. */
+.userwrap{position:relative;display:flex;align-items:center}
+
+.usermenu{position:absolute;right:0;top:calc(100% + 6px);z-index:80;display:grid;gap:2px;
+min-width:208px;max-width:calc(100vw - 16px);padding:6px;background:var(--panel);
+border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px #000b}
 
 .usermenu[hidden]{display:none}
 
-.usermenu button{text-align:left;background:none;border:0;border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);cursor:pointer;min-height:0}
+.usermenu button{text-align:left;background:none;border:0;border-radius:8px;padding:9px 11px;
+font-size:13px;line-height:1.2;color:var(--text);cursor:pointer;min-height:0}
 
 .usermenu button:hover{background:var(--panel2)}
 
+/* Sign out is the way out, not another destination: a full-width rule above it, muted until
+   hovered, and red on the press it is about to make. */
+.usermenu button:last-child{margin:4px -6px 0;border-top:1px solid var(--line);
+border-radius:0 0 11px 11px;padding:11px 17px 9px;color:var(--dim)}
+
+.usermenu button:last-child:hover{background:color-mix(in srgb,var(--err) 14%,transparent);color:var(--err)}
+
+
 .brand{font-weight:700;font-size:17px;letter-spacing:.2px;margin-right:auto}
+/* The wordmark is a button (Home → the Library page). It reads as the old text, not as a
+   control: no chrome, no fill on hover, an underline once you are on it. */
+button.brand{background:none;border:0;border-radius:6px;padding:0;margin:0;min-height:0;line-height:inherit;color:inherit}
+button.brand:hover{background:none}
+button.brand:hover span{text-decoration:underline}
+button.brand:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .brand span{color:var(--accent)}
 
@@ -39,8 +63,6 @@ background:var(--panel);border:1px solid var(--line);border-radius:11px;box-shad
   background:transparent;color:var(--dim);cursor:pointer;font:inherit}
 
 .tab.on{background:var(--panel2);color:var(--text);border-color:#3a3a48}
-
-.followrow .who{flex:1;min-width:0}
 
 .pvol-inline{position:relative;display:flex;align-items:center}
 

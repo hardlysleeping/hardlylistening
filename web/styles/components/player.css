@@ -49,14 +49,20 @@ border-top:1px solid var(--line);backdrop-filter:blur(10px)}
 #player .ptitle{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* The second line is two controls: the artist, then the release. They sit in one row so
- the album can scroll inside its own box without moving the artist beside it. */
+ the album can scroll inside its own box without moving the artist beside it. The artist
+ is the one that must stay readable, so it never shrinks or ellipsises while the release
+ has room; the release is the part that gives way, and scrolls when what is left of it
+ is too short. */
 #player .psub{display:flex;align-items:baseline;min-width:0;white-space:nowrap;overflow:hidden;
 color:var(--dim);font-size:11.5px;margin-top:2px}
 
-#player .psub .psub-a{flex:0 1 auto;min-width:0;max-width:62%;overflow:hidden;text-overflow:ellipsis;
+#player .psub .psub-a{flex:0 0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;
 color:inherit;text-decoration:none;cursor:pointer}
 
 #player .psub .psub-a:hover{color:var(--text);text-decoration:underline}
+
+/* A name wider than the whole line is the only case where the artist itself scrolls. */
+#player .psub .psub-a.rolling{text-overflow:clip}
 
 #player .psub .psub-sep{flex:0 0 auto;white-space:pre}
 
@@ -134,6 +140,68 @@ body:has(#player.on){padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 #player-full .pf-tab{margin:8px auto 0;border:0;background:none;color:var(--dim);font-size:22px;line-height:1;padding:8px 30px;border-radius:12px;cursor:pointer}
 
 #player-full .pf-tab:hover{color:var(--text);background:var(--panel2)}
+
+/* Hot cues are a toggle ("Cues" in the foot), because they are a DJ's tool rather than
+   something every listener wants on the record. One row of four, centred on the record's
+   lower edge and above the title. They overlay the vinyl instead of sitting beside it: a
+   pair pushed out past the disc's edge was clipped by the overlay's own scroll box on a
+   phone, and inside the stage's box nothing can leave it. The layer takes no pointer
+   events — only the pads do — so the record underneath still scrubs. The letter identifies
+   the pad, the time is where it lands. */
+#player-full .pf-cues{position:absolute;left:0;right:0;bottom:6px;z-index:4;display:none;
+  justify-content:center;align-items:flex-end;gap:var(--pf-cue-gap);pointer-events:none}
+
+#player-full .pf-cues.on{display:flex}
+
+.pf-cue{display:grid;place-items:center;box-sizing:border-box;width:var(--pf-cue);height:var(--pf-cue);
+  padding:0;border:1px dashed color-mix(in srgb,var(--line) 85%,transparent);border-radius:12px;
+  /* A pad lies on the vinyl, and on the sleeve in art mode, so it carries its own scrim:
+     an empty outline over grooves was unreadable. The layer around it takes no events, so
+     the pad has to take them back. */
+  background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(6px);
+  color:var(--dim);font:inherit;line-height:1;cursor:pointer;pointer-events:auto;
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;
+  transition:border-color .12s,background .12s,color .12s,transform .08s}
+
+.pf-cue-key{font-size:13px;font-weight:700;letter-spacing:.05em}
+
+.pf-cue-time{font-size:9.5px;font-variant-numeric:tabular-nums;opacity:.7}
+
+.pf-cue.set{border-style:solid;border-color:color-mix(in srgb,var(--accent) 62%,var(--line));
+  background:color-mix(in srgb,var(--accent) 13%,#15161d);color:var(--text)}
+
+.pf-cue.set .pf-cue-time{color:var(--accent);opacity:1}
+
+.pf-cue:active{transform:scale(.94)}
+
+@media (hover:hover){
+  #player-full .pf-cue:hover{border-color:var(--accent);color:var(--text)}
+}
+
+/* AutoDJ's switch, the mirror of the cue grid: a small pill in the top-right, so the two
+   DJ controls bracket the record. Off is a plain outline; on is accent-lit with a live dot,
+   which is the only state change the listener has to notice. */
+#player-full>.pf-autodj{position:absolute;top:calc(8px + env(safe-area-inset-top));
+  right:calc(10px + env(safe-area-inset-right));z-index:4;display:inline-flex;align-items:center;gap:7px;
+  height:32px;min-height:0;padding:0 12px;border:1px solid var(--line);border-radius:999px;
+  background:color-mix(in srgb,var(--panel2) 82%,transparent);color:var(--dim);font:inherit;
+  font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  cursor:pointer;touch-action:manipulation;
+  transition:border-color .12s,background .12s,color .12s,transform .08s}
+
+#player-full>.pf-autodj .dot{width:7px;height:7px;border-radius:50%;background:var(--line);
+  transition:background .12s,box-shadow .12s}
+
+#player-full>.pf-autodj.on{border-color:color-mix(in srgb,var(--accent) 58%,var(--line));
+  background:color-mix(in srgb,var(--accent) 14%,#15161d);color:var(--text)}
+
+#player-full>.pf-autodj.on .dot{background:#43d17c;box-shadow:0 0 7px #43d17ccc}
+
+#player-full>.pf-autodj:active{transform:scale(.96)}
+
+@media (hover:hover){
+  #player-full>.pf-autodj:hover{color:var(--text);border-color:var(--accent)}
+}
 
 #player-full .pf-body{width:min(560px,100%);display:flex;flex-direction:column;gap:14px;margin:auto 0;padding:8px 0 4px}
 
@@ -224,7 +292,27 @@ body:has(#player.on){padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 
 #player-full .pf-ctrl .iconbtn.big{width:60px;height:60px}
 
-#player-full .pf-foot{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:4px}
+/* A thin accent ring around the play button: elapsed time as a share of the track, starting
+   at twelve o'clock and running clockwise, so a finished song closes the circle. The share is
+   `--pf-progress` (0-1) on the button, painted by `paintSeekFill()` with the same number the
+   seek line uses, so the two can never disagree. The unplayed remainder is the accent at low
+   alpha, so the ring reads as one control rather than a half-drawn outline. */
+#player-full #pfplay{position:relative;--pf-progress:0}
+#player-full #pfplay::after{content:"";position:absolute;inset:-5px;border-radius:50%;
+  pointer-events:none;
+  background:conic-gradient(from 0deg,
+    var(--accent) calc(var(--pf-progress) * 1turn),
+    color-mix(in srgb,var(--accent) 22%,transparent) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px))}
+
+/* Three lanes: the two side groups sit on the edges, the queue alone holds the centre.
+   Equal 1fr columns keep the queue on the screen's own centre line at every width. The row
+   is wider than the body's 560 px column on purpose — the foot is the one line that can use
+   the screen's width, and at 560 the right group (save + heart + fader, 255 px) overflowed
+   its 242 px column and ran into the queue. It centres on the same line either way. */
+#player-full .pf-foot{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  gap:10px;margin-top:4px;width:720px;max-width:calc(100vw - 40px);align-self:center}
 
 #player-full .pf-foot button{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 14px;font-size:12.5px;cursor:pointer}
 
@@ -237,14 +325,16 @@ body:has(#player.on){padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 #player-full .pf-vol{display:none}
 
 @media (min-width:761px){
-  /* It sits at the right end of the foot row, level with the like/queue/visualizer buttons:
-     a row of its own would have pushed the visualizer knobs off a 1280x800 screen, and the
-     transport row has no spare width beside the centred cluster. */
-  #player-full .pf-foot{position:relative}
-  #player-full .pf-vol{display:flex;align-items:center;justify-content:flex-end;gap:9px;
-    position:absolute;right:0;top:50%;transform:translateY(-50%);margin:0}
+  /* Its own row under the foot, centred: in the right group the fader made that group
+     wider than its lane and it pushed into the queue, and a row of its own reads as the
+     row's volume rather than as a fourth button. */
+  #player-full .pf-vol{display:flex;align-items:center;justify-content:center;gap:9px;
+    margin:2px auto 0}
   #player-full .pf-vol>svg{flex:none;color:var(--dim)}
-  #player-full #pfvol{-webkit-appearance:none;appearance:none;width:130px;height:20px;margin:0;
+  /* The row is centred and nothing else shares it, so the width is the fader's own business
+     — no neighbouring hit area to stay clear of. Wide enough to read the level at a glance
+     and to grab a precise point; the thumb travels far more per pixel than before. */
+  #player-full #pfvol{-webkit-appearance:none;appearance:none;width:180px;height:20px;margin:0;
     padding:0;background:transparent;cursor:pointer}
   #player-full #pfvol::-webkit-slider-runnable-track{height:4px;border-radius:2px;
     background:linear-gradient(90deg,var(--accent) var(--vol,100%),#3a3d47 var(--vol,100%))}
@@ -273,6 +363,12 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
   #player-full .pf-ctrl .iconbtn.big{width:50px;height:50px}
 }
 
+/* The record shrinks on a short phone, so the pads shrink with it: at 46 px the inner one
+   would start to cross the circle's edge. */
+@media(max-width:760px) and (max-height:700px){
+  #player-full{--pf-cue:40px;--pf-cue-gap:5px}
+}
+
 .actrow{padding:12px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:14px;background:#191a21}
 
 @media(max-width:640px){
@@ -297,7 +393,10 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
   #player input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:#33333f}
   #player .pvol{grid-area:extras;display:flex;align-items:center;gap:8px;width:auto;justify-self:stretch;flex:1 1 auto}
   #player .pvol input{order:2;flex:1 1 auto;width:auto;min-width:0;height:20px;background:transparent}
+  /* Mute and the volume popup sit at the end of the transport in that order: mute keeps
+     its own order because the volume slot used to own the tail of the row. */
   #player #plmute{order:1;flex:none}
+  #player #plvolmore{order:2;flex:none}
 }
 
 @media(max-width:640px){
@@ -339,7 +438,7 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
 }
 
 /* Phones keep audio.volume read-only: the fader and mute are hidden there, not faked. */
-.no-volume #plvolbtn,.no-volume #player-full .pf-vol{display:none!important}
+.no-volume #plvolbtn,.no-volume #plvolmore,.no-volume #player-full .pf-vol{display:none!important}
 
   /* mute still works: iOS ignores volume, not muted */
 
@@ -402,9 +501,12 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
 
 #player-full .pf-text{transition:transform .44s cubic-bezier(.25,.8,.3,1)}
 
-#player-full.queue-open .pf-disc-shell{transform:translateY(-115%) scale(.92);opacity:0;pointer-events:none}
+#player-full:is(.queue-open,.eq-open) .pf-disc-shell{transform:translateY(-115%) scale(.92);opacity:0;pointer-events:none}
 
-#player-full.queue-open .pf-text{transform:translateY(calc(-1 * var(--pf-head-travel, 40px)))}
+/* The pads belong to the record, so they leave with it instead of floating over the queue. */
+#player-full:is(.queue-open,.eq-open) .pf-cues{opacity:0;pointer-events:none;transition:opacity .2s ease}
+
+#player-full:is(.queue-open,.eq-open) .pf-text{transform:translateY(calc(-1 * var(--pf-head-travel, 40px)))}
 
 #player-full .pf-queue-slot{position:absolute;left:0;right:0;top:var(--pf-slot-top,120px);bottom:0;
   display:none;overflow:hidden;transform:translateY(100%);opacity:.001;pointer-events:none;
@@ -417,49 +519,119 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
 
 /* With the queue open the column starts at the top (under the close chevron) instead of
    centring, so the header really lands at the top edge. */
-#player-full.queue-open{justify-content:flex-start}
+#player-full:is(.queue-open,.eq-open){justify-content:flex-start}
 
-#player-full.queue-open .pf-body{margin:0;padding-top:0}
+#player-full:is(.queue-open,.eq-open) .pf-body{margin:0;padding-top:0}
 
-/* Fullscreen: the header block sits a little lower, and the foot controls are bare icons.
-   One rule owns like, queue and the style toggle, so no later block can size one of them
-   differently: same 44 px box, same 24 px glyph, same baseline. --pf-foot-size is the token
-   the rest of the player reads. */
+/* Fullscreen: the header block sits a little lower, and the foot controls are bare icons
+   plus one word. One rule owns the three glyph buttons, so no later block can size one of
+   them differently: same box, same base, same baseline. --pf-foot-size is the token the rest
+   of the player reads. */
 /* 55 px is the box the queue already occupied, so equalising upwards leaves the row's height
-   — and therefore the record above it — exactly where it was. */
-#player-full{--pf-foot-size:55px;--pf-foot-glyph:30px}
+   — and therefore the record above it — exactly where it was. The equalizer used to be a
+   pill with a word in it; the word moved to Cue, which is the control that needs one. */
+#player-full{--pf-foot-size:55px;--pf-foot-glyph:30px;--pf-cue:46px;--pf-cue-gap:6px}
 
 #player-full .pf-body{padding-top:10px}
 
-#player-full.queue-open .pf-body{padding-top:22px}
+#player-full:is(.queue-open,.eq-open) .pf-body{padding-top:22px}
 
 #player-full .pf-foot #pflike,
-#player-full .pf-foot #pfqueue{
+#player-full .pf-foot #pfqueue,
+#player-full .pf-foot #pfeq{
   display:grid;place-items:center;box-sizing:border-box;
   width:var(--pf-foot-size);height:var(--pf-foot-size);
   min-width:var(--pf-foot-size);min-height:var(--pf-foot-size);
   padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;
   color:var(--text);font-size:var(--pf-foot-glyph);line-height:1}
 
-#player-full .pf-foot #pflike:hover{background:none;color:var(--accent)}
+/* Cue keeps its word: it opens a set of pads, which a bare glyph does not explain. Same
+   55 px height as the glyph boxes so the row keeps one baseline; the width comes from the
+   label, with the same 12 px corner the switched-on ring draws. */
+/* The side groups keep the foot's own rhythm: a 12 px gap between the controls inside a
+   group, and each group anchored to its edge. */
+#player-full .pf-foot .pf-side{display:flex;align-items:center;gap:12px;min-width:0}
+#player-full .pf-foot .pf-start{justify-self:start}
+#player-full .pf-foot .pf-end{justify-self:end}
+
+#player-full .pf-foot #pfcues{
+  display:inline-grid;place-items:center;box-sizing:border-box;
+  width:auto;height:var(--pf-foot-size);min-height:var(--pf-foot-size);
+  padding:0 17px;margin:0;border:1px solid transparent;border-radius:12px;
+  background:none;box-shadow:none;
+  color:var(--text);font-size:13px;font-weight:600;letter-spacing:.02em;line-height:1}
+
+/* The heart is the one glyph drawn as a character, and its outline sits inside its em box,
+   so at the shared size it reads smaller than the drawn icons beside it. 1.15x levels it
+   with the equalizer's drawn weight. */
+#player-full .pf-foot #pflike{font-size:calc(var(--pf-foot-glyph) * 1.15)}
+
+/* The drawn glyph sits at the queue's optical weight: 27 px inside the 55 px box. */
+#player-full .pf-foot #pfeq svg{display:block;width:27px;height:27px}
 
 /* Hover is a hint, not a state. The queue toggle used to take the accent on hover alone, so
    it looked switched on for as long as the pointer rested on it — and, with nothing marking
-   the real state, it looked no different while the queue was actually open. The open state
-   now owns the accent and a ring (the same pair the visualizer toggle uses), so it survives
-   the pointer leaving the button, and a plain hover only warms the glyph. */
-#player-full .pf-foot #pfqueue:hover{background:none;
+   the real state, it looked no different while the queue was actually open. A switched-on
+   control now owns the accent and a ring (the same pair the visualizer toggle uses), so it
+   survives the pointer leaving the button, and a plain hover only warms the glyph. */
+#player-full .pf-foot :is(#pflike,#pfqueue,#pfcues,#pfeq):hover{background:none;
   color:color-mix(in srgb,var(--text) 78%,var(--accent))}
 
-#player-full .pf-foot #pfqueue[aria-expanded="true"]{color:var(--accent);border-radius:10px;
+#player-full .pf-foot #pfqueue[aria-expanded="true"],
+#player-full .pf-foot #pfcues.on,
+#player-full .pf-foot #pfeq.on,
+#player-full .pf-foot #pflike.on{color:var(--accent);border-radius:10px;
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
 
-#player-full .pf-foot #pflike.on{color:var(--accent)}
+/* The equalizer is a sheet, not a block in the column: it takes the same band the queue
+   takes, rises and leaves with the same move, and the two are never open together. Its top
+   and bottom are written by `placeSheet` on each open, so neither can drift from the other. */
+#player-full .pf-eq{position:absolute;left:0;right:0;top:var(--pf-slot-top,120px);z-index:1;
+  display:grid;gap:8px;padding:10px 12px 14px;border:1px solid var(--line);border-radius:14px 14px 0 0;
+  background:#15161d;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;
+  transform:translateY(100%);opacity:.001;pointer-events:none;
+  transition:transform .44s cubic-bezier(.25,.8,.3,1),opacity .2s linear}
+
+#player-full.eq-open .pf-eq{transform:none;opacity:1;pointer-events:auto}
+
+#player-full .pf-eq[hidden]{display:none}
+
+.pf-eq-head{display:flex;align-items:center;gap:8px}
+
+.pf-eq-head b{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:600}
+
+.pf-eq-head button{margin-left:0;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  border-radius:8px;padding:4px 10px;font-size:11.5px;cursor:pointer;min-height:0}
+
+.pf-eq-head button:first-of-type{margin-left:auto}
+
+.pf-eq-head button.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+
+.pf-eq-bands{display:grid;gap:4px}
+
+.pf-eq-band{display:grid;grid-template-columns:56px 1fr 38px;align-items:center;gap:10px;font-size:11.5px;color:var(--dim)}
+
+.pf-eq-band output{text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+
+.pf-eq-band input[type=range]{width:100%;accent-color:var(--accent);height:22px;margin:0}
+
+.pf-eq-note{margin:0;font-size:10.5px;line-height:1.4;color:var(--dim)}
+
+/* The loudness switch reads as a row, not a stray checkbox: the tick carries the state and
+   the sentence explains what the curve does, because "Loudness" alone is a marketing word. */
+.pf-eq-loud{display:flex;align-items:flex-start;gap:9px;padding-top:8px;margin-top:2px;
+  border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent);
+  font-size:10.5px;line-height:1.45;color:var(--dim);cursor:pointer}
+
+.pf-eq-loud input{flex:0 0 auto;width:15px;height:15px;margin:1px 0 0;accent-color:var(--accent);
+  cursor:pointer}
+
+.pf-eq-loud b{color:var(--text);font-weight:600}
 
 /* More air between the record and the title. */
 #player-full .pf-text{margin-top:16px}
 
-#player-full.queue-open .pf-text{margin-top:0}
+#player-full:is(.queue-open,.eq-open) .pf-text{margin-top:0}
 
 /* ---- Player backgrounds: dispersed glass of the album art ------------------
    The artwork is painted twice: a soft wash for the surface, then the same cover again,
@@ -470,13 +642,19 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
    "green and blue" over a black-and-white sleeve and only looked right when the cover
    happened to contain those colours. Taken from the artwork instead, a grey cover glows
    grey and a purple one glows purple; the drift is what keeps it from looking dead. */
-#player-full.has-art::before,#player.has-art::before{
+/* The wash belongs to the fullscreen player only. On the compact pill the same blurred,
+   scaled copy of the cover paints a soft rectangle around a small rounded bar, and that
+   rectangle reads as a stray box behind it at every width — the pill is a floating object,
+   not a surface the art can bleed across. Both layers are scoped to `#player-full`: the
+   shine layer was still shared with `#player`, which is the rectangle that kept reappearing
+   over the compact bar long after the wash itself was made fullscreen-only. */
+#player-full.has-art::before{
   content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background-image:var(--player-art);background-size:cover;background-position:center;
   filter:blur(48px) saturate(1.6) brightness(.7);transform:scale(1.25);opacity:.55;
   animation:hl-wash 52s ease-in-out infinite}
 
-#player-full.has-art::after,#player.has-art::after{
+#player-full.has-art::after{
   content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background-image:var(--player-art);background-size:cover;background-position:center;
   filter:blur(56px) saturate(2.2) brightness(1.12);transform:scale(1.5);opacity:.5;
@@ -505,7 +683,6 @@ body.fullplayer #player-full{padding-bottom:calc(22px + var(--safe-b,0px))}
 }
 
 @media(prefers-reduced-motion:reduce){
-  #player.has-art::before,#player.has-art::after,
   #player-full.has-art::before,#player-full.has-art::after{animation:none}
 }
 
@@ -553,11 +730,11 @@ body.fullplayer #player-full{touch-action:pan-y;overscroll-behavior:contain}
 
 /* Opening the queue must not re-flow the player: the column keeps the same box and only
    the record, header and queue move. Otherwise the transport jumps up on every click. */
-#player-full.queue-open{justify-content:flex-start}
+#player-full:is(.queue-open,.eq-open){justify-content:flex-start}
 
-#player-full.queue-open .pf-body{margin:auto 0;padding-top:10px}
+#player-full:is(.queue-open,.eq-open) .pf-body{margin:auto 0;padding-top:10px}
 
-#player-full.queue-open .pf-text{margin-top:16px}
+#player-full:is(.queue-open,.eq-open) .pf-text{margin-top:16px}
 
 @media (min-width: 761px){
   #player.on{left:50%;right:auto;bottom:14px;transform:translateX(-50%);
@@ -669,10 +846,6 @@ body.fullplayer{top:0}
     border-radius:12px 11px 11px 11px;margin:0 0 0 -12px}
   /* Three columns: empty 1fr, the transport, empty 1fr. The queue/fullscreen pair
      lives in the right column, in flow, so it can never sit on top of the mute. */
-  /* The lyrics button is hidden in the compact bar; leaving it in the grid made it
-     claim an implicit column, which kept the queue/fullscreen pair short of the
-     right edge. */
-  #player .pvol{display:none}
   #player .pctrl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
     grid-column:2 / -1}
   #player .ptrans{grid-column:2;justify-self:center;transform:translateX(8px)}
@@ -715,11 +888,34 @@ body.fullplayer{top:0}
 body #player,body #player.on{position:fixed;left:14px;right:14px;bottom:calc(var(--nav-h,0px) + var(--safe-b,0px));
   z-index:60;display:none;width:auto;max-width:none;height:112px;box-sizing:border-box;
   margin:0;padding:0;transform:none;animation:none;overflow:hidden;
-  background:linear-gradient(180deg,#1b1b22,#14141a);
+  --cbar-r:14px;
+  background:linear-gradient(180deg,rgba(27,27,35,.91) 0%,rgba(16,16,20,.91) 62%);
   border:1px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;
   backdrop-filter:blur(10px);box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
 
 body #player.on{display:block;animation:none}
+
+/* The fullscreen player's two art layers, on the compact bar too, held inside the bar.
+   Its wash may run past its own edges because it owns the screen; a blurred rectangle
+   around a floating 112 px bar reads as a stray box, so both layers carry the bar's own
+   outline as a clip and stay translucent — the .9 gradient and its backdrop blur are what
+   keep this glass rather than paint. The drift is dropped: it is transform-driven, and a
+   transform would carry the clip out with it and let the edge show again. */
+body #player.has-art::before{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:inherit;
+  clip-path:inset(0 round var(--cbar-r,14px) var(--cbar-r,14px) 0 0);
+  background-image:var(--player-art);background-size:cover;background-position:center;
+  filter:blur(26px) saturate(1.5) brightness(.85);opacity:.4}
+
+body #player.has-art::after{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:inherit;
+  clip-path:inset(0 round var(--cbar-r,14px) var(--cbar-r,14px) 0 0);
+  background-image:var(--player-art);background-size:cover;background-position:center;
+  filter:blur(30px) saturate(2) brightness(1.1);opacity:.34;mix-blend-mode:screen;
+  -webkit-mask-image:radial-gradient(58% 60% at 12% 10%,#000 0,transparent 74%),
+    radial-gradient(52% 55% at 88% 90%,#000 0,transparent 76%);
+  mask-image:radial-gradient(58% 60% at 12% 10%,#000 0,transparent 74%),
+    radial-gradient(52% 55% at 88% 90%,#000 0,transparent 76%)}
 
 /* Cover: the image is clipped by its own frame radius, so the art curves with the border. */
 /* Bigger art on the title's top line: 72px at 4,5 stops one pixel short of the transport's
@@ -732,9 +928,9 @@ body #player.on #plartwrap{position:absolute;left:1px;top:1px;width:72px;height:
 
 body #player.on #plartwrap img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 
-/* Text column: starts at the drawing's x=83 and stops 56 px from the right edge, so the
-   title truncates before it can reach the heart. */
-body #player.on #plmeta{position:absolute;left:83px;right:56px;top:2px;margin:0;padding:0;
+/* Text column: starts at the drawing's x=83 and stops 90 px from the right edge, so the
+   title truncates before it can reach the heart in the bar's top-right corner. */
+body #player.on #plmeta{position:absolute;left:83px;right:90px;top:2px;margin:0;padding:0;
   min-width:0;max-width:none;display:block;text-align:left;cursor:pointer;z-index:2}
 
 body #player.on #pltitle{font-size:13px;font-weight:600;line-height:18px;margin:0;text-align:left;
@@ -742,6 +938,10 @@ body #player.on #pltitle{font-size:13px;font-weight:600;line-height:18px;margin:
 
 body #player.on #plsub{font-size:10.5px;line-height:14px;color:var(--dim);margin:0;text-align:center;
   display:flex;justify-content:center;white-space:nowrap;overflow:hidden}
+
+/* A name too long for the whole line keeps the left edge it starts from and gives up the
+   release beside it, instead of the centred row clipping the beginning of the name. */
+body #player.on #plsub.artist-only{justify-content:flex-start}
 
 /* Heart, top-right, inside the bar's own corner. `right:9px` is the column's centre line:
    the heart, the add/remove slot (11.5 + half of 29) and the expand button (9 + 17) all
@@ -760,7 +960,10 @@ body #player.on .pctrl{position:absolute;left:0;right:0;top:32px;height:44px;mar
   display:flex;align-items:center;justify-content:center;gap:0;flex:none;
   pointer-events:none;z-index:2}
 
-body #player.on .ptrans{display:flex;align-items:center;justify-content:center;gap:0;margin:0 24px 0 0;
+/* The negative right margin is the compensation for the volume button: the group now ends
+   one button further right, and the margin pulls the whole row back so the play button
+   stays on the bar's centre line (measured +3 px at 390, 430, 1280 and 1440). */
+body #player.on .ptrans{display:flex;align-items:center;justify-content:center;gap:0;margin:0 -6px 0 0;
   transform:none;pointer-events:auto}
 
 body #player.on .ptrans .iconbtn{width:30px;height:30px;min-width:30px;min-height:30px;margin:0;
@@ -784,6 +987,51 @@ body #player.on #plplay:hover{background:#fff}
 
 body #player.on #plplay svg{width:16px;height:16px}
 
+/* The compact bar's volume: the speaker beside mute opens a slim vertical fader that rises out
+   of the bar. The panel is fixed to the viewport instead of the bar, because the bar clips its
+   own overflow (that is what keeps the cover inside its rounded corner), so a panel inside it
+   could never appear above it. `placeVolumeMenu()` sets the offsets from the button's own box
+   when it opens. Quiet by default: a pill, a hairline, one accent fill, no label and no chrome. */
+.plvol-menu{position:fixed;z-index:61;width:40px;height:124px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--panel) 93%,transparent);
+  -webkit-backdrop-filter:blur(14px) saturate(115%);backdrop-filter:blur(14px) saturate(115%);
+  border:1px solid color-mix(in srgb,var(--line) 62%,transparent);border-radius:999px;
+  box-shadow:0 14px 30px -12px #000c,0 2px 8px -2px #0008,inset 0 1px 0 #ffffff0d;
+  opacity:0;visibility:hidden;transform:translateY(6px) scale(.96);transform-origin:bottom center;
+  transition:opacity .14s ease,transform .2s cubic-bezier(.2,.7,.3,1),visibility .14s}
+
+.plvol-menu.open{opacity:1;visibility:visible;transform:none}
+
+/* Rotated rather than written vertically: the same fader paints the same way in every engine,
+   and `rotate(-90deg)` puts the gradient's zero end at the bottom, so the accent fills upward.
+   The unfilled rail is white at 12% so it reads on the glass panel instead of as a grey bar.
+   The box is taken out of the panel's flow and centred by hand: as a grid item its 88 px
+   width became the grid's track, so the track grew wider than the 40 px pill and pushed the
+   rail out past the right edge instead of centring it. */
+.plvol-menu input{position:absolute;left:50%;top:50%;-webkit-appearance:none;appearance:none;
+  width:88px;height:24px;margin:0;padding:0;background:transparent;cursor:pointer;
+  transform:translate(-50%,-50%) rotate(-90deg)}
+
+.plvol-menu input::-webkit-slider-runnable-track{height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent) var(--vol,100%),#ffffff1f var(--vol,100%))}
+
+.plvol-menu input::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  margin-top:-5px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0009;
+  transition:box-shadow .14s ease}
+
+/* The thumb glows in the accent only while it is being used, so the closed bar stays quiet. */
+.plvol-menu input:hover::-webkit-slider-thumb,
+.plvol-menu input:focus-visible::-webkit-slider-thumb,
+.plvol-menu input:active::-webkit-slider-thumb{
+  box-shadow:0 1px 2px #0009,0 0 0 4px color-mix(in srgb,var(--accent) 26%,transparent)}
+
+.plvol-menu input::-moz-range-track{height:3px;border-radius:2px;background:#ffffff1f}
+
+.plvol-menu input::-moz-range-progress{height:3px;border-radius:2px;background:var(--accent)}
+
+.plvol-menu input::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;
+  background:#fff;box-shadow:0 1px 2px #0009}
+
 /* Queue and expandstack under the heart, right-aligned to the same edge. */
 /* Each of the two sits on the line it belongs to: the queue on the transport's centre,
    level with the mute, and the expand on the duration's centre at the bottom right. */
@@ -802,32 +1050,39 @@ body #player.on #plqueue{width:34px;height:34px;font-size:26px;line-height:1;rig
    the fullscreen player, so nothing was lost but a 34 px square. Its bottom-right corner
    goes back to the add/remove slot, which sat there before the expand button ever existed. */
 
-/* Seek: the drawing's 222 px track, with the clock at each end outside it. */
-body #player.on #plseek{position:absolute;left:85px;right:95px;bottom:19px;width:auto;min-width:0;
-  height:16px;margin:0;padding:0;flex:none;background:transparent;z-index:2;touch-action:auto}
+/* Seek: the wave's own rectangle is the control. The range input is still what holds the
+   position — so the keyboard, a screen reader and the page's own swipe guard keep working —
+   but it is drawn as nothing and stretched over the canvas: a press or a drag anywhere in
+   the visualizer's bounds seeks. It sits one layer under the transport (z-index 1 against
+   the transport's 2), so the buttons that overlap the top of the rectangle win their own
+   presses and the empty space around them falls through to the scrub. */
+body #player.on #plseek{position:absolute;left:85px;right:95px;bottom:0;width:auto;min-width:0;
+  height:65px;margin:0;padding:0;flex:none;background:transparent;border:0;
+  -webkit-appearance:none;appearance:none;z-index:1;touch-action:none;cursor:pointer}
 
-body #player.on #plseek::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:#3a3d47}
+body #player.on #plseek::-webkit-slider-runnable-track{height:100%;border-radius:0;background:transparent}
 
-body #player.on #plseek::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;
-  margin-top:-3px;border-radius:50%;background:#e8eaf0}
+body #player.on #plseek::-webkit-slider-thumb{-webkit-appearance:none;width:0;height:0;margin:0;
+  border:0;background:transparent;box-shadow:none}
 
-body #player.on #plseek::-moz-range-track{height:4px;border-radius:2px;background:#3a3d47}
+body #player.on #plseek::-moz-range-track{height:100%;background:transparent}
 
-body #player.on #plseek::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:#e8eaf0}
+body #player.on #plseek::-moz-range-thumb{width:0;height:0;border:0;background:transparent}
 
-/* The scrub keeps its own track and thumb with the wave on: the wave is decoration below
-   the slider, never a substitute for it, so the position is always readable and grabable. */
-body #player.on .ptime{position:absolute;bottom:19px;width:44px;margin:0;font-size:11.5px;
+/* The control is invisible, so its focus ring is the only thing that can show it. */
+body #player.on #plseek:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px}
+
+/* The clocks sit either side of the wave and rest on its base — the line the bars stand
+   on — rather than floating on the rectangle's mid-line: with the slider gone the base is
+   the only horizontal the eye can read. 4 px is the optical sit, not padding. */
+body #player.on .ptime{position:absolute;bottom:4px;width:44px;margin:0;font-size:11.5px;
   line-height:16px;color:var(--dim);font-variant-numeric:tabular-nums;text-align:center;z-index:2}
 
-/* Each clock sits 1 px outside its end of the track's inset, so the gap a person sees
-   (the 44 px box centres the text, 10 px each side) is the same on both sides. */
+/* Each clock sits 1 px outside the wave's own edge, so the gap a person sees (the 44 px
+   box centres the text, 10 px each side) is the same on both sides. */
 body #player.on #pltime{left:40px}
 
 body #player.on #pldur{right:50px}
-
-/* Lyrics is dead markup app-wide; the volume control lives in the top bar now. */
-body #player.on .pvol{display:none}
 
 /* The art-tinted glass is the bar's look, not a phone refinement: this block used to sit in a
    max-width:760px query, so the same bar was glass on a phone and an opaque gradient on a
@@ -836,12 +1091,9 @@ body #player.on .pvol{display:none}
    The compact pill is a small floating object, not a full-screen surface: the blurred copy
    of the cover is kept tight (a wide bloom on a phone was wider than the bar itself) and
    the drop shadow stays short and close. */
-body #player.on.has-art{background:rgba(18,19,25,.72);box-shadow:0 8px 20px #00000059,inset 0 1px 0 #ffffff12}
-body #player.on.has-art::before{opacity:.34;filter:blur(22px) saturate(1.45) brightness(.62);
-  animation-duration:64s}
-body #player.on.has-art::after{filter:blur(20px) saturate(2.1) brightness(1.2);opacity:.22;
-  animation-duration:52s}
-
+body #player.on.has-art{background:linear-gradient(180deg,rgba(16,16,20,.72),rgba(12,12,17,.72));
+  box-shadow:0 8px 24px #00000059,inset 0 1px 0 #ffffff12;
+  border-color:transparent}
 @media (max-width:720px){
   #player{box-shadow:0 4px 12px #0000004d,inset 0 1px 0 #ffffff10}
 }
@@ -851,7 +1103,7 @@ body #player.on.has-art::after{filter:blur(20px) saturate(2.1) brightness(1.2);o
     left:50%;right:auto;transform:translateX(-50%);
     bottom:calc(16px + var(--nav-h,0px) + var(--safe-b,0px));
     width:min(1072px,calc(100vw - 48px));max-width:none;
-    border:1px solid var(--line);border-radius:16px}
+    --cbar-r:16px;border:1px solid var(--line);border-radius:16px}
   body:has(#player.on){padding-bottom:calc(140px + var(--nav-h,0px) + var(--safe-b,0px))}
 
   /* The phone's composition, kept as it is: art in the corner, title and artist centred
@@ -879,16 +1131,16 @@ body #player.on #pltitle .plmqt{display:inline-flex;white-space:nowrap;will-chan
    seek   = the wave is the progress line in the compact scrub
    aura   = the glow behind the record in the fullscreen player                    */
 
-/* The wave IS the compact scrub's line. A canvas is a replaced element, so left+right
-   with width:auto would not stretch: the width is stated against the same 180 px of
-   insets the scrub uses, or the wave collapses to its intrinsic 300/24 px.
-   65 px tall (72 less a tenth) and flush with the bar's bottom edge, so the bars stand on
-   the bottom margin and grow up through the scrub — the track is 27 px up (bottom 19 +
-   half of 16), so a full bar crosses the slider and keeps going instead of hanging under
-   it. The height is the only thing that shrank; the scrub itself has not moved. Drawn
-   behind the input, which keeps its track and thumb: the position stays readable and
-   grabable. */
-body #player.on .plwave-seek{position:absolute;left:85px;bottom:0;height:65px;
+/* The wave IS the compact scrub: its rectangle is the hit area, drawn under the input
+   that covers the same bounds. A canvas is a replaced element, so left+right with
+   width:auto would not stretch: the width is stated against the same 180 px of insets the
+   input uses, or the wave collapses to its intrinsic 300/24 px.
+   49 px tall — three quarters of the old 65 — and flush with the bar's bottom edge, so the
+   bars still stand on the bottom margin and grow up behind the transport without reaching
+   the title line. The canvas is sized from its own client box every frame, so the drawing
+   follows the height on its own. Nothing here is clickable — the input above it owns the
+   presses, and the drawing owns the feedback (lit bars, a playhead while scrubbing). */
+body #player.on .plwave-seek{position:absolute;left:85px;bottom:0;height:49px;
   width:calc(100% - 180px);pointer-events:none;z-index:1}
 
 /* Only while the wave is drawing the line: with the visualizer off the native track
@@ -911,12 +1163,11 @@ body #player.on .plwave-seek{position:absolute;left:85px;bottom:0;height:65px;
    siblings so the row's height does not change. */
 #player-full .pf-foot .pfsave{display:inline-flex;align-items:center;justify-content:center}
 
-/* The compact add/remove slot sits in the right-hand cluster (measured), absolutely, so it
-   never joins the flow and cannot push the transport or the title. It owns the column's
-   bottom cell (the expand button's old 69-103 px slot, centred 26 px in from the right
-   edge, 11.5 px of inset), sitting under the heart at the bar's top corner. 29 px keeps
-   the ~2 px of air it had against the heart. */
-body #player.on .plsave{display:block;position:absolute;right:11.5px;bottom:11.5px;width:29px;height:29px;z-index:3}
+/* The compact add/remove slot sits on the time line, directly under the heart and centred
+   on the same vertical line (11.5 + half of 29 = 26 px from the bar's right edge, the same
+   centre the heart holds), so the pair reads as one column while staying out of the clocks'
+   and the scrub's way. */
+body #player.on .plsave{display:block;position:absolute;right:11.5px;bottom:13px;width:29px;height:29px;z-index:3}
 
 /* The strip between the queue panel and the bar is now a control: a wide tab hanging off
    the bar top centre, exactly the height of the reduced gap, that toggles the queue. The
@@ -945,3 +1196,18 @@ body #player.on .qgrip{min-height:0;min-width:0;width:114px;height:18px;top:-18p
    glyph is a grid item, so the transform applies; only the arrow turns, the tab stays put. */
 body #player.on .qgrip span{display:block;transition:transform .16s ease}
 body #player.on.queue-shown .qgrip span{transform:rotate(180deg)}
+
+/* AutoDJ's status tab: the queue grip's twin, hung off the bar's top-right instead of its
+   centre, and only while AutoDJ is on. It is a light, not a control — the pill in the
+   fullscreen player is where the mode is switched — so it does not take the tap. */
+body #player.on .autodj-tab{position:absolute;top:-18px;right:9px;z-index:4;
+  display:none;align-items:center;gap:5px;height:18px;min-height:0;min-width:0;
+  padding:0 9px 0 8px;margin:0;border:1px solid var(--line);border-bottom:0;
+  border-radius:9px 9px 0 0;background:var(--panel);color:var(--text);
+  font-size:9px;font-weight:600;line-height:1;letter-spacing:.06em;text-transform:uppercase;
+  pointer-events:none;white-space:nowrap}
+
+body #player.on .autodj-tab.on{display:inline-flex}
+
+body #player.on .autodj-tab .dot{width:6px;height:6px;border-radius:50%;background:#43d17c;
+  box-shadow:0 0 6px #43d17ccc}

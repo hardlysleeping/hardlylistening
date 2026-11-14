@@ -3,7 +3,7 @@
 // the page — marked, dimmed, with a + — until you leave the view, and a tab, view or scope
 // change is what makes a removed item actually gone.
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 

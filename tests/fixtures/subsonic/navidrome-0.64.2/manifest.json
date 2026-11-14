@@ -1,0 +1,96 @@
+{
+  "base_url": "https://demo.navidrome.org",
+  "client": "hardlylistening-fidelity",
+  "note": "GET only. Recorded by tools/record-subsonic-fixtures.py.",
+  "protocol_version": "1.16.1",
+  "recorded": "2026-11-14T10:28:37Z",
+  "responses": {
+    "getAlbum": {
+      "endpoint": "getAlbum",
+      "params": {
+        "id": "6qVa68sKTKahAuJabPcGQu"
+      },
+      "sha256": "cff2a21cfd1d361d0482dfaffecab7ca05f42101bfa932b7998fea7f6476163d"
+    },
+    "getAlbumList2": {
+      "endpoint": "getAlbumList2",
+      "params": {
+        "size": 5,
+        "type": "alphabeticalByName"
+      },
+      "sha256": "6134ac93d47ffd564c2036f644e1ab3be46d0d329e953c17e0fb2719d63779b2"
+    },
+    "getArtist": {
+      "endpoint": "getArtist",
+      "params": {
+        "id": "33X3V2Xn7Cip7WqqfXNkL8"
+      },
+      "sha256": "e8dc079edd159ed7db917099b5d66c60e51d2fef38707d7c0b338ce12faedb75"
+    },
+    "getArtist_missing_id": {
+      "endpoint": "getArtist",
+      "params": {},
+      "sha256": "67ffa6f16b6bed102ea17243000f433ad9cfdc640c2bf5daa138921af7e97ab5"
+    },
+    "getArtists": {
+      "endpoint": "getArtists",
+      "params": {},
+      "sha256": "7bc24b996d37f518740b4e1fb87efa08f0d545dd8f227d39c5fd1e680992cdd8"
+    },
+    "getCoverArt_unknown": {
+      "endpoint": "getCoverArt",
+      "params": {
+        "id": "nonexistent-cover-art"
+      },
+      "sha256": "376b9f8540e5d65f1bc622c88ffbdcb3317f0a90e58381af460759ef1ae87041"
+    },
+    "getLyricsBySongId": {
+      "endpoint": "getLyricsBySongId",
+      "params": {
+        "id": "0xeB5VXHxD6BpHc3YHxgNR"
+      },
+      "sha256": "a4b8adc2f66ca4bca4ba725bf313b667bdd47655f5d004138785e58c685d1e53"
+    },
+    "getOpenSubsonicExtensions": {
+      "endpoint": "getOpenSubsonicExtensions",
+      "params": {},
+      "sha256": "44fa22021fecdf3c388af3924500776a9df29fa892116af7ff6f5c382570938c"
+    },
+    "getPlaylist": {
+      "endpoint": "getPlaylist",
+      "params": {
+        "id": "5iPgRcNW6ZkBCNCaZD0scG"
+      },
+      "sha256": "0f1327a06543056a2037147ea83303a3ddfc1a211c72f36fe338a166218fa4aa"
+    },
+    "getPlaylists": {
+      "endpoint": "getPlaylists",
+      "params": {},
+      "sha256": "6498d228d8044f3339dd3b7b713e2228ed00be2e0e73518eb687906723a71c90"
+    },
+    "getSong": {
+      "endpoint": "getSong",
+      "params": {
+        "id": "0xeB5VXHxD6BpHc3YHxgNR"
+      },
+      "sha256": "7abff7a752188540ad182b65a84b016f656e465144799ab69be4d7b47ab586e4"
+    },
+    "ping": {
+      "endpoint": "ping",
+      "params": {},
+      "sha256": "85d43876d9f9a3f8956bc569d2873732a589db418e72434aadd839db0bf54ad6"
+    },
+    "search3": {
+      "endpoint": "search3",
+      "params": {
+        "albumCount": 3,
+        "artistCount": 3,
+        "query": "love",
+        "songCount": 3
+      },
+      "sha256": "ee7ad709de80a8b0554f299b27f4f6d3e4063d9ace24fa06b99518f959b1fe6f"
+    }
+  },
+  "server": "navidrome-0.64.2",
+  "server_version": "0.64.2 (10114574)"
+}

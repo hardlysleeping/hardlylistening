@@ -1,6 +1,6 @@
 // Queue drawer: the row of buttons under the list is gone, clear is a broom beside ×.
 const http = require("http"), fs = require("fs"), path = require("path");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const WEB = path.join(__dirname, "..", "web");
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
 const server = http.createServer((req, res) => {
@@ -66,7 +66,12 @@ const check = (ok, what) => { if (ok) console.log("ok   " + what); else { failur
 
     // Clearing works from the icon, then the broom greys out.
     await page.evaluate(() => { libQueue = libQueue.slice(); paintPlaybackQueue(); });
+    // Clearing is destructive, so the broom asks first: the dialog has to be accepted.
     await page.click("#pqclear", { timeout: 4000 });
+    await page.waitForTimeout(80);
+    check(await page.evaluate(() => document.getElementById("queue-confirm").open),
+      label + ": the broom asks before it clears");
+    await page.click("#queue-confirm button[value=\"go\"]");
     await page.waitForTimeout(120);
     const after = await page.evaluate(() => ({ len: libQueue.length, disabled: document.querySelector("#pqclear").disabled,
       status: document.querySelector("#playback-status").textContent }));

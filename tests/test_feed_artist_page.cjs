@@ -2,7 +2,7 @@
 // page shaped like the Repo's (hero + tracklist + download), and Back walks out one
 // level at a time. A fold-out under the grid is what this replaces.
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
 

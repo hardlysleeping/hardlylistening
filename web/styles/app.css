@@ -26,6 +26,7 @@
 @import url("./components/playback-queue.css") layer(components);
 @import url("./components/queue-view.css") layer(components);
 @import url("./components/feed.css") layer(components);
+@import url("./components/member.css") layer(components);
 @import url("./components/artist.css") layer(components);
 @import url("./components/activity.css") layer(components);
 @import url("./components/dialogs.css") layer(components);

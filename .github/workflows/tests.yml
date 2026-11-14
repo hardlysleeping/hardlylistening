@@ -1,0 +1,49 @@
+name: tests
+
+# The suite is stdlib-only Python, so this is the cheapest workflow and the one that gates the
+# rest. `unittest discover` is not usable here (tests/ is not a package), so the module list is
+# built the way the project's own docs build it.
+#
+# The `.cjs` harnesses are deliberately not here yet: on the machine that wrote them they are
+# resolved through `NODE_PATH` and a third of them fail for pre-existing reasons unrelated to
+# any current change. A workflow that starts red and stays red is worse than no workflow, so
+# they get a card of their own before this job grows a `node` step.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # ffmpeg and yt-dlp are runtime tools, not Python dependencies of the core: the tests
+      # that need them skip or stub otherwise, so this install makes the suite cover more
+      # rather than making it start at all.
+      - name: runtime tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python -m pip install --upgrade yt-dlp
+      - name: suite
+        run: |
+          export TMPDIR="$(mktemp -d)"
+          mods=$(ls tests/test_*.py | sed 's#/#.#; s#\.py$##' | tr '\n' ' ')
+          PYTHONPATH=.:tests python -m unittest $mods

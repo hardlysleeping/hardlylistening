@@ -2,7 +2,7 @@
 // Range requests with 206 slices of that copy, and the budget evicts the oldest copy first.
 // Everything here runs against a local server and a 4 KB fixture; no real library is touched.
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 // The manifest and the two icons live beside the server, not inside web/.
 const APP = [path.join(__dirname, ".."), ROOT];
@@ -11,10 +11,21 @@ const SIZE = 4000;
 const hits = {};                       // how many times each track's audio was asked for
 const FILL = id => String.fromCharCode(65 + (id % 26));
 const audio = id => Buffer.alloc(SIZE, FILL(id));
+// A cover, and the digest the server would name it by. The bytes are not a real JPEG: the
+// client only counts them, and the worker only checks the content type.
+const COVER = Buffer.alloc(900, 0xff);
+const ART_HASH = "a".repeat(32);
 
 const server = () => http.createServer((req, res) => {
   const p = req.url.split("?")[0];
   const json = body => res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
+  if (/^\/api\/art\/[a-f0-9]{32}$/.test(p))
+    return res.writeHead(200, { "content-type": "image/jpeg",
+      "content-length": String(COVER.length) }).end(COVER);
+  const art = /^\/api\/track\/(\d+)\/artwork$/.exec(p);
+  if (art && req.method === "GET")
+    return res.writeHead(200, { "content-type": "image/jpeg", "x-art-hash": ART_HASH,
+      "content-length": String(COVER.length) }).end(COVER);
   const track = /^\/api\/track\/(\d+)\/audio$/.exec(p);
   if (track && req.method === "GET") {
     hits[Number(track[1])] = (hits[Number(track[1])] || 0) + 1;
@@ -56,6 +67,12 @@ const server = () => http.createServer((req, res) => {
     await page.waitForTimeout(500);
     check("the page is controlled by the worker",
       await page.evaluate(() => !!navigator.serviceWorker.controller), true);
+    // Installability is a browser verdict, not a phone: Chrome reports the reasons it would
+    // not offer an install, and an empty list is the same answer the prompt would get.
+    const cdp = await page.context().newCDPSession(page);
+    const install = await cdp.send("Page.getInstallabilityErrors").catch(error => ({ error: String(error) }));
+    check("the browser finds nothing blocking install",
+      Array.isArray(install.installabilityErrors) ? install.installabilityErrors.map(e => e.errorId) : install, []);
 
     // A played song is kept whole, under the key the worker looks up.
     await page.evaluate(() => cachePlayedAudio(1));
@@ -66,6 +83,62 @@ const server = () => http.createServer((req, res) => {
       return hit ? (await hit.blob()).size : 0;
     }), SIZE);
     check("the index records its size", await page.evaluate(() => offlineIndex()["1"].bytes), SIZE);
+
+    // The cover belongs to the song: kept beside it, and answered with no network.
+    check("a kept song keeps its cover", await page.evaluate(async () => {
+      const cache = await caches.open("hardlylistening-artwork-v1");
+      const hit = await cache.match("/api/track/1/artwork");
+      return hit ? (await hit.blob()).size : 0;
+    }), COVER.length);
+    await page.context().setOffline(true);
+    const offlineArt = await page.evaluate(() =>
+      fetch("/api/track/1/artwork").then(r => r.ok ? r.headers.get("Content-Type") : "no").catch(() => "no"));
+    await page.context().setOffline(false);
+    check("the kept cover opens with no network", offlineArt, "image/jpeg");
+
+    // A row with a digest asks our own route, which is immutable and cached by URL.
+    await page.evaluate(async () => {
+      libAll = [{ id: 3, art_hash: "a".repeat(32), artwork: "" }];
+      await cachePlayedAudio(3);
+    });
+    await page.waitForTimeout(600);
+    check("a known digest is kept under both shapes a row can ask for",
+      await page.evaluate(async () => {
+        const cache = await caches.open("hardlylistening-artwork-v1");
+        return [Boolean(await cache.match(`/api/art/${"a".repeat(32)}`)),
+          Boolean(await cache.match("/api/track/3/artwork"))];
+      }), [true, true]);
+    await page.context().setOffline(true);
+    check("and the digest route opens with no network", await page.evaluate(async () => {
+      const r = await fetch(`/api/art/${"a".repeat(32)}`).catch(() => null);
+      return r ? r.ok : false;
+    }), true);
+    await page.context().setOffline(false);
+
+    // The row says so, in markup a screen reader also gets.
+    await page.evaluate(() => {
+      document.getElementById("liblist").innerHTML =
+        '<div class="songrow" data-id="1"><div class="st"><span class="sttext"><b>x</b>' +
+        '<span class="kept-badge" hidden>Kept</span></span></div></div>' +
+        '<div class="songrow" data-id="999"><div class="st"><span class="sttext"><b>y</b>' +
+        '<span class="kept-badge" hidden>Kept</span></span></div></div>';
+      paintOfflineMarks();
+    });
+    check("a kept song says so", await page.evaluate(() =>
+      [...document.querySelectorAll(".kept-badge")].map(b => !b.hidden)), [true, false]);
+
+    // The figure is the bytes on disk, not a claim.
+    check("the storage figure matches what is kept", await page.evaluate(async () => {
+      const cache = await caches.open("hardlylistening-audio-v1");
+      let bytes = 0;
+      for (const key of await cache.keys()) bytes += (await (await cache.match(key)).blob()).size;
+      return offlineStats().bytes === bytes;
+    }), true);
+    await page.evaluate(() => openOfflineDialog());
+    await page.waitForTimeout(300);
+    check("and the dialog counts it", /2 songs kept on this device/.test(
+      await page.evaluate(() => document.getElementById("offline-status").textContent)), true);
+    await page.evaluate(() => document.getElementById("dlg-offline").close());
 
     // The element asks with a Range header; the copy is one 200, so the worker slices it.
     const slice = await page.evaluate(async () => {
@@ -118,6 +191,12 @@ const server = () => http.createServer((req, res) => {
         (await cache.match("/api/track/2/audio")) ? "kept" : "gone"];
     }), ["gone", "kept"]);
     check("and the index agrees", await page.evaluate(() => Object.keys(offlineIndex())), ["2"]);
+    check("an eviction is announced", /Freed .* older offline cop/.test(
+      await page.evaluate(() => (document.getElementById("toast") || {}).textContent || "")), true);
+    check("the evicted song's cover goes with it", await page.evaluate(async () => {
+      const cache = await caches.open("hardlylistening-artwork-v1");
+      return Boolean(await cache.match("/api/track/1/artwork"));
+    }), false);
 
     // Off means nothing new is kept.
     await page.evaluate(() => setOfflineBudget("0"));
@@ -141,6 +220,24 @@ const server = () => http.createServer((req, res) => {
     check("a claim with no copy behind it is dropped",
       await page.evaluate(() => offlineReconcile().then(s => s.count)), 0);
     check("and leaves the index empty", await page.evaluate(() => Object.keys(offlineIndex())), []);
+
+    // The same rule for a cover: the audio is there, the claimed picture is not.
+    await page.evaluate(async () => {
+      const cache = await caches.open("hardlylistening-audio-v1");
+      await cache.put("/api/track/8/audio", new Response(new Blob([new Uint8Array(10)])));
+      const index = offlineIndex();
+      index["8"] = { bytes: 10, at: Date.now(), art: "/api/art/" + "b".repeat(32) };
+      saveOfflineIndex(index);
+    });
+    check("a cover claim with no copy behind it is dropped",
+      await page.evaluate(() => offlineReconcile().then(() => offlineIndex()["8"].art)), "");
+    await page.evaluate(async () => {
+      const cache = await caches.open("hardlylistening-audio-v1");
+      await cache.delete("/api/track/8/audio");
+      const index = offlineIndex();
+      delete index["8"];
+      saveOfflineIndex(index);
+    });
 
     // The dialog says what is actually held.
     await page.evaluate(() => openOfflineDialog());

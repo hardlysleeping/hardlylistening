@@ -347,6 +347,14 @@
   flex:none
 }
 
+/* `hidden` has to win here. An author `display` beats the UA sheet's `[hidden]{display:none}`,
+   so `#libcooldown` was painted from first load and stayed: a permanent "Cooling down —
+   the server asked for a pause" while the queue was only paused. The note now appears on a
+   real 429 and nowhere else. */
+.libnote[hidden]{
+  display:none
+}
+
 .srchip{
   display:inline-block;
   padding:1px 6px;
@@ -388,6 +396,13 @@
 }
 
 #view-library.detail-open #libviews, #view-library.detail-open #layoutseg, #view-library.detail-open #compactbtn, #view-library.detail-open .density, #view-library.detail-open .genre-panel{
+  display:none
+}
+
+/* With the switch and the funnel gone the row above the list is empty, but it still reserved
+   its 40 px minimum plus its margin — a blank band between the section nav and Back. The row
+   stays for the only two controls a detail page keeps: the grid shape and New playlist. */
+#view-library.detail-open .liblayout:not(:has(#gridstylebtn:not([hidden]), #playlist-edit-btn:not([hidden]))){
   display:none
 }
 

@@ -3,7 +3,7 @@
 // reorder must not disturb the "recently played" drawer underneath the queue.
 // No network and no media: the API is a stub and every track is a fixture.
 const fs = require("fs"), path = require("path"), http = require("http"), assert = require("assert");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 const STUB = { ok: true, songs: [], queue: [], tracks: [], playlists: [], folders: [], favorites: [], library: [] };

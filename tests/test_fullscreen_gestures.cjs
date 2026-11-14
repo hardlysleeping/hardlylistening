@@ -2,7 +2,7 @@
 // desktop. A mouse drag over the bar or the pane used to open/dismiss it, and a dismiss
 // timer could close a player that had been reopened while the old pane was still leaving.
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
 

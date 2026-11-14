@@ -2,11 +2,14 @@
 
 The main app has **one stylesheet entry point** and **one owner per surface**. This file is
 the contract; `docs/UI_COMPONENTS.md` records which component each element belongs to.
+`/theme.css` is not part of the tree: it is generated per request from the member's saved
+palette, so it has no file, no imports and no place in the service worker's cache.
 
 ## The tree
 
 ```text
-web/index.html            <link rel="stylesheet" href="/styles/app.css">   ← the only one
+web/index.html            <link rel="stylesheet" href="/styles/app.css">   ← the only file tree
+                          <link rel="stylesheet" href="/theme.css">        ← the session palette
 web/styles/
 ├── app.css               layer order + imports. Contains no rules.
 ├── tokens.css            design values (:root custom properties)
@@ -26,6 +29,7 @@ web/styles/
     ├── feed.css              Feed tab and the artist catalogue page
     ├── artist.css            artist profile rows
     ├── activity.css          activity feed
+    ├── member.css            the member profile page (#memberpage) inside the Feed tab
     ├── dialogs.css           dialog shells and their frames
     ├── status.css            banners, toasts, empty states, drop zone, counts
     ├── preferences.css       like/pin presentation, including the pinned strip
@@ -34,7 +38,11 @@ web/styles/
 ```
 
 `web/party.css` and `web/swipe.css` are **separate surfaces** and stay that way. They do not
-import `app.css`, and `app.css` does not import them.
+import `app.css`, and `app.css` does not import them. The one exception runs the other way:
+`swipe.html` links `styles/components/player.css` itself, because its compact bar *is* the
+library's bar and a second copy of that surface would drift. The link comes **before**
+`swipe.css`: the bar's rules are stated once at one specificity, so the page sheet has to be
+later in the cascade or every narrowing rule loses.
 
 One shared primitive is deliberately parked with the list row: the song-card chrome that both
 `.songrow` and `.songcard` use — `.thumb`, `.st`, `.splay`, `.lsave` — lives in

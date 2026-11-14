@@ -2,6 +2,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">
 <title>Swipe · HardlyListening</title>
+<!-- The bar is the library's own compact player, so it borrows the library's sheet rather
+     than growing a second copy of the same surface. The library's sheet comes first and
+     swipe.css only narrows the bar to this page's column, which needs it to be later in
+     the cascade: the same rules at the same specificity, resolved by order. -->
+<link rel="stylesheet" href="/styles/components/player.css">
 <link rel="stylesheet" href="/swipe.css">
 <script src="/swipe.js" defer></script></head>
 <body>
@@ -22,4 +27,34 @@
   <audio id="audio" preload="none"></audio>
   <p class="empty" id="empty" hidden>Nothing left to swipe — every playable Repository song is either in your library or already swiped.</p>
 </main>
+
+<!-- The compact player: the same bar the library shows, with the controls a deck can honour.
+     No queue sheet, no fullscreen view, no repeat/shuffle — this page plays one song because
+     you tapped its card. -->
+<div id="player">
+  <button class="plartwrap" id="plartwrap" type="button" title="The card being played" aria-label="The card being played"><img id="plart" alt=""></button>
+  <div class="pmeta" id="plmeta">
+    <div class="ptitle" id="pltitle">—</div>
+    <div class="psub" id="plsub"></div>
+  </div>
+  <div class="pctrl">
+    <div class="ptrans">
+      <button class="iconbtn" id="plprev" title="Previous" aria-label="Previous"></button>
+      <button class="iconbtn big" id="plplay" title="Play" aria-label="Play"></button>
+      <button class="iconbtn" id="plnext" title="Next" aria-label="Next"></button>
+      <button class="iconbtn small" id="plmute" title="Mute" aria-label="Mute" aria-pressed="false"></button>
+      <button class="iconbtn small" id="plvolmore" title="Volume" aria-label="Volume" aria-haspopup="dialog"
+        aria-expanded="false" aria-controls="plvolmenu"></button>
+    </div>
+    <div class="pend"></div>
+  </div>
+  <span class="ptime" id="pltime">0:00</span>
+  <input class="pseek" type="range" id="plseek" min="0" max="1000" value="0" aria-label="Seek">
+  <span class="ptime" id="pldur">0:00</span>
+</div>
+<!-- Same placement rule as the library: the bar clips its own overflow, so the fader is a
+     fixed panel positioned from the button's box by swipe.js. -->
+<div class="plvol-menu" id="plvolmenu" role="dialog" aria-label="Volume">
+  <input type="range" id="plvolv" min="0" max="100" step="1" value="100" title="Volume" aria-label="Volume">
+</div>
 </body></html>

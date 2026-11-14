@@ -1,6 +1,6 @@
 // Three song layouts: List, Cards (with a compact mode), Grid (covers only, opens album).
 const http = require("http"), fs = require("fs"), path = require("path");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const WEB = path.join(__dirname, "..", "web");
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==", "base64");

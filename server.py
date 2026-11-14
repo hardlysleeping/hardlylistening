@@ -50,6 +50,14 @@ SCHEDULER = None
 SEEDED = False
 LOCK = threading.Lock()
 
+#: Every request that makes this server *do work*: reach a provider, run yt-dlp, write a
+#: file, take a queue slot. Gated by a grant (HL-219), for every role — the plan is
+#: explicit that membership, player access and administration must not imply it.
+ACQUIRE_ROUTES = re.compile(
+    r'^/api/(add|library/grab|failed/retry|feed/refresh-all|track/queue'
+    r'|track/\d+/(retry|source|unpick)|playlist/\d+/(requeue|verify)|feed/\d+/queue'
+    r'|library/verify)$')
+
 ROUTES = [
     ("POST", r"^/api/add$", "add"),
     ("POST", r"^/api/pause$", "pause"),
@@ -70,6 +78,7 @@ ROUTES = [
     ("POST", r"^/api/track/(\d+)/delete$", "track_delete"),
     ("POST", r"^/api/track/(\d+)/restore$", "track_restore"),
     ("POST", r"^/api/trash/empty$", "trash_empty"),
+    ("POST", r"^/api/replacements/collect$", "replacements_collect"),
     ("POST", r"^/api/trash/(\d+)/restore$", "trash_restore"),
     ("POST", r"^/api/playlist/(\d+)/remove$", "playlist_remove"),
     ("POST", r"^/api/release/(\d+)/remove$", "release_remove"),
@@ -101,8 +110,8 @@ def boot() -> tuple[db.Store, Queue]:
         if STORE is None:
             paths.ensure()
             STORE = db.Store()
-            # `MUSIC_DIR` supplies the first root only: once the settings table holds a value
-            # the admin chose, it wins and the variable is inert (see config.seed_music_root).
+            # `MUSIC_DIR` supplies the first root only: once the settings table has one, the
+            # admin's choice wins and the variable is inert (see config.seed_music_root).
             if config.seed_music_root(STORE):
                 print(f"library root seeded from HARDLYLISTENING_MUSIC_DIR: {STORE.setting('root')}",
                       flush=True)
@@ -118,11 +127,22 @@ def boot() -> tuple[db.Store, Queue]:
             # the download path did not already do, then keeps watching.
             from library import art_store
             art_store.start(STORE)
-            # A file the queue could not link has no row, so it is invisible: the
-            # sweep adopts those orphans instead of letting a retry download them
-            # again. Standing job, never deletes or moves.
+            # Same standing-job idea for files the queue could not link: a file
+            # with no row is invisible, so a retry downloads it again.
             from library import reconcile
             reconcile.start(STORE)
+            # The bucket mirror: a persistent queue of finished files, drained while the server
+            # runs. Nothing is queued until something downloads, and local mode queues nothing.
+            from library import uploads
+            uploads.start(STORE)
+            # A USB export that was mid-copy when the process stopped is not running now:
+            # it is marked interrupted rather than left claiming to be copying (HL-228).
+            from library import usb_export
+            usb_export.startup(STORE)
+            # Previous media kept for a reverse is collected once its window passes; an
+            # interrupted swap's scratch folder goes too (HL-229).
+            from replacements import start as start_retention
+            start_retention(STORE)
             # Core publishes domain events (a member joining or renaming); Social subscribes
             # Activity to them here, so `security.py` never reaches into the Feed. A server
             # running without Social still boots — those events simply go nowhere (ARCH-007).
@@ -222,6 +242,63 @@ class Handler(BaseHTTPRequestHandler):
                 import user_playlists
                 user_playlists.dispatch(self, boot()[0], SECURITY)
                 return False
+            if path == '/api/storage' or path in ('/api/storage/migrate',
+                                                 '/api/storage/restore'):
+                # What the bucket settings say, whether they can actually be used, and the two
+                # actions an administrator owns: queue the library that already exists, and put
+                # one object back on disk. The credential is never here, only whether one exists.
+                from library import storage, uploads
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                SECURITY.admin(self.member)
+                if path == '/api/storage':
+                    if self.command != 'GET':
+                        raise Denied(405, 'Method not allowed')
+                    view = storage.public(store)
+                    try:
+                        storage.build(store)
+                        view['ready'] = True
+                    except storage.StorageError as error:
+                        # A refused configuration is answered, not hidden: the reason is the point.
+                        view['ready'] = False
+                        view['reason'] = str(error)
+                    view['uploads'] = uploads.summary(store)
+                    view['migrations'] = uploads.migrations(store)
+                    view['cache'] = storage.cache_report(store)
+                    self.json(view)
+                    return False
+                if self.command != 'POST':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.csrf(self)
+                payload = self.body()
+                if path == '/api/storage/migrate':
+                    SECURITY.limit(self.member['id'], 'storage-migrate', 3)
+                    try:
+                        result = uploads.migrate(store, by=self.member['id'])
+                    except (ValueError, storage.StorageError) as error:
+                        raise Denied(400, str(error))
+                    self.json({'ok': True, **result})
+                    return False
+                key = str(payload.get('key') or '').strip()
+                if not key and payload.get('track_id'):
+                    try:
+                        track_id = int(payload['track_id'])
+                    except (TypeError, ValueError):
+                        raise Denied(400, 'track_id must be a number')
+                    track = store.track_by_id(track_id)
+                    if not track or not track.get('file'):
+                        raise Denied(400, 'that track has no stored file')
+                    try:
+                        key = storage.key_for(store, track['file'])
+                    except storage.StorageError as error:
+                        raise Denied(400, str(error))
+                if not key:
+                    raise Denied(400, 'key or track_id is required')
+                try:
+                    self.json({'ok': True, 'restored': uploads.restore(store, key)})
+                except storage.StorageError as error:
+                    raise Denied(400, str(error))
+                return False
             if path == '/api/artist/art/candidates':
                 store, _ = boot()
                 self.member = SECURITY.authenticate(self, store)
@@ -254,8 +331,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not job:
                     raise Denied(400, 'that track has no download job')
                 asked = (parse_qs(urlparse(self.path).query).get('q') or [''])[0].strip()
-                query = asked or ' '.join(
-                    p for p in (track.get('artist_name'), track.get('title')) if p).strip()
+                query = asked or ' '.join(p for p in (track.get('artist_name'), track.get('title')) if p).strip()
                 try:
                     results = search.find(query, limit=25) if query else []
                 except ValueError as exc:
@@ -282,6 +358,36 @@ class Handler(BaseHTTPRequestHandler):
                         'new_url': latest['new_url'], 'error': latest.get('error') or '',
                     },
                 })
+                return False
+            if path == '/api/stats' or path.startswith('/api/stats/'):
+                # Listening numbers for one member, read-only. Own by default; the
+                # `/<member_id>` form is another member's, and the app has no private
+                # profiles, so nothing is hidden.
+                import stats
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if self.command != 'GET':
+                    raise Denied(405, 'Method not allowed')
+                query = parse_qs(urlparse(self.path).query)
+                target = (query.get('member') or [''])[0] if path == '/api/stats' \
+                    else path.rsplit('/', 1)[-1]
+                if path != '/api/stats' and (not target or len(target) > 64):
+                    raise Denied(404, 'Unknown member')
+                if target and target != self.member['id']:
+                    with store.lock:
+                        exists = store.conn.execute(
+                            'SELECT 1 FROM members WHERE id=?', (target,)).fetchone()
+                    if not exists:
+                        raise Denied(404, 'Unknown member')
+                period = (query.get('period') or ['week'])[0]
+                year = (query.get('year') or [''])[0]
+                try:
+                    summary = stats.summary(
+                        store, target or self.member['id'], period,
+                        year=int(year) if year.isdigit() else None)
+                except ValueError as error:
+                    raise Denied(400, str(error))
+                self.json(summary)
                 return False
             if path.startswith('/api/listening/'):
                 import listening
@@ -344,13 +450,63 @@ class Handler(BaseHTTPRequestHandler):
                 import lyrics
                 store, _ = boot()
                 self.member = SECURITY.authenticate(self, store)
-                if self.command != 'GET':
+                track_id = int(lyric_route.group(1))
+                if self.command == 'GET':
+                    SECURITY.limit(self.member['id'], 'lyrics', 30)
+                    result = lyrics.get(store, track_id)
+                elif self.command == 'POST':
+                    # A member's correction, not an acquisition: it is text about a track they
+                    # can already play, stored against the track so a provider refresh cannot
+                    # undo it. `reset` drops it again. The response is the shape a GET answers
+                    # with, so the client repaints from either.
+                    SECURITY.limit(self.member['id'], 'lyrics-edit', 30)
+                    body = self.body()
+                    if body.get('reset'):
+                        result = lyrics.clear_edit(store, track_id)
+                    else:
+                        try:
+                            result = lyrics.save_edit(store, track_id, body.get('text'), self.member)
+                        except (ValueError, TypeError) as exc:
+                            raise Denied(400, str(exc))
+                else:
                     raise Denied(405, 'Method not allowed')
-                SECURITY.limit(self.member['id'], 'lyrics', 30)
-                result = lyrics.get(store, int(lyric_route.group(1)))
                 if result is None:
                     raise Denied(404, 'No such track')
                 self.json(result)
+                return False
+            if path == '/api/library/usb/plan' or path == '/api/library/usb/start':
+                # Preparing a removable drive (HL-228). Reading the plan writes nothing, so
+                # a person can ask "does this fit?" without touching the stick; starting is
+                # the write, and it is a queued job rather than a request that sits there
+                # copying a set. Same permission as the DJ export itself: any approved
+                # member handing the shared library to a device they brought.
+                from library import usb_export
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if self.command != 'POST':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.csrf(self)
+                SECURITY.limit(self.member['id'], 'usb-export', 10)
+                body = self.body()
+                destination = str(body.get('destination') or '')
+                raw_playlist = body.get('playlist')
+                try:
+                    playlist_id = int(raw_playlist) if raw_playlist not in (None, '', 0) else None
+                    if path == '/api/library/usb/plan':
+                        result = usb_export.plan(store, self.member, destination, playlist_id)
+                    else:
+                        result = usb_export.start(store, self.member, destination, playlist_id)
+                except (ValueError, TypeError) as exc:
+                    raise Denied(400, str(exc))
+                self.json(result)
+                return False
+            if path == '/api/library/usb':
+                from library import usb_export
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                if self.command != 'GET':
+                    raise Denied(405, 'Method not allowed')
+                self.json(usb_export.status(store))
                 return False
             if path == '/api/library/move':
                 store, queue = boot()
@@ -366,6 +522,8 @@ class Handler(BaseHTTPRequestHandler):
                     queue.pause(True)
                 try:
                     result = import_files.move_library(store, target)
+                except ValueError as exc:
+                    raise Denied(400, str(exc))
                 finally:
                     if queue:
                         queue.pause(was_paused)
@@ -612,6 +770,98 @@ class Handler(BaseHTTPRequestHandler):
             SECURITY.config()
             if path.startswith('/auth/') and self.command == 'GET':
                 raise Denied(404, 'Not found')
+            if path == '/api/acquisitions':
+                # Who may start work. Read and write are administrator-only, and granting
+                # is the only way in: the check itself never consults a role.
+                import acquisitions
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                SECURITY.admin(self.member)
+                SECURITY.schema(store)
+                if self.command == 'GET':
+                    self.json({'grants': acquisitions.grants(store)})
+                    return False
+                if self.command != 'POST':
+                    raise Denied(405, 'Method not allowed')
+                SECURITY.csrf(self)
+                payload = self.body()
+                member_id = str(payload.get('member_id') or '').strip()
+                if not member_id or len(member_id) > 64:
+                    raise Denied(400, 'member_id is required')
+                try:
+                    if payload.get('grant', True):
+                        changed = acquisitions.grant(store, member_id, self.member['id'])
+                    else:
+                        changed = acquisitions.revoke(store, member_id)
+                except ValueError as error:
+                    # A named member that does not exist is a request problem, not a crash:
+                    # the handler answers with the reason instead of dropping the connection.
+                    raise Denied(400, str(error))
+                self.json({'ok': True, 'changed': changed,
+                           'grants': acquisitions.grants(store)})
+                return False
+            if path == '/api/extensions' or path.startswith('/api/extensions/'):
+                # The opt-in host's administrator surface: what is on disk, what is installed,
+                # what is trusted, and what a run asked for. Installation reads a directory the
+                # administrator already placed under `paths.EXTENSIONS_DIR`; code is never
+                # accepted over HTTP, because this runs as the server's own user.
+                import extensions
+                import extension_host
+                store, _ = boot()
+                self.member = SECURITY.authenticate(self, store)
+                SECURITY.admin(self.member)
+                try:
+                    if self.command == 'GET':
+                        if path == '/api/extensions':
+                            self.json({'extensions': extensions.installed(store),
+                                       'on_disk': extension_host.on_disk(),
+                                       'directory': str(extension_host.EXTENSIONS_DIR),
+                                       'runs': extension_host.runs(store, limit=10)})
+                            return False
+                        found = re.fullmatch(r'/api/extensions/([^/]+)/calls', path)
+                        if not found:
+                            raise Denied(404, 'Not found')
+                        self.json({'calls': extension_host.calls(store, found.group(1)),
+                                   'runs': extension_host.runs(store, found.group(1))})
+                        return False
+                    if self.command != 'POST':
+                        raise Denied(405, 'Method not allowed')
+                    SECURITY.csrf(self)
+                    payload = self.body()
+                    if path == '/api/extensions/install':
+                        ext_id = str(payload.get('id') or '').strip()
+                        extension_host.install_from_disk(store, ext_id, by=self.member['id'])
+                        # The answer is the record the list would show, so an administrator who
+                        # installed it can see that it is installed and *not* enabled.
+                        record = next(item for item in extensions.installed(store)
+                                      if item['id'] == ext_id)
+                        self.json({'ok': True, 'extension': record})
+                        return False
+                    found = re.fullmatch(
+                        r'/api/extensions/([^/]+)/(enable|revoke|remove|run)', path)
+                    if not found:
+                        raise Denied(404, 'Not found')
+                    ext_id, action = found.group(1), found.group(2)
+                    if action == 'enable':
+                        self.json({'ok': True,
+                                   'extension': extensions.enable(store, ext_id,
+                                                                  self.member['id'])})
+                    elif action == 'revoke':
+                        extensions.revoke(store, ext_id)
+                        self.json({'ok': True})
+                    elif action == 'remove':
+                        # The row goes; the directory stays. A POST does not delete files an
+                        # administrator put here — reinstalling is the same directory again.
+                        extensions.remove(store, ext_id)
+                        self.json({'ok': True})
+                    else:
+                        SECURITY.limit(self.member['id'], 'extension-run', 10)
+                        self.json(extension_host.run(store, ext_id, member=self.member))
+                    return False
+                except ValueError as error:
+                    # A bad manifest, a missing entry file or an unknown id is a request problem,
+                    # not a dropped connection.
+                    raise Denied(400, str(error))
             if path.startswith('/api/'):
                 store, _ = boot()
                 self.member = SECURITY.authenticate(self, store)
@@ -627,25 +877,30 @@ class Handler(BaseHTTPRequestHandler):
                             owner = store.conn.execute('SELECT member_id FROM member_playlists WHERE playlist_id=?', (pid,)).fetchone()
                             if not owner or owner[0] != self.member['id']:
                                 raise Denied(403, 'Only the playlist owner may edit it')
+                    if ACQUIRE_ROUTES.match(path):
+                        # Everyone, administrators included. A role is not a grant.
+                        import acquisitions
+                        acquisitions.schema(store)
+                        if not acquisitions.may_acquire(store, self.member):
+                            raise Denied(
+                                403,
+                                'Acquisition is a separate permission on this server. '
+                                'Ask an administrator to grant it.')
                     with store.lock:
                         store.conn.execute('INSERT INTO member_requests(member_id,path) VALUES(?,?)', (self.member['id'], path))
                         store.conn.commit()
             return True
         except Denied as exc:
             self.close_connection = True
-            self.denied(exc)
+            data = {'error': exc.message}
+            headers = None
+            if exc.retry_after is not None:
+                data['retry_after'] = exc.retry_after
+                headers = {'Retry-After': str(exc.retry_after)}
+            self.json(data, exc.code, extra_headers=headers)
             return False
 
     # -- plumbing --
-    def denied(self, exc: 'Denied') -> None:
-        """One place that turns a refusal into a response, Retry-After included."""
-        data = {'error': exc.message}
-        headers = None
-        if exc.retry_after is not None:
-            data['retry_after'] = exc.retry_after
-            headers = {'Retry-After': str(exc.retry_after)}
-        self.json(data, exc.code, extra_headers=headers)
-
     def _send(self, code: int, body: bytes, ctype: str, extra_headers=None) -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -674,8 +929,7 @@ class Handler(BaseHTTPRequestHandler):
                     return result
                 return value
             data = public(data)
-        self._send(code, json.dumps(data, default=str).encode(), "application/json",
-                   extra_headers=extra_headers)
+        self._send(code, json.dumps(data, default=str).encode(), "application/json", extra_headers=extra_headers)
 
     def body(self) -> dict:
         """Memoised: rfile.read() only answers once, so a second call would hang."""
@@ -709,6 +963,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/robots.txt':
             self._send(200, b'User-agent: *\nDisallow: /\n', 'text/plain')
             return
+        # The member's colours as a stylesheet, linked from <head>: the browser has them
+        # before the first paint, so a saved theme never flashes the default first.
+        if path == '/theme.css':
+            self.theme_css()
+            return
         # Public share pages are capability URLs: no session, no catalogue.
         if path.startswith('/s/'):
             import shares
@@ -728,7 +987,12 @@ class Handler(BaseHTTPRequestHandler):
                 if exc.code == 401:
                     self.redirect('/login')
                 else:
-                    self.denied(exc)
+                    data = {'error': exc.message}
+                    headers = None
+                    if exc.retry_after is not None:
+                        data['retry_after'] = exc.retry_after
+                        headers = {'Retry-After': str(exc.retry_after)}
+                    self.json(data, exc.code, extra_headers=headers)
                 return
         store, _ = boot()
         if path == "/api/state":
@@ -780,6 +1044,26 @@ class Handler(BaseHTTPRequestHandler):
             # Releases are catalogue, not activity: Repo owns the read (REPO-012).
             from repo import discovery as repo_discovery
             self.json({"items": repo_discovery.releases(store, 200, decision)})
+            return
+        if path == "/api/popular":
+            # The community chart: the only read over `listen_events` that is not one
+            # member's, so it takes no member and lives beside Activity in the Feed.
+            # Calendar windows (stats.calendar_window): today, this week, this month.
+            query = parse_qs(urlparse(self.path).query)
+            period = (query.get("period") or ["day"])[0]
+            try:
+                limit = int((query.get("limit") or ["50"])[0])
+            except ValueError:
+                limit = 50
+            import stats as stats_module
+            try:
+                start, end = stats_module.calendar_window(period)
+            except ValueError as error:
+                self.json({"error": str(error)}, 400)
+                return
+            self.json({"period": period, "start": start, "end": end,
+                       "items": stats_module.popular_tracks(
+                           store, start, end, max(1, min(200, limit)))})
             return
         if path == "/api/activity":
             query = parse_qs(urlparse(self.path).query)
@@ -922,10 +1206,12 @@ class Handler(BaseHTTPRequestHandler):
                     " COALESCE(NULLIF(TRIM(m.display_name),''),'') AS added_by"
                     " FROM playlists p LEFT JOIN member_playlists o ON o.playlist_id=p.id"
                     " LEFT JOIN members m ON m.id=o.member_id"
+                    " WHERE " + db.playlist_rows("p") +
                     " ORDER BY p.position,p.id")]
             except Exception:
                 playlists = [dict(r) for r in store.conn.execute(
-                    "SELECT id,title,provider,source_url FROM playlists ORDER BY position,id")]
+                    "SELECT id,title,provider,source_url FROM playlists p WHERE "
+                    + db.playlist_rows("p") + " ORDER BY position,id")]
             self.json({"tracks": annotate(store.library()), "all_tracks": annotate(store.library(include_pending=True)), "artist_art": store.artist_art_map(), "playlists": playlists})
             return
         if path == "/api/library/export":
@@ -1121,6 +1407,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
             except (BrokenPipeError, ConnectionResetError):
                 return
+                remaining -= len(chunk)
 
     def redirect(self, location: str) -> None:
         self.send_response(303)
@@ -1301,6 +1588,29 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, UI_OFF, "text/plain; charset=utf-8")
         return True
 
+    def theme_css(self) -> None:
+        """The signed-in member's three colours, or the stock ones.
+
+        Only the `--user-*` inputs are written, never the derived tokens: tokens.css keeps
+        owning the mixing, and the same `:root:root` selector it uses means a sheet linked
+        after it wins the cascade without an !important anywhere.
+        """
+        import preferences
+        if self.web_ui_off():
+            return
+        colours = dict(preferences.DEFAULT_THEME)
+        if SECURITY.required:
+            store, _ = boot()
+            try:
+                member = SECURITY.peek(self, store)
+            except Exception:
+                member = None          # a broken session must not 500 the page's stylesheet
+            if member:
+                colours = preferences.theme(store, member['id'])
+        css = (':root:root{--user-base:%s;--user-accent:%s;--user-trim:%s}\n'
+               % (colours['base'], colours['accent'], colours['trim']))
+        self._send(200, css.encode(), 'text/css; charset=utf-8')
+
     def static(self, name: str) -> None:
         if self.web_ui_off():
             return
@@ -1478,6 +1788,7 @@ class Handler(BaseHTTPRequestHandler):
         if not urls:
             raise ValueError("paste a playlist link")
         _, queue = boot()
+        from repo import acquisition as repo_acquisition
         out = []
         for one in urls:
             try:
@@ -1489,7 +1800,7 @@ class Handler(BaseHTTPRequestHandler):
                         if prior and prior['member_id'] != self.member['id']:
                             out.append({'error': 'Only the playlist owner may refresh this playlist'})
                             continue
-                    result = queue.ingest(one)
+                    result = repo_acquisition.ingest(queue, one)
                     if self.member and result.get('playlist_id') and result['playlist_id'] not in existing:
                         store.conn.execute('INSERT OR IGNORE INTO member_playlists(playlist_id,member_id) VALUES(?,?)', (result['playlist_id'], self.member['id']))
                         store.conn.commit()
@@ -1506,9 +1817,8 @@ class Handler(BaseHTTPRequestHandler):
         The rule (an unowned follow belongs to nobody; an anonymous reader sees all of
         them) lives in Repo, so the endpoint and the feed cannot drift apart.
         """
-        from repo import service as repo_service
-        member = getattr(self, "member", None) or {}
-        return repo_service.subscriptions(store, str(member.get("id") or ""))
+        from repo import api as repo_api
+        return repo_api.subscriptions_for(self, store)
 
     def do_subscription_add(self) -> None:
         body = self.body()
@@ -1571,6 +1881,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_feed_queue(self, item_id: int) -> None:
         """The only place a feed item becomes work — a click, never a timer."""
         store, queue = boot()
+        from repo import acquisition as repo_acquisition
         from repo import discovery as repo_discovery
         item = repo_discovery.release(store, item_id)
         if not item:
@@ -1582,7 +1893,7 @@ class Handler(BaseHTTPRequestHandler):
             self.json({"ok": True, "already": True, "playlist_id": item["playlist_id"]})
             return
         try:
-            result = queue.ingest(item["source_url"])
+            result = repo_acquisition.ingest(queue, item["source_url"])
         except Exception as exc:                       # noqa: BLE001
             store.feed_mark(item_id, outcome="failed")
             raise ValueError(str(exc))
@@ -1603,7 +1914,8 @@ class Handler(BaseHTTPRequestHandler):
         if not url:
             raise ValueError("nothing to download")
         _, queue = boot()
-        result = queue.ingest(url)
+        from repo import acquisition as repo_acquisition
+        result = repo_acquisition.ingest(queue, url)
         self.want_in_library(result.get("playlist_id"))
         self.json({"ok": True, **result})
 
@@ -1858,9 +2170,13 @@ class Handler(BaseHTTPRequestHandler):
         queue.wake()
         self.json({"moved": moved})
 
+    def _may_delete(self, store, kind: str, target_id: int) -> bool:
+        """Local mode has no members, so it behaves like the admin it already is."""
+        if not SECURITY.required:
+            return True
+        return SECURITY.may_delete(store, self.member, kind, target_id)
+
     def do_track_delete(self, tid: int) -> None:
-        """Delete one song. The row stays as a tombstone, so a refresh cannot
-        download it again and Settings can put it back."""
         import deletion
         store, queue = boot()
         if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
@@ -1884,6 +2200,20 @@ class Handler(BaseHTTPRequestHandler):
             self.json({"error": "Administrator required"}, 403)
             return
         self.json(deletion.empty_trash(store))
+
+    def do_replacements_collect(self) -> None:
+        """Collect previous media whose window has passed. Admin-only, CSRF-checked.
+
+        The same collection the boot thread runs, offered as a button: an administrator who
+        has just changed the window should not have to wait six hours to see it happen.
+        """
+        import replacements
+        store, _queue = boot()
+        SECURITY.csrf(self)
+        if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
+            self.json({"error": "Administrator required"}, 403)
+            return
+        self.json(replacements.collect(store))
 
     def do_trash_restore(self, tid: int) -> None:
         """Put one trashed file back where it came from, playlist and album deletes too."""
@@ -1911,12 +2241,6 @@ class Handler(BaseHTTPRequestHandler):
         if report.get("queued"):
             queue.wake()
         self.json(report)
-
-    def _may_delete(self, store, kind: str, target_id: int) -> bool:
-        """Local mode has no members, so it behaves like the admin it already is."""
-        if not SECURITY.required:
-            return True
-        return SECURITY.may_delete(store, self.member, kind, target_id)
 
     def do_playlist_remove(self, pid: int) -> None:
         import deletion

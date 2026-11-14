@@ -11,7 +11,7 @@ queue speed.
 import importlib.util, json, sqlite3, sys, time
 from pathlib import Path
 
-APP = Path("/var~/apps/hardlylistening")
+APP = Path(__file__).resolve().parents[1]
 DB = APP / "hardlylistening.db"
 path = APP / "downloaders" / "ytdlp.py"
 if "--ytdlp" in sys.argv:

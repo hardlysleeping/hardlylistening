@@ -53,6 +53,7 @@ class InstallTree(unittest.TestCase):
         self.copy_tree()
         # What the service needs and would silently miss.
         for needed in ('web/index.html', 'bin/hardlylistening-server', 'cli.py', 'config.py',
+                       'core/db.py', 'core/config.py', 'core/security.py',
                        'paths.py', 'server.py', 'VERSION'):
             self.assertTrue((self.prefix / needed).exists(), needed)
 

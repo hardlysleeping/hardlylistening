@@ -288,6 +288,35 @@
   box-shadow:0 0 6px #e0a24a
 }
 
+/* A kept song (HL-226): the copy on this device plays with no network. Accent green, because
+   it is the app's own copy rather than a warning about the source. */
+.kept-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-left:8px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:10.5px;
+  font-weight:600;
+  letter-spacing:.02em;
+  color:#bfe9d8;
+  background:#16342b;
+  border:1px solid #2f6a55;
+}
+
+.kept-badge::before{
+  content:"";
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 6px var(--accent)
+}
+
+/* An author `display` beats the UA sheet's `[hidden]{display:none}`, so say it here too. */
+.kept-badge[hidden]{display:none}
+
 .songrow .idx{
   color:var(--dim);
   font-variant-numeric:tabular-nums;
@@ -479,6 +508,31 @@
   content:'♫'
 }
 
+/* Tempo on the cover, top-left, small enough to sit on a thumbnail. Cards only: the table
+   keeps its badge in the tag column. The play-next chip shares that corner but only on
+   hover, and it is a button, so it wins while it is up. */
+.songcard .thumb .bpm{
+  position:absolute;
+  top:var(--chip);
+  left:var(--chip);
+  z-index:2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:15px;
+  padding:0 4px;
+  border-radius:4px;
+  background:#0b0c11cc;
+  border:1px solid #ffffff24;
+  color:#eef1f5;
+  font-size:9px;
+  font-weight:650;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.02em;
+  backdrop-filter:blur(6px);
+  pointer-events:none
+}
+
 .songcard .thumb .snext{
   position:absolute;
   top:var(--chip);
@@ -631,7 +685,7 @@ html[data-cardstyle="compact"] .songcard:not(.open) .st b{
   color:#f2f4f8
 }
 
-html[data-cardstyle="compact"] .songcard:not(.open) .sartist, html[data-cardstyle="compact"] .songcard:not(.open) .salbum, html[data-cardstyle="compact"] .songcard:not(.open) .votes, html[data-cardstyle="compact"] .songcard:not(.open) .rowactions, html[data-cardstyle="compact"] .songcard:not(.open) .pref-pair, html[data-cardstyle="compact"] .songcard:not(.open) .send, html[data-cardstyle="compact"] .songcard:not(.open) .sdur, html[data-cardstyle="compact"] .songcard:not(.open) .thumb .snext{
+html[data-cardstyle="compact"] .songcard:not(.open) .sartist, html[data-cardstyle="compact"] .songcard:not(.open) .salbum, html[data-cardstyle="compact"] .songcard:not(.open) .votes, html[data-cardstyle="compact"] .songcard:not(.open) .rowactions, html[data-cardstyle="compact"] .songcard:not(.open) .pref-pair, html[data-cardstyle="compact"] .songcard:not(.open) .send, html[data-cardstyle="compact"] .songcard:not(.open) .sdur, html[data-cardstyle="compact"] .songcard:not(.open) .thumb .snext, html[data-cardstyle="compact"] .songcard:not(.open) .thumb .bpm{
   display:none
 }
 
@@ -1262,6 +1316,25 @@ html[data-gridstyle="hex"] .covercell .marks{
 
 .songtable .songrow:not(.songcard) .listtags:empty{
   display:none
+}
+
+/* Tempo, read as a unit: 128 rather than "128 BPM", since the badge only holds four
+   digits and the column already has the source glyph beside it. */
+.listtags .bpm{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  height:18px;
+  padding:0 5px;
+  border-radius:5px;
+  background:color-mix(in srgb,var(--panel2) 70%,transparent);
+  color:var(--dim);
+  font-size:10px;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.02em;
+  pointer-events:none
 }
 
 #player-full .pf-foot .pfsave .ghost.lsave{

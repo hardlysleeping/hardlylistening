@@ -3,8 +3,10 @@
 See PARTY_INTEGRATION.md before wiring the HTTP adapter into server.py.
 """
 import hashlib
+import random
 import re
 import secrets
+import sqlite3
 import time
 from contextlib import contextmanager
 from urllib.parse import urlsplit, parse_qs
@@ -32,7 +34,9 @@ def schema(store):
         CREATE TABLE IF NOT EXISTS party_rooms (
           id TEXT PRIMARY KEY, title TEXT NOT NULL, creator TEXT NOT NULL,
           expires REAL NOT NULL, closed INTEGER NOT NULL DEFAULT 0,
-          host_digest TEXT, host_member TEXT, host_until REAL NOT NULL DEFAULT 0);
+          host_digest TEXT, host_member TEXT, host_until REAL NOT NULL DEFAULT 0,
+          deck_playing INTEGER NOT NULL DEFAULT 0, deck_gain REAL NOT NULL DEFAULT 1,
+          deck_position REAL NOT NULL DEFAULT 0, deck_updated REAL NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS party_guests (
           id TEXT PRIMARY KEY, party TEXT NOT NULL, invite_digest TEXT UNIQUE NOT NULL,
           expires REAL NOT NULL, display_name TEXT NOT NULL DEFAULT '',
@@ -42,7 +46,7 @@ def schema(store):
         CREATE TABLE IF NOT EXISTS party_entries (
           id INTEGER PRIMARY KEY AUTOINCREMENT, party TEXT NOT NULL,
           track_id INTEGER NOT NULL, added_by TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'waiting');
+          status TEXT NOT NULL DEFAULT 'waiting', position INTEGER NOT NULL DEFAULT 0);
         CREATE INDEX IF NOT EXISTS party_entries_room ON party_entries(party,status,id);
         CREATE UNIQUE INDEX IF NOT EXISTS party_one_current ON party_entries(party) WHERE status='playing';
         CREATE TABLE IF NOT EXISTS party_chat (
@@ -59,6 +63,18 @@ def schema(store):
           entry INTEGER NOT NULL, actor TEXT NOT NULL,
           PRIMARY KEY(entry,actor));
         ''')
+        # Rooms created before HL-204 have no deck. Adding the columns is the whole migration:
+        # the defaults describe a room that has never had a deck, which is what these are.
+        for table, column, ddl in (
+                ('party_rooms', 'deck_playing', 'INTEGER NOT NULL DEFAULT 0'),
+                ('party_rooms', 'deck_gain', 'REAL NOT NULL DEFAULT 1'),
+                ('party_rooms', 'deck_position', 'REAL NOT NULL DEFAULT 0'),
+                ('party_rooms', 'deck_updated', 'REAL NOT NULL DEFAULT 0'),
+                ('party_entries', 'position', 'INTEGER NOT NULL DEFAULT 0')):
+            try:
+                store.conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}')
+            except sqlite3.OperationalError:
+                pass                       # already there
 
 
 @contextmanager
@@ -121,7 +137,8 @@ def advance(c, store, pid, expected):
     if got is not None:
         c.execute('DELETE FROM party_skips WHERE entry=?', (got,))
     nxt = c.execute('''SELECT e.id,e.track_id FROM party_entries e LEFT JOIN party_votes v ON v.entry=e.id
-       WHERE e.party=? AND e.status='waiting' GROUP BY e.id ORDER BY COALESCE(SUM(v.value),0) DESC,e.id LIMIT 1''', (pid,)).fetchone()
+       WHERE e.party=? AND e.status='waiting' GROUP BY e.id
+       ORDER BY COALESCE(SUM(v.value),0) DESC,e.position,e.id LIMIT 1''', (pid,)).fetchone()
     if not nxt:
         return None
     track(c, store, nxt['track_id'])
@@ -218,15 +235,23 @@ def search(store, pid, query):
         return {'tracks': [public_track(dict(t)) for t in rows if local_path(store, dict(t))][:30]}
 
 
+def queue_entry(c, store, pid, actor, tid):
+    """Append one track to the waiting queue. The rule lives here so `add` and the jukebox agree."""
+    track(c, store, tid)
+    if c.execute("SELECT count(*) FROM party_entries WHERE party=? AND status='waiting'", (pid,)).fetchone()[0] >= 200:
+        raise Denied(409, 'Waiting queue is full')
+    if c.execute("SELECT 1 FROM party_entries WHERE party=? AND track_id=? AND status IN ('waiting','playing')", (pid, tid)).fetchone():
+        raise Denied(409, 'Track is already queued')
+    position = c.execute('SELECT COALESCE(MAX(position),0)+1 FROM party_entries WHERE party=?',
+                         (pid,)).fetchone()[0]
+    return c.execute('INSERT INTO party_entries(party,track_id,added_by,position) VALUES(?,?,?,?)',
+                     (pid, tid, actor, position)).lastrowid
+
+
 def add(store, pid, actor, tid):
     with transaction(store) as c:
         room(c, pid)
-        track(c, store, tid)
-        if c.execute("SELECT count(*) FROM party_entries WHERE party=? AND status='waiting'", (pid,)).fetchone()[0] >= 200:
-            raise Denied(409, 'Waiting queue is full')
-        if c.execute("SELECT 1 FROM party_entries WHERE party=? AND track_id=? AND status IN ('waiting','playing')", (pid, tid)).fetchone():
-            raise Denied(409, 'Track is already queued')
-        eid = c.execute('INSERT INTO party_entries(party,track_id,added_by) VALUES(?,?,?)', (pid, tid, actor)).lastrowid
+        eid = queue_entry(c, store, pid, actor, tid)
     return {'entry_id': eid}
 
 
@@ -256,7 +281,7 @@ def state(store, pid, actor):
           COALESCE(MAX(CASE WHEN v.voter=? THEN v.value ELSE NULL END),0) AS vote
           FROM party_entries e JOIN tracks t ON t.id=e.track_id LEFT JOIN party_votes v ON v.entry=e.id
           WHERE e.party=? AND e.status IN ('waiting','playing') GROUP BY e.id
-          ORDER BY CASE e.status WHEN 'playing' THEN 0 ELSE 1 END,score DESC,e.id ASC''', (actor, pid)).fetchall()
+          ORDER BY CASE e.status WHEN 'playing' THEN 0 ELSE 1 END,score DESC,e.position ASC,e.id ASC''', (actor, pid)).fetchall()
         entries = [dict(t) for t in rows]
         # Votes are not anonymous in the room either: each entry carries the names
         # of the people who voted on it, so a score never hides behind a number.
@@ -284,7 +309,14 @@ def state(store, pid, actor):
         mine = bool(current) and bool(c.execute(
             'SELECT 1 FROM party_skips WHERE entry=? AND actor=?', (current['entry_id'], actor)).fetchone())
         nxt = queue[0] if queue else None
+        deck = {'playing': bool(r['deck_playing']) and r['host_until'] > now,
+                'gain': float(r['deck_gain']), 'position': float(r['deck_position'] or 0),
+                'host_active': r['host_until'] > now, 'controlled_by': ''}
+        if deck['host_active'] and r['host_member']:
+            host = c.execute('SELECT display_name FROM members WHERE id=?', (r['host_member'],)).fetchone()
+            deck['controlled_by'] = ((host[0] if host else '') or '').strip() or 'Member'
         return {'id': pid, 'title': r['title'], 'expires': r['expires'],
+                'deck': deck,
                 'host_active': r['host_until'] > now,
                 # "Next up" is the entry an advance would promote right now.
                 'next': ({k: nxt[k] for k in ('entry_id', 'id', 'title', 'artist_name', 'duration', 'score')} if nxt else None),
@@ -317,7 +349,111 @@ def skip(store, pid, actor, expected=None):
                 'current': None if done else eid}
 
 
-def control(store, member, pid, op, host_token=None, expected=None, guest_id=None):
+def waiting_entries(c, pid):
+    """The waiting queue in the order an advance would take it: votes first, then position."""
+    return c.execute('''SELECT e.id,e.track_id FROM party_entries e
+      LEFT JOIN party_votes v ON v.entry=e.id
+      WHERE e.party=? AND e.status='waiting' GROUP BY e.id
+      ORDER BY COALESCE(SUM(v.value),0) DESC,e.position,e.id''', (pid,)).fetchall()
+
+
+def deck_status(c, pid, now=None):
+    """What a Subsonic jukebox client asks for: index, playing, gain, position (whole seconds)."""
+    now = time.time() if now is None else now
+    r = c.execute('SELECT deck_playing,deck_gain,deck_position,host_until FROM party_rooms WHERE id=?',
+                  (pid,)).fetchone()
+    playing = c.execute("SELECT id FROM party_entries WHERE party=? AND status='playing'", (pid,)).fetchone()
+    return {'currentIndex': 0 if playing else -1,
+            'playing': bool(r['deck_playing']) and r['host_until'] > now,
+            'gain': float(r['deck_gain']),
+            'position': int(float(r['deck_position'] or 0))}
+
+
+def clear_waiting(c, pid):
+    rows = [row[0] for row in c.execute(
+        "SELECT id FROM party_entries WHERE party=? AND status='waiting'", (pid,))]
+    if rows:
+        marks = ','.join('?' for _ in rows)
+        c.execute(f'DELETE FROM party_votes WHERE entry IN ({marks})', rows)
+        c.execute(f'DELETE FROM party_entries WHERE id IN ({marks})', rows)
+
+
+JUKEBOX_ACTIONS = ('get', 'status', 'set', 'start', 'stop', 'add', 'clear', 'remove', 'shuffle',
+                   'setGain')
+
+
+def jukebox(store, pid, member, action, ids=None, index=None, gain=None):
+    """Steer the room's deck without becoming a second speaker.
+
+    The lease (`control('claim')`) decides which device makes sound; these commands decide what
+    the room plays and how, so a phone can control the room it is in. Membership is required —
+    guests may vote and skip, not replace the queue — and every change lands in one transaction.
+
+    `position` on each entry is the order a jukebox client asked for; the room's votes still
+    outrank it (`waiting_entries`), so a `set` order is honoured among tracks nobody has voted
+    on, and a vote still moves a track up. That is the honest way to have both.
+    """
+    actor = member_identity(member)
+    if not isinstance(action, str) or action not in JUKEBOX_ACTIONS:
+        raise Denied(400, 'Unknown jukebox action')
+    with transaction(store) as c:
+        room(c, pid)
+        now = time.time()
+        if action in ('get', 'status'):
+            status = deck_status(c, pid, now)
+            if action == 'status':
+                return {'status': status}
+            # The playlist a jukebox client reads is the room's queue with the playing track at
+            # index 0, which is what `currentIndex` refers to.
+            playing = [row[0] for row in c.execute(
+                "SELECT track_id FROM party_entries WHERE party=? AND status='playing'", (pid,))]
+            return {'status': status,
+                    'tracks': playing + [row['track_id'] for row in waiting_entries(c, pid)]}
+        if action in ('start', 'stop'):
+            if action == 'start' and not c.execute(
+                    'SELECT host_until FROM party_rooms WHERE id=?', (pid,)).fetchone()[0] > now:
+                # No leased device means no speaker: "playing" would be a status that lies.
+                raise Denied(409, 'No aux host is playing this room')
+            c.execute('UPDATE party_rooms SET deck_playing=?,deck_updated=? WHERE id=?',
+                      (1 if action == 'start' else 0, now, pid))
+        elif action == 'setGain':
+            if isinstance(gain, bool) or not isinstance(gain, (int, float)) or not 0 <= float(gain) <= 1:
+                raise Denied(400, 'Gain must be between 0 and 1')
+            c.execute('UPDATE party_rooms SET deck_gain=?,deck_updated=? WHERE id=?',
+                      (float(gain), now, pid))
+        elif action in ('set', 'add'):
+            if isinstance(ids, (str, int)) or not isinstance(ids, (list, tuple)):
+                raise Denied(400, 'A list of track ids is required')
+            wanted = [integer(tid) for tid in ids]
+            if len(wanted) > 200:
+                raise Denied(409, 'Waiting queue is full')
+            if action == 'set':
+                clear_waiting(c, pid)
+                for position, tid in enumerate(wanted):
+                    entry = queue_entry(c, store, pid, actor, tid)
+                    c.execute('UPDATE party_entries SET position=? WHERE id=?', (position, entry))
+            else:
+                for tid in wanted:
+                    queue_entry(c, store, pid, actor, tid)
+        elif action == 'clear':
+            clear_waiting(c, pid)
+        elif action == 'remove':
+            ordering = waiting_entries(c, pid)
+            if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(ordering):
+                raise Denied(400, 'Index out of range')
+            entry = ordering[index]['id']
+            c.execute('DELETE FROM party_votes WHERE entry=?', (entry,))
+            c.execute('DELETE FROM party_entries WHERE id=?', (entry,))
+        elif action == 'shuffle':
+            ordering = waiting_entries(c, pid)
+            order = list(range(len(ordering)))
+            random.shuffle(order)
+            for position, row in zip(order, ordering):
+                c.execute('UPDATE party_entries SET position=? WHERE id=?', (position, row['id']))
+        return {'status': deck_status(c, pid, now)}
+
+
+def control(store, member, pid, op, host_token=None, expected=None, guest_id=None, position=None, playing=None):
     member_identity(member)
     with transaction(store) as c:
         r, now = room(c, pid), time.time()
@@ -338,11 +474,75 @@ def control(store, member, pid, op, host_token=None, expected=None, guest_id=Non
                 c.execute('UPDATE party_rooms SET host_until=0,host_digest=NULL WHERE id=?', (pid,))
             else:
                 c.execute('UPDATE party_rooms SET host_until=? WHERE id=?', (now+30, pid))
+                if op == 'heartbeat' and position is not None:
+                    if isinstance(position, bool) or not isinstance(position, (int, float)) \
+                            or not 0 <= float(position) < 24 * 3600:
+                        raise Denied(400, 'Invalid playback position')
+                    c.execute('UPDATE party_rooms SET deck_position=? WHERE id=?',
+                              (float(position), pid))
+                if op == 'heartbeat' and playing is not None:
+                    if not isinstance(playing, bool):
+                        raise Denied(400, 'Invalid playback state')
+                    # The device making sound is the only honest source for this flag: a remote
+                    # `stop` must be able to stop it, and a local pause must not be undone by the
+                    # next poll. The heartbeat therefore reports what the audio element is doing.
+                    c.execute('UPDATE party_rooms SET deck_playing=? WHERE id=?',
+                              (1 if playing else 0, pid))
                 if op == 'next':
+                    c.execute('UPDATE party_rooms SET deck_position=0 WHERE id=?', (pid,))
                     advance(c, store, pid, expected)
         else:
             raise Denied(400, 'Unknown party control')
     return {'ok': True}
+
+
+def room_for(store, actor, now=None):
+    """The open room this identity last had open, or None.
+
+    A Subsonic client carries no room id, so "the member's current room" has to come from the
+    server. Reading a room is what writes presence (`state`), which makes this table the only
+    honest answer: the newest room this actor is still counted as being in. `PRESENCE_TTL` is the
+    room's own rule for who is there, so a member who left the party is not still in it.
+    """
+    now = time.time() if now is None else now
+    with store.lock:
+        row = store.conn.execute(
+            "SELECT p.party FROM party_presence p JOIN party_rooms r ON r.id=p.party"
+            " WHERE p.actor=? AND p.seen>=? AND r.closed=0 AND r.expires>?"
+            " ORDER BY p.seen DESC LIMIT 1", (actor, now - PRESENCE_TTL, now)).fetchone()
+        return row[0] if row else None
+
+
+def control_room(store, member_id, now=None):
+    """The room a member may steer from a client.
+
+    Presence is the first answer (the room is open in front of them). A phone app has no room
+    window, though, so the fallback is the room they created or whose deck they hold — never
+    somebody else's room they happen to be able to reach.
+    """
+    now = time.time() if now is None else now
+    with store.lock:
+        row = store.conn.execute(
+            "SELECT p.party FROM party_presence p JOIN party_rooms r ON r.id=p.party"
+            " WHERE p.actor=? AND p.seen>=? AND r.closed=0 AND r.expires>?"
+            " ORDER BY p.seen DESC LIMIT 1", ('m:' + member_id, now - PRESENCE_TTL, now)).fetchone()
+        if row:
+            return row[0]
+        row = store.conn.execute(
+            "SELECT id FROM party_rooms WHERE closed=0 AND expires>? AND (creator=? OR host_member=?)"
+            " ORDER BY expires DESC LIMIT 1", (now, member_id, member_id)).fetchone()
+        return row[0] if row else None
+
+
+def messages(store, pid, since=0.0, limit=200):
+    """Chat newer than a wall-clock time, oldest first — the order Subsonic's `since` asks for."""
+    with store.lock:
+        room(store.conn, pid)
+        rows = store.conn.execute(
+            'SELECT id,display_name,profile_icon,body,created FROM party_chat'
+            ' WHERE party=? AND created>=? ORDER BY id LIMIT ?',
+            (pid, float(since or 0), int(limit))).fetchall()
+        return [dict(r) for r in rows]
 
 
 def chat(store, pid, actor, payload=None, after='0'):
@@ -410,7 +610,7 @@ def dispatch(handler, store, security):
         m = security.authenticate(handler, store)
         handler.json(create(store, m, payload.get('title', 'Party'), payload.get('hours', 24)))
         return
-    match = re.fullmatch(r'/api/party/([A-Za-z0-9_-]{16})(?:/(search|queue|vote|skip|invite|control|chat))?', path)
+    match = re.fullmatch(r'/api/party/([A-Za-z0-9_-]{16})(?:/(search|queue|vote|skip|invite|control|chat|jukebox))?', path)
     if not match:
         raise Denied(404, 'Not found')
     pid, action = match.groups()
@@ -418,7 +618,24 @@ def dispatch(handler, store, security):
         m = security.authenticate(handler, store)
         if handler.command != 'POST':
             raise Denied(405, 'Method not allowed')
-        result = invite(store, m, pid) if action == 'invite' else control(store, m, pid, payload.get('op'), payload.get('host_token'), payload.get('expected'), payload.get('guest_id'))
+        if action == 'invite':
+            result = invite(store, m, pid)
+        else:
+            # The host's heartbeat carries where the track is, so `deck.position` is measured
+            # rather than guessed. Members (not guests) steer the deck.
+            result = control(store, m, pid, payload.get('op'), payload.get('host_token'),
+                             payload.get('expected'), payload.get('guest_id'),
+                             payload.get('position'), payload.get('playing'))
+    elif action == 'jukebox':
+        # Membership is required here even when a guest cookie is present: guests shape the
+        # queue with votes, not by replacing it.
+        m = security.authenticate(handler, store)
+        security.limit(m['id'], 'party-actions', 90)
+        if handler.command == 'GET':
+            result = jukebox(store, pid, m, 'get')
+        else:
+            result = jukebox(store, pid, m, payload.get('action'), payload.get('ids'),
+                             payload.get('index'), payload.get('gain'))
     else:
         # A party cookie is never accepted by Security.authenticate or other APIs.
         sid = security.cookie(handler, COOKIE)

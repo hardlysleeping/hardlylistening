@@ -2,7 +2,7 @@
 // behind the library's icon tabs, with the same cards / covers / rows switch applied to
 // both, a filter in the artist's own row, and the songs paged (60 at a time).
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
 

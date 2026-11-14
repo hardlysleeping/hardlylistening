@@ -40,6 +40,7 @@ from pathlib import Path
 
 import api.v1 as api_v1
 import db
+import security
 import subsonic
 from sdk import capabilities as sdk_capabilities
 from sdk import social as sdk_social
@@ -53,7 +54,7 @@ FIXTURE = APP_DIR / 'tests' / 'fixtures' / 'player' / 'social.json'
 NODE_TEST = APP_DIR / 'tests' / 'test_player_social.cjs'
 API_V1 = APP_DIR / 'api' / 'v1.py'
 SERVER = APP_DIR / 'server.py'
-SECURITY = APP_DIR / 'security.py'
+SECURITY = Path(security.__file__)  # the implementation, wherever ARCH-009 put it
 SDK_CAPS = APP_DIR / 'sdk' / 'capabilities.py'
 
 #: The one route this card answers on the app's own front end, and what it is answered from.

@@ -279,7 +279,9 @@ class RadioAndPodcasts(unittest.TestCase):
         self.assertEqual(reply['status'], 'failed')
         self.assertIn('downloaded', reply['error']['message'].lower())
         self.assertEqual(self.response('getPodcasts')['podcasts']['storage']['usedBytes'], 0)
-        for endpoint in ('jukeboxControl', 'getSonicSimilarTracks', 'hls', 'addChatMessage'):
+        # `addChatMessage` left this list with HL-210 (it answers error 30 only when the member is
+        # in no room; `tests/test_subsonic_chat.py` covers the mapped behaviour).
+        for endpoint in ('jukeboxControl', 'getSonicSimilarTracks', 'hls'):
             self.assertEqual(self.response(endpoint)['error']['code'], 30, endpoint)
 
 

@@ -2,8 +2,9 @@
 
 `listening.rest()` authenticates the device, builds that member's catalogue and hands the
 endpoint here. Everything that maps onto real app data is implemented; the subsystems this
-app has no equivalent for (chat, jukebox, sonic analysis, podcast downloads, user
-administration) answer Subsonic error 30 with a plain message, never a silent lie.
+app has no equivalent for (jukebox, sonic analysis, podcast downloads, user administration)
+answer Subsonic error 30 with a plain message, never a silent lie. Chat is mapped onto the party
+room's own timeline (HL-210), which is why it answers 30 only when the member is in no room.
 
 Transcoding is answered as the OpenSubsonic extension #1 requires, and it is real: the
 library keeps one canonical file per track, and a client that cannot play it as it is gets
@@ -45,8 +46,7 @@ EXTENSIONS = [{'name': 'formPost', 'versions': [1]},
               {'name': 'transcoding', 'versions': [1]}]
 
 NOT_IMPLEMENTED = {
-    'jukeboxControl', 'hls',
-    'addChatMessage', 'getChatMessages',
+    'hls',
     'getSonicSimilarTracks', 'findSonicPath', 'getVideos', 'getVideoInfo', 'getCaptions',
     'changePassword', 'createUser', 'updateUser', 'deleteUser', 'tokenInfo',
 }
@@ -152,6 +152,13 @@ def _int(value):
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _capped(target, limit):
@@ -625,12 +632,19 @@ def handle(endpoint, params, multi, ctx):
         return {}
     if endpoint in ('scrobble', 'reportPlayback'):
         now = time.time()
+        # `submission=false` is a "now playing" notification, not a finished play: the
+        # totals below keep counting it (that is what getTopSongs/frequent read), but it
+        # must not put a second dated row in the stats history.
+        dated = str(params.get('submission', 'true')).lower() not in ('false', '0')
+        import activity
         for value in ids_of('id'):
             try:
                 track_id = int(value)
             except ValueError:
                 continue
             service.record_play(store, uid, track_id, when=now)
+            if dated:
+                activity.log_play(store, uid, track_id, 'subsonic', now)
         return {}
     if endpoint == 'getTopSongs':
         artist = params.get('artist', '').casefold()
@@ -860,6 +874,51 @@ def handle(endpoint, params, multi, ctx):
                   'podcastRole': False, 'streamRole': True, 'jukeboxRole': False,
                   'shareRole': False, 'videoConversionRole': False}
         return {'users': {'user': [member]}} if endpoint == 'getUsers' else {'user': member}
+
+    # ---- the party room's chat (HL-210) -------------------------------------------------
+    # Subsonic chat is the room timeline, not Discuss (`social_comments`): a room's chatter must
+    # not land on a song page, and a guest's 24-hour identity must not enter a member's Activity
+    # log. There is no second store — these two endpoints read and write `party_chat`.
+    if endpoint in ('addChatMessage', 'getChatMessages'):
+        import party
+        party.schema(store)
+        actor = 'm:' + uid
+        pid = party.room_for(store, actor)
+        if endpoint == 'getChatMessages':
+            if not pid:
+                return {'chatMessages': {'chatMessage': []}}
+            since = _int(params.get('since')) / 1000.0
+            return {'chatMessages': {'chatMessage': [
+                {'username': row['display_name'], 'time': int(row['created'] * 1000),
+                 'message': row['body']} for row in party.messages(store, pid, since)]}}
+        if not pid:
+            # No room to post to: error 30, the same answer as an unimplemented feature,
+            # rather than inventing a room or writing to a store the room does not own.
+            raise Denied(430, 'Join a party before sending a message')
+        # The submitted `username` is ignored on purpose: the author is the authenticated
+        # member, so a client cannot post as somebody else.
+        party.chat(store, pid, actor, {'body': params.get('message', '')})
+        return {}
+
+    # ---- the room's deck (HL-204) --------------------------------------------------------
+    # Subsonic's jukebox is the room's single deck seen as a playlist. The lease decides which
+    # device makes sound (`control('claim')`); these commands steer it, so a phone never becomes
+    # a second speaker. Membership is required, and a member reaches only their own room.
+    if endpoint == 'jukeboxControl':
+        import party
+        party.schema(store)
+        pid = party.control_room(store, uid)
+        if not pid:
+            raise Denied(430, 'Join or create a party before controlling its deck')
+        ids = multi.get('id') or ([params['id']] if params.get('id') else [])
+        result = party.jukebox(store, pid, {'id': uid, 'role': ctx.get('role') or 'member'},
+                               params.get('action', ''), ids=ids,
+                               index=_int(params.get('index')), gain=_float(params.get('gain')))
+        if params.get('action') == 'get':
+            by_id = {str(song['id']): song for song in songs}
+            entries = [by_id[str(tid)] for tid in result['tracks'] if str(tid) in by_id]
+            return {'jukeboxPlaylist': dict(result['status'], entry=entries)}
+        return {'jukeboxStatus': result['status']}
 
     if endpoint in NOT_IMPLEMENTED:
         raise Denied(430, 'This server does not implement %s' % endpoint)

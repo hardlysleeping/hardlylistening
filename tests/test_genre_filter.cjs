@@ -2,7 +2,7 @@
 // when that row is open, opens a popup, and narrows every library section. Storage is the
 // shared taxonomy; filtering is metadata-only (no audio, no inference at render time).
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
 

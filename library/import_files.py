@@ -221,17 +221,154 @@ def import_paths(store, paths: list[str], *, copy: bool = True, limit: int = 500
             "track_ids": track_ids, "playlist_ids": playlist_ids}
 
 
+def _relative(path: str, root: Path):
+    """`path` below `root`, or None. Resolved on both sides, since a row keeps what was typed."""
+    try:
+        return Path(path).expanduser().resolve().relative_to(root.resolve())
+    except (ValueError, OSError):
+        return None
+
+
+def _replacement_rows(store, columns: str) -> list[dict]:
+    """The swap history, or nothing on a database that predates it."""
+    from replacements import schema
+    with store.lock:
+        schema(store)
+        return [dict(r) for r in store.conn.execute(f"SELECT {columns} FROM source_replacements")]
+
+
+def _unserviceable(store, old_root: Path) -> list[int]:
+    """Completed swaps whose previous file is already outside the root.
+
+    A move rewrites what it carries, but it cannot make an absolute path under someone else's
+    folder part of this library, so these rows are reported rather than quietly pretended to
+    work. They are not a reason to refuse: a reverse already refuses them today, and a move
+    must not be blocked by an undo that was never available.
+    """
+    return [row["id"] for row in _replacement_rows(store, "id,old_file,status,pruned")
+            if row["status"] == "completed" and not row["pruned"]
+            and _relative(row["old_file"], old_root) is None]
+
+
+def _inside(child: Path, parent: Path) -> bool:
+    """`child` at or below `parent`, resolved so two spellings of one folder agree."""
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def _move_dotfolder(old_root: Path, new_root: Path, name: str) -> int:
+    """Carry a hidden folder of the library across: `.replacements/`, `.trash/`.
+
+    Both live inside the media root and both are named by a unique id — a retained or staging
+    folder by a replacement id, a trash file by a timestamp and a uuid — so the two trees merge
+    rather than overwrite. A name already present on the far side is left alone, which makes a
+    move that died halfway safe to run again.
+    """
+    source = old_root / name
+    if not source.is_dir():
+        return 0
+    target = new_root / name
+    if source.resolve() == target.resolve():
+        return 0
+    target.mkdir(parents=True, exist_ok=True)
+    moved = 0
+    for entry in sorted(source.iterdir()):
+        destination = target / entry.name
+        if entry.is_dir():
+            destination.mkdir(parents=True, exist_ok=True)
+            for child in sorted(entry.iterdir()):
+                if (destination / child.name).exists():
+                    continue
+                shutil.move(str(child), str(destination / child.name))
+                moved += 1
+        elif not destination.exists():
+            shutil.move(str(entry), str(destination))
+            moved += 1
+    # Only now-empty directories are removed; `rmdir` refuses a folder that still holds a
+    # retained copy, which is the guard against this deleting one.
+    for path in sorted((p for p in source.rglob("*") if p.is_dir()),
+                       key=lambda p: len(p.parts), reverse=True):
+        try:
+            path.rmdir()
+        except OSError:
+            pass
+    try:
+        source.rmdir()
+    except OSError:
+        pass
+    return moved
+
+
+def _restate(value: str, old_root: Path, new_root: Path):
+    """`value` under the new root, or None when it was never inside the old one."""
+    if not value:
+        return None
+    relative = _relative(value, old_root)
+    return None if relative is None else str(new_root / relative)
+
+
+def _rewrite_replacements(store, old_root: Path, new_root: Path) -> int:
+    """Point the swap history at the new root, so a reverse still knows where its file goes."""
+    changed = 0
+    for row in _replacement_rows(store, "id,old_file,new_file"):
+        old_file = _restate(row["old_file"], old_root, new_root) or row["old_file"]
+        new_file = _restate(row["new_file"], old_root, new_root) or row["new_file"]
+        if (old_file, new_file) == (row["old_file"], row["new_file"]):
+            continue
+        with store.lock:
+            store.conn.execute("UPDATE source_replacements SET old_file=?,new_file=? WHERE id=?",
+                               (old_file, new_file, row["id"]))
+            store.conn.commit()
+        changed += 1
+    return changed
+
+
+def _rewrite_trash(store, old_root: Path, new_root: Path) -> int:
+    """The trash keeps both the file and where it came from; both are absolute paths."""
+    changed = 0
+    with store.lock:
+        rows = [dict(r) for r in store.conn.execute(
+            "SELECT id,path,trash_path FROM library_trash")]
+    for row in rows:
+        path = _restate(row["path"], old_root, new_root) or row["path"]
+        trashed = _restate(row["trash_path"], old_root, new_root) or row["trash_path"]
+        if (path, trashed) == (row["path"], row["trash_path"]):
+            continue
+        with store.lock:
+            store.conn.execute("UPDATE library_trash SET path=?,trash_path=? WHERE id=?",
+                               (path, trashed, row["id"]))
+            store.conn.commit()
+        changed += 1
+    return changed
+
+
 def move_library(store, target: str) -> dict:
     """Move every file under the library root to a new root and rewrite paths.
 
     The queue must be paused by the caller: a download writing into the old tree
     while it is being moved would leave a job pointing at nothing.
+
+    What travels besides the tracks: `.replacements/` — the media a completed swap parked so
+    `reverse` can put it back, and any scratch directory a swap still owns — and the rows that
+    name those paths, which are rewritten against the new root. A folder *inside* the current
+    library is refused before anything moves, because that is the one destination where the
+    parked undos cannot come along: the copy would be moved into the tree it is being moved out
+    of. A swap whose previous file lives outside the library is reported (`unserviceable`) and
+    left alone — a move cannot make somebody else's folder part of this library.
     """
     store.sync_playlists()
     old_root = Path(store.setting("root")).expanduser()
     new_root = Path(target).expanduser()
     if new_root.resolve() == old_root.resolve():
         return {"moved": 0, "root": str(new_root), "note": "already there"}
+    if _inside(new_root, old_root):
+        raise ValueError(
+            "the new library folder is inside the current one; choose a folder outside "
+            + str(old_root) + " so the library's replacement history can move with it")
+    unserviceable = _unserviceable(store, old_root)
     new_root.mkdir(parents=True, exist_ok=True)
 
     moved, missing = 0, 0
@@ -261,8 +398,18 @@ def move_library(store, target: str) -> dict:
     archive = old_root / ".archive.txt"
     if archive.is_file():
         shutil.move(str(archive), str(new_root / ".archive.txt"))
+    retained = _move_dotfolder(old_root, new_root, ".replacements")
+    _move_dotfolder(old_root, new_root, ".trash")
+    rewritten = _rewrite_replacements(store, old_root, new_root)
+    trashed = _rewrite_trash(store, old_root, new_root)
     store.set_settings({"root": str(new_root)})
     store.sync_playlists()
+    if unserviceable:
+        store.log("library moved, but replacement(s) " + ", ".join(str(i) for i in unserviceable)
+                  + " keep a previous file outside it and cannot be reversed", "warn")
     store.log(f"library moved to {new_root} ({moved} files"
-              f"{', ' + str(missing) + ' missing' if missing else ''})", "warn")
-    return {"moved": moved, "missing": missing, "root": str(new_root)}
+              f"{', ' + str(missing) + ' missing' if missing else ''}"
+              f"{', ' + str(retained) + ' replacement file(s)' if retained else ''}"
+              f"{', ' + str(trashed) + ' trashed file(s)' if trashed else ''})", "warn")
+    return {"moved": moved, "missing": missing, "root": str(new_root),
+            "replacements": rewritten, "trash": trashed, "unserviceable": unserviceable}

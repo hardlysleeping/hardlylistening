@@ -3,31 +3,64 @@
    One owner for this surface. Edit these rules here; do not append an override
    further down the cascade or in another file. */
 
-/* Lyrics is parked until it works: the buttons stay in the DOM (and in lyrics.js) but
-   nothing renders them, so bringing the feature back is deleting this line. */
-#pllyrics,#pflyrics{display:none}
+/* The lyrics reading is opened from the fullscreen player's `#pflyrics` (one tap on the bar,
+   then Lyrics). The compact bar keeps a hidden `#pllyrics` only because the page forwards the
+   full player's button to it (`$("#pflyrics").onclick`) and `lyrics.js` binds it: the bar is a
+   fixed 402×112 layer drawn from `compact-bar-layers.svg`, and its right-hand slot has no room
+   left for a word beside the transport. */
+#player .pend #pllyrics{display:none}
 
+/* The fullscreen foot's Lyrics button: the same 55 px box and 12 px corner as Cue, because
+   both are words that open something, and the row keeps one baseline. Its width comes from
+   the label. */
+#player-full .pf-foot #pflyrics{
+  display:inline-grid;place-items:center;box-sizing:border-box;
+  width:auto;height:var(--pf-foot-size);min-height:var(--pf-foot-size);
+  padding:0 14px;margin:0;border:1px solid var(--line);border-radius:12px;
+  background:var(--panel2);color:var(--text);font-size:12.5px;font-weight:600;
+  letter-spacing:.02em;line-height:1}
+
+/* A phone's foot has 350 px for three groups; the word is what keeps this control legible,
+   so its padding gives way rather than the word. */
 @media(max-width:640px){
-  #player #pllyrics{order:3;flex:none;min-height:28px;padding:0 10px;font-size:11.5px}
+  #player-full .pf-foot .pf-start{gap:8px}
+  #player-full .pf-foot #pflyrics{padding:0 10px;font-size:11.5px}
 }
 
 #lyrics-overlay{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;box-sizing:border-box;padding:10px 12px 12px;color:#fff;background:transparent;overflow:hidden;opacity:0;transform:translateY(18px);transition:opacity .28s ease,transform .34s cubic-bezier(.2,.75,.25,1);pointer-events:none}
 #lyrics-overlay[hidden]{display:none}
 #lyrics-overlay.on{opacity:1;transform:translateY(0);pointer-events:auto}
-#lyrics-overlay .lyrics-tools{display:flex;align-items:center;gap:6px;flex:none}
-#lyrics-status{font-size:10px;line-height:1.25;color:#fff;text-shadow:0 1px 5px #000;flex:1;min-width:0}
+/* The reading is drawn over the full player's own disc and its small labels, so the tool row
+   gets a glass backing: bare 10 px white type over another line of pale type is not readable.
+   The row is one surface at every width. Its container is the disc column, not the viewport,
+   so the status takes a line of its own and the four buttons sit under it — the same shape on
+   a phone and on a desktop rather than a breakpoint that would never describe this width. */
+#lyrics-overlay .lyrics-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:none;
+  padding:7px 8px;border-radius:12px;background:rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+#lyrics-status{flex:1 1 100%;font-size:10px;line-height:1.25;color:#fff;text-shadow:0 1px 5px #000;min-width:0}
 #lyrics-overlay .lyrics-tools button{min-height:30px;padding:4px 8px;border:1px solid #ffffff65;border-radius:8px;background:transparent;color:#fff;font-size:11px;text-shadow:0 1px 4px #000;backdrop-filter:none}
 #lyrics-overlay .lyrics-tools button:disabled{display:none}
-#lyrics-close{font-size:17px!important;line-height:1}
+#lyrics-close{font-size:17px!important;line-height:1;margin-left:auto}
 #lyrics-body{overflow:auto;overscroll-behavior:contain;scroll-behavior:smooth;text-align:center;padding:12px 8px;max-height:70%;mask-image:linear-gradient(transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(transparent,#000 12%,#000 88%,transparent);text-shadow:0 2px 8px #000,0 1px 2px #000}
 #lyrics-body p{font-size:clamp(17px,4.5vw,26px);line-height:1.35;font-weight:600;color:#ffffffa8;margin:12px 0;transition:color .35s ease,transform .35s ease,opacity .35s ease;opacity:.55}
 #lyrics-body p.current{opacity:1;color:#fff;font-weight:750;transform:scale(1.035)}
 #lyrics-body p.next{opacity:.82}
 #lyrics-body pre{white-space:pre-wrap;font:inherit;font-weight:600;font-size:17px;line-height:1.45;color:#fff}
+/* Word timing (HL-227): a word-timed line is a run of spans, and the word being sung lifts
+   while the words before it stay lit. Colour and glow only — a transform on an inline span
+   would shift the line's layout on every tick. Line timing is untouched: a line with no
+   `<mm:ss>` marks is plain text and keeps the `.current`/`.next` treatment. */
+#lyrics-body p.wordline .w{color:inherit;transition:color .18s ease,text-shadow .18s ease}
+#lyrics-body p.wordline.current .w.on{color:#fff}
+#lyrics-body p.wordline.current .w.current{color:var(--accent);text-shadow:0 0 16px rgba(88,211,168,.55),0 2px 8px #000}
 #lyrics-overlay.karaoke #lyrics-body{max-height:75%;display:flex;flex-direction:column;justify-content:center}
 #lyrics-overlay.karaoke #lyrics-body p{display:none}
 #lyrics-overlay.karaoke #lyrics-body p.current,#lyrics-overlay.karaoke #lyrics-body p.next{display:block;font-size:clamp(20px,6vw,34px)}
 #lyrics-overlay:fullscreen{position:fixed;inset:0;width:100vw;height:100dvh;background:#0000}
 #lyrics-overlay:fullscreen #lyrics-body{max-height:75dvh}
 #pllyrics.lyrics-ready,#pflyrics.lyrics-ready{color:var(--accent);border-color:var(--accent)}
+/* A track with no lyrics still shows the button, dimmed rather than missing: a control that
+   appears and disappears as tracks change reads as a broken row, and the dim state is what
+   says "this one has none". */
+#player-full .pf-foot #pflyrics:disabled{opacity:.45;color:var(--dim);border-color:var(--line);cursor:default}
 @media(prefers-reduced-motion:reduce){#lyrics-overlay *{transition:none!important;scroll-behavior:auto!important}}

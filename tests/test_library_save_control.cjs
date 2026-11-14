@@ -2,7 +2,7 @@
 // into a minus, and only the second click removes it from the library. Nothing is sent on the
 // first click, and an armed minus lets go by itself.
 const fs = require("fs"), path = require("path"), http = require("http"), assert = require("assert");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 const SAVED = new Set([7]);            // one track already in the library

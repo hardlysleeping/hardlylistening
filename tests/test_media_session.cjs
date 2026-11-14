@@ -7,7 +7,7 @@
 // Not covered here: what the head unit chooses to redraw. A test can only prove what the page
 // publishes, which is why the republish milestones are asserted explicitly.
 const fs = require("fs"), path = require("path"), http = require("http"), assert = require("assert");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 

@@ -3,8 +3,8 @@
 `ARCH-005`. A facade, not a rewrite. The functions below are the whole of Social from outside:
 who did what (`feed`, `profile`, `recent`), the 24-hour boost slot, and discussion about a Repo
 object (summary, batch, comments, votes, likes). Each one delegates to the module that already owns
-the query — `activity`, `profiles`, `social.discussion` — with the same arguments and the same
-return value.
+the query — `social.activity`, `social.boosts`, `social.comments`, `social.likes` and `profiles` —
+with the same arguments and the same return value.
 
 What this buys is a boundary that can be checked. `docs/server-domains.md` forbids Social -> Library
 and Playback -> Social; once callers reach Social through here, an import of `social.service` is the
@@ -17,9 +17,17 @@ the one underneath so that delegation cannot quietly change an answer.
 """
 from __future__ import annotations
 
-import activity as _activity
+import importlib
+
 import profiles as _profiles
-from social import discussion as _discussion
+import social.activity as _activity
+import social.boosts as _boosts
+import social.likes as _likes
+
+# `social/__init__.py` re-exports the *function* `comments`, and that package attribute shadows the
+# submodule of the same name: `import social.comments as _comments` binds the function. Ask the
+# loader for the module instead of trusting the attribute.
+_comments = importlib.import_module('social.comments')
 
 
 # -- the Activity log -----------------------------------------------------------------------------
@@ -67,61 +75,61 @@ def listen(store, member: dict | None, track_id: int) -> None:
 
 def boost(store, member_id: str, track_id: int, now: float | None = None) -> dict:
     """Set this member's 24-hour slot; switching songs never extends its expiry."""
-    return _activity.boost(store, member_id, track_id, now)
+    return _boosts.boost(store, member_id, track_id, now)
 
 
 def current_boost(store, member_id: str, now: float | None = None) -> dict | None:
-    return _activity.current_boost(store, member_id, now)
+    return _boosts.current_boost(store, member_id, now)
 
 
 def active_boosts(store, limit: int = 80, now: float | None = None) -> list[dict]:
-    return _activity.active_boosts(store, limit, now)
+    return _boosts.active_boosts(store, limit, now)
 
 
 # -- discussion -----------------------------------------------------------------------------------
 
 def annotate(tracks):
     """Give each track the provider-independent album id the discussion targets."""
-    return _discussion.annotate(tracks)
+    return _comments.annotate(tracks)
 
 
 def album_id(track):
-    return _discussion.album_id(track)
+    return _comments.album_id(track)
 
 
 def validate_target(store, kind, target) -> None:
     """Refuse an unknown or forged target before any table is touched."""
-    return _discussion.validate_target(store, kind, target)
+    return _comments.validate_target(store, kind, target)
 
 
 def summary(store, kind, target, member) -> dict:
     """The score, the counts and the named voters for one target."""
-    return _discussion.summary(store, kind, target, member)
+    return _comments.summary(store, kind, target, member)
 
 
 def batch(store, kind, targets, member, latest: int = 0) -> dict:
     """Counts for many targets at once, so a grid does not fetch per card."""
-    return _discussion.batch(store, kind, targets, member, latest=latest)
+    return _comments.batch(store, kind, targets, member, latest=latest)
 
 
 def comments(store, kind, target, member, after: int = 0) -> dict:
     """One page of comments with their likes, plus the target's summary."""
-    return _discussion.comments(store, kind, target, member, after)
+    return _comments.comments(store, kind, target, member, after)
 
 
 def vote(store, kind, target, member, value) -> dict:
     """Set, switch or clear one member's vote. Returns the target's new summary."""
-    return _discussion.vote(store, kind, target, member, value)
+    return _comments.vote(store, kind, target, member, value)
 
 
 def like(store, kind, target, member, comment_id) -> dict:
     """Toggle one member's like on a comment."""
-    return _discussion.like(store, kind, target, member, comment_id)
+    return _likes.like(store, kind, target, member, comment_id)
 
 
 def comment(store, kind, target, member, *, body=None, comment_id=None, delete=False) -> dict:
     """Add, edit or delete a comment; author or administrator only for the last two."""
-    return _discussion.comment(store, kind, target, member, body=body,
+    return _comments.comment(store, kind, target, member, body=body,
                                comment_id=comment_id, delete=delete)
 
 

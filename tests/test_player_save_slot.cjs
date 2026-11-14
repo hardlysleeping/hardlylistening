@@ -1,10 +1,10 @@
-// The player's library control. 0.16.1 parked it in the compact bar's right-hand column at
-// exactly the expand button's box (right 9 / top 36, z-index 3 over the expand's 2), so the
-// fullscreen button sat under a save square and blinked as the saves poll repainted the slot.
-// 0.16.6 gave it a real slot: the second of three stacked controls, between the heart and the
-// expand. This pins that it stays a slot of its own — its own centre hit-tests into its own
-// button, and it overlaps neither neighbour at either width — and that the fullscreen foot
-// keeps the same control for the playing track.
+// The player's library control. It used to live in the bar's bottom-right corner beside the
+// clock, where it read as part of the time and was routinely missed on desktop. It now sits
+// in the heart's own cluster: immediately left of the heart, on the same line, because the
+// two answer the same question about the same song. This pins that — its own centre
+// hit-tests into its own button, it overlaps neither the heart nor the title column, it is
+// left of the heart at both widths — and that the fullscreen foot keeps the same control,
+// immediately left of the heart, bound to the playing track.
 const fs = require("fs"), http = require("http"), path = require("path"), assert = require("assert");
 const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
@@ -42,6 +42,7 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
           const r = el.getBoundingClientRect();
           const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
           return { id, left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+            width: r.width, height: r.height,
             hit: hit ? (hit.closest("button")?.id || hit.id || hit.tagName) : "none",
             // The slot's own button carries no id, so it is identified by containment.
             own: !!hit && el.contains(hit) };
@@ -49,21 +50,26 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
         const slot = document.getElementById("plsave");
         const button = slot.querySelector("button.lsave");
         return {
-          boxes: ["pllike", "plsave", "plfull"].map(box),
+          boxes: ["pllike", "plsave", "plmeta"].map(box),
           saveFill: button ? { key: button.dataset.saveKey, pressed: button.getAttribute("aria-pressed") } : null,
           slotDisplay: getComputedStyle(slot).display,
         };
       });
-      const [like, save, full] = bar.boxes;
+      const [like, save, meta] = bar.boxes;
       const at = viewport.width + "px";
       assert.notStrictEqual(bar.slotDisplay, "none", `${at}: the compact save slot is not shown`);
       assert(bar.saveFill, `${at}: the compact save slot is empty for a playing track`);
       assert.strictEqual(bar.saveFill.key, "track42", `${at}: the compact save is bound to the playing track`);
       assert.strictEqual(bar.saveFill.pressed, "true", `${at}: a saved track reads as pressed`);
       assert.strictEqual(save.own, true, `${at}: the compact save is covered by ${save.hit}`);
+      assert.strictEqual(like.hit, "pllike", `${at}: #pllike is covered by ${like.hit}`);
       assert(!overlaps(save, like), `${at}: the compact save overlaps #pllike`);
-      assert(!overlaps(save, full), `${at}: the compact save overlaps #plfull`);
-      for (const box of [like, full]) assert.strictEqual(box.hit, box.id, `${at}: #${box.id} is covered by ${box.hit}`);
+      assert(!overlaps(save, meta), `${at}: the compact save overlaps the title column`);
+      // Immediately left of the heart, on the same line: within a few pixels of its middle.
+      assert(save.right <= like.left, `${at}: the save is not left of the heart (${save.right} > ${like.left})`);
+      assert(like.left - save.right <= 14, `${at}: the save is not beside the heart (${like.left - save.right}px gap)`);
+      const heartMid = (like.top + like.bottom) / 2, saveMid = (save.top + save.bottom) / 2;
+      assert(Math.abs(heartMid - saveMid) <= 6, `${at}: the save is not on the heart's line (${Math.abs(heartMid - saveMid)}px off)`);
       await page.close();
     }
 
@@ -71,7 +77,8 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
     await page.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "load" });
     await page.waitForTimeout(600);
 
-    // Fullscreen foot: the same control, repainted for the playing track.
+    // Fullscreen foot: the same control, repainted for the playing track, immediately left
+    // of the heart and sharing the row's line.
     const foot = await page.evaluate(() => {
       playingId = 42;
       listeningSaves = { tracks: [42], playlists: [], folders: [] };
@@ -79,13 +86,22 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
       const slot = document.getElementById("pfsave");
       const button = slot.querySelector("button.lsave");
       const r = button.getBoundingClientRect();
-      const siblings = [...slot.parentElement.children].filter(el => el !== slot)
+      const heart = document.getElementById("pflike").getBoundingClientRect();
+      const kids = [...slot.parentElement.children];
+      const siblings = kids.filter(el => el !== slot)
         .map(el => { const b = el.getBoundingClientRect(); return [el.id, Math.round(b.left), Math.round(b.right)]; });
       return { key: button.dataset.saveKey, pressed: button.getAttribute("aria-pressed"),
-        rect: [Math.round(r.left), Math.round(r.right)], siblings, overflow: document.documentElement.scrollWidth - innerWidth };
+        rect: [Math.round(r.left), Math.round(r.right)],
+        heart: [Math.round(heart.left), Math.round(heart.right)],
+        prev: kids[kids.indexOf(slot) - 1]?.id || null, next: kids[kids.indexOf(slot) + 1]?.id || null,
+        mid: Math.round((r.top + r.bottom) / 2), heartMid: Math.round((heart.top + heart.bottom) / 2),
+        siblings, overflow: document.documentElement.scrollWidth - innerWidth };
     });
     assert.strictEqual(foot.key, "track42", "the foot button is bound to the playing track");
     assert.strictEqual(foot.pressed, "true", "a saved track reads as pressed");
+    assert.strictEqual(foot.next, "pflike", `the foot save is followed by #${foot.next}, not the heart`);
+    assert(foot.rect[1] <= foot.heart[0], "the foot save is not left of the heart");
+    assert(Math.abs(foot.mid - foot.heartMid) <= 4, "the foot save is not on the heart's line");
     for (const [id, left, right] of foot.siblings)
       assert(foot.rect[1] <= left || foot.rect[0] >= right, `the save control overlaps #${id}`);
     assert.strictEqual(foot.overflow, 0, "the foot row overflows the viewport");
@@ -98,6 +114,6 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
     });
     assert.strictEqual(stable, true, "an unchanged state must not rebuild the button");
 
-    console.log("Player save slot PASS: compact save in its own slot, heart and expand on top, fullscreen foot bound to the track");
+    console.log("Player save slot PASS: compact save beside the heart, title clears it, fullscreen foot save left of the heart");
   } finally { await browser.close(); srv.close(); }
 })().catch(e => { console.error("FAIL " + e.message); process.exitCode = 1; });

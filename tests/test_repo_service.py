@@ -112,12 +112,12 @@ class Facade(unittest.TestCase):
             service.artist(self.store, '   ')
 
     def test_releases_and_tracks_are_passed_through_untouched(self):
-        with patch.object(service._tracklist, 'catalogue',
+        with patch.object(service._catalogue, 'catalogue',
                           return_value={'releases': [], 'offset': 0}) as catalogue:
             self.assertEqual(service.releases(self.store, 7, offset=60, limit=30),
                              {'releases': [], 'offset': 0})
             catalogue.assert_called_once_with(self.store, 7, offset=60, limit=30)
-        with patch.object(service._tracklist, 'tracks', return_value=[{'title': 'X'}]) as tracks:
+        with patch.object(service._catalogue, 'tracks', return_value=[{'title': 'X'}]) as tracks:
             self.assertEqual(service.tracks('https://example/album'), [{'title': 'X'}])
             tracks.assert_called_once_with('https://example/album')
 

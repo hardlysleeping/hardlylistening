@@ -1,0 +1,71 @@
+{
+  "subsonic-response": {
+    "artist": {
+      "album": [
+        {
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "coverArt": "al-6qVa68sKTKahAuJabPcGQu_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.095348032Z",
+          "discTitles": [],
+          "displayArtist": "2 Mello",
+          "duration": 2536,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "id": "6qVa68sKTKahAuJabPcGQu",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "Chrono Jigga",
+          "originalReleaseDate": {},
+          "playCount": 5922,
+          "played": "2026-11-14T06:25:59.969Z",
+          "recordLabels": [
+            {
+              "name": "Scrub Club Records"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 12,
+          "sortName": "chrono jigga",
+          "starred": "2026-11-13T10:49:34.109524015Z",
+          "userRating": 0,
+          "version": "",
+          "year": 2013
+        }
+      ],
+      "albumCount": 1,
+      "artistImageUrl": "https://demo.navidrome.org/share/img/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImFyLTMzWDNWMlhuN0NpcDdXcXFmWE5rTDhfZmY0ZjliOTE5MDBjYmM5OCIsImlzcyI6Ik5EIn0.AOm9LQnbuNvXtTZSjA3QZBcayyvPZoPJYiHykGuW7uM?size=600",
+      "averageRating": 2,
+      "coverArt": "ar-33X3V2Xn7Cip7WqqfXNkL8_ff4f9b91900cbc98",
+      "id": "33X3V2Xn7Cip7WqqfXNkL8",
+      "musicBrainzId": "",
+      "name": "2 Mello",
+      "roles": [
+        "composer",
+        "maincredit",
+        "albumartist",
+        "artist"
+      ],
+      "sortName": "2 mello",
+      "userRating": 2
+    },
+    "openSubsonic": true,
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

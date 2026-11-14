@@ -3,6 +3,6 @@ main = "worker.mjs"
 compatibility_date = "2026-11-01"
 account_id = "3d860b0bf85b5ea9242168b4361842e8"
 workers_dev = false
-routes = [{ pattern = "music.example.com/*", zone_name = "example.com" }]
+routes = [{ pattern = "music.hardlysleep.ing/*", zone_name = "hardlysleep.ing" }]
 [observability]
 enabled = false

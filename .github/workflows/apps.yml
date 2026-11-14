@@ -1,0 +1,139 @@
+name: apps
+
+# Builds the two applications that exist only as source on the development machine:
+#
+#   desktop  the optional window that starts/stops/points at a HardlyListening server
+#   player   the store-safe OpenSubsonic client
+#
+# Why here and not locally: the development box has no `gtk+-3.0` / `webkit2gtk-4.1` dev
+# packages (an immutable distro would need a layering and a reboot) and no `cargo-tauri`, so
+# neither shell has ever been compiled. This is the cheapest place that can.
+#
+# What this does NOT do: sign or notarise anything. A macOS bundle here is unsigned, a Windows
+# installer is unsigned, and no iOS or Android binary is produced — those need a certificate and
+# a provisioning profile, which are secrets and are deliberately absent. `store-safe.md` and
+# `player/assemble.mjs` are the gate that matters before any of that: the assembled tree is
+# asserted to carry no acquisition code, and that assertion is a test, not a build step.
+#
+# Triggers: a tag (`desktop-v*`, `player-v*`) attaches the artefacts to the release; a manual
+# dispatch builds them for inspection without publishing.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+      - "player-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: desktop (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: linux
+            deps: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          - os: macos-14
+            label: macos-arm64
+            deps: ""
+          - os: windows-2022
+            label: windows
+            deps: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: linux webview + packaging dependencies
+        if: matrix.deps != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ matrix.deps }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop/src-tauri -> target"
+
+      # The sidecar is a byte-for-byte copy of the canonical launcher, staged under the name
+      # Tauri resolves for this target triple. `--check` afterwards proves the copy did not
+      # drift from `bin/hardlylistening-server`.
+      - name: stage the launcher as the sidecar
+        run: python3 desktop/tools/stage_sidecar.py
+      - name: the sidecar is still a copy
+        run: python3 desktop/tools/stage_sidecar.py --check
+
+      - name: cargo tauri build
+        working-directory: desktop/src-tauri
+        run: |
+          cargo install tauri-cli --version "^2" --locked
+          cargo tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardlylistening-desktop-${{ matrix.label }}
+          path: |
+            desktop/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14
+
+  player:
+    name: player (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: linux
+            deps: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          - os: macos-14
+            label: macos-arm64
+            deps: ""
+          - os: windows-2022
+            label: windows
+            deps: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: linux webview + packaging dependencies
+        if: matrix.deps != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ matrix.deps }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "player/src-tauri -> target"
+
+      # The allow-list is the single statement of what a player contains. Assembling before
+      # the build means the app never ships a stale `www/`.
+      - name: assemble the player tree
+        run: node player/assemble.mjs
+
+      - name: store-safe assertion over the assembled tree
+        run: |
+          export TMPDIR="$(mktemp -d)"
+          PYTHONPATH=.:tests python3 -m unittest tests.test_player_store_safe tests.test_player_shell
+
+      - name: cargo tauri build
+        working-directory: player/src-tauri
+        run: |
+          cargo install tauri-cli --version "^2" --locked
+          cargo tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardlylistening-player-${{ matrix.label }}
+          path: |
+            player/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14

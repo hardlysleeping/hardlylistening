@@ -142,8 +142,57 @@ body.fullplayer #playback-panel.open{
   cursor:pointer;
   touch-action:pan-y;
   -webkit-user-select:none;
-  user-select:none
+  user-select:none;
+  position:relative;
+  overflow:hidden
 }
+
+/* A lifted row is dragged across its neighbours, so its shadow must be free to fall
+   outside the row box; every other row clips, which is what makes the slide read. */
+#playback-items .pq-row.pq-lift{overflow:visible}
+
+/* The slide. One variable, set on the row while a finger moves, positions both halves of
+   the gesture: the content goes left, the Remove panel follows it in from the right edge.
+   Anything left over at -92px is exactly the panel's width, so the two move as one piece. */
+#playback-items .pq-body{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:1;
+  min-width:0;
+  transform:translateX(var(--pq-shift,0px))
+}
+
+#playback-items .pq-row:not(.pq-live) .pq-body,
+#playback-items .pq-row:not(.pq-live) .pq-remove{
+  transition:transform .18s ease
+}
+
+#playback-items .pq-remove{
+  position:absolute;
+  top:0;
+  right:0;
+  width:92px;
+  height:100%;
+  display:grid;
+  place-items:center;
+  border:0;
+  padding:0;
+  min-height:0;
+  background:#a3322c;
+  color:#fff;
+  font-size:12.5px;
+  font-weight:600;
+  letter-spacing:.01em;
+  cursor:pointer;
+  transform:translateX(calc(100% + var(--pq-shift,0px)))
+}
+
+#playback-items .pq-remove:hover,#playback-items .pq-remove:focus-visible{
+  background:#b93a33
+}
+
+#playback-items .pq-row.pq-swiped{--pq-shift:-92px}
 
 #playback-items .pq-row:hover,#playback-items .pq-row:focus-visible{
   background:#20222a
@@ -219,34 +268,6 @@ body.fullplayer #playback-panel.open{
   box-shadow:0 12px 26px #0009;
   opacity:.96;
   cursor:grabbing
-}
-
-#playback-items .pq-x{
-  flex:none;
-  display:grid;
-  place-items:center;
-  width:26px;
-  height:26px;
-  min-height:0;
-  border:0;
-  background:none;
-  color:var(--dim);
-  font-size:16px;
-  line-height:1;
-  padding:0;
-  border-radius:7px;
-  opacity:0;
-  cursor:pointer
-}
-
-#playback-items .pq-row:hover .pq-x,#playback-items .pq-row:focus-visible .pq-x,#playback-items .pq-x:focus-visible{
-  opacity:.7
-}
-
-#playback-items .pq-x:hover{
-  opacity:1;
-  background:#ffffff14;
-  color:var(--fg)
 }
 
 #playback-items .pq-empty{
@@ -341,7 +362,6 @@ body.fullplayer #playback-panel.open{
 #playback-panel{right:auto;bottom:calc(var(--nav-h,0px) + 169px + var(--safe-b,0px));width:calc(100vw - 16px);padding:6px 8px 8px;box-sizing:border-box}
 body.fullplayer #playback-panel{left:8px;right:8px;bottom:0;width:auto}
 #playback-items{max-height:min(40vh,300px)}
-#playback-items .pq-x{opacity:.55}
 #playback-items .pq-handle{display:none}
 .pq-actions{flex-basis:100%;padding-left:2px}
 .pq-actions button{min-height:38px}

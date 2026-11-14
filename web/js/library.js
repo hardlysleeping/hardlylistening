@@ -8,6 +8,13 @@
    choices) still lives in index.html; this file reads it at call time.
 */
 // ------------------------------------------------------------------ grouping
+// The cover to draw for a track: our own digest route when the server knows one (the same
+// picture at every width, independent of the provider's CDN, and something the service worker
+// can keep for offline play), otherwise the provider URL exactly as before.
+function trackArt(track){
+  if (!track) return "";
+  return track.art_hash ? `/api/art/${track.art_hash}` : (track.artwork || "");
+}
 function albumsOf(rows){
   const map = new Map();
   for (const t of rows){
@@ -26,7 +33,7 @@ function albumsOf(rows){
       map.set(key, album);
     }
     album.tracks.push(t);
-    if (!album.art && t.artwork) album.art = t.artwork;
+    if (!album.art && trackArt(t)) album.art = trackArt(t);
     album.duration += t.duration || 0;
     album.added = Math.max(album.added, t.added || 0);
   }
@@ -44,7 +51,7 @@ function artistsOf(rows){
     let artist = map.get(name);
     if (!artist){ artist = {name, albums: [], tracks: [], art: "", added: 0}; map.set(name, artist); }
     artist.tracks.push(t);
-    if (!artist.art) artist.art = t.artwork || "";
+    if (!artist.art) artist.art = trackArt(t);
     artist.added = Math.max(artist.added, t.added || 0);
   }
   for (const album of albumsOf(rows)){
@@ -178,6 +185,8 @@ function renderLibrary(){
   paintBubbles();
   // The cover wall was just rebuilt, so the honeycomb's row marks are new too.
   if (typeof paintHexRows === "function") paintHexRows();
+  // Offline copies are marked per row, and the mark has to survive every repaint.
+  if (typeof paintOfflineMarks === "function") paintOfflineMarks();
 }
 
 function emptyState(rows, q){
@@ -495,6 +504,7 @@ function sortKeys(key, t){
     case "artist":     return String(t.artist_name || "").toLowerCase();
     case "album":      return String(t.album || "").toLowerCase();
     case "duration":   return Number(t.duration || 0);
+    case "bpm":        return Number(t.bpm || 0);
     case "votes_all":  { const v = summary("track", t.id); return {a: v.up, b: v.down}; }
     default:           return Number(t.added || 0);
   }
@@ -518,7 +528,7 @@ function compareTracks(key, a, b){
 // Only keys that mean something in that section: a song sorts by its own title, an album
 // by the album title or its artist, never the other way round.
 const SORT_BY_VIEW = {
-  songs:     ['title', 'duration', 'votes_all', 'recent', 'oldest'],
+  songs:     ['title', 'duration', 'bpm', 'votes_all', 'recent', 'oldest'],
   albums:    ['title', 'duration', 'recent', 'oldest'],
   artists:   ['artist', 'recent'],
   playlists: [],
@@ -657,7 +667,10 @@ function paintGridStyle(){
   const button = document.getElementById('gridstylebtn');
   if (button){
     const onGrid = libSongLayout === 'grid';
-    const layoutView = ['albums', 'songs'].includes(libView) || (detail && detail.kind === 'artist');
+    // A detail page draws its own list, so the wall shape has nothing to act on there — the
+    // same rule the card-density toggle follows. The artist page is the exception: it draws
+    // a wall of covers itself, so the shape still applies.
+    const layoutView = detail ? detail.kind === 'artist' : ['albums', 'songs'].includes(libView);
     button.hidden = !onGrid || !layoutView;
     button.classList.toggle('on', onGrid && gridStyle !== 'std');
     const label = gridStyle === 'std' ? 'squares' : gridStyle === 'hex' ? 'honeycomb' : 'mosaic';
@@ -842,13 +855,18 @@ function songRow(track, index, card = false, opts = {}){
   // A SoundCloud set's name is stored as the album, so the right-hand cell on a card
   // would just repeat the playlist ("Shuffle") the songs came from. Real album names stay.
   const setAlbum = (track.playlists || []).some(p => p.title === track.album);
+  // Our own copy of the cover (by digest) when the server knows one: it is the same picture
+  // at every width, it does not depend on a provider CDN, and the service worker can keep it
+  // for offline play. A row with no digest keeps the provider URL, as before.
+  const art = trackArt(track);
   return `<div class="songrow ${card ? 'songcard' : ''} ${on ? "playing" : ""} ${gone ? "gone" : ""} ${removed ? "removed" : ""} ${track.playable ? "" : "absent"}" data-id="${track.id}" tabindex="0" aria-label="${esc(track.title)}${on ? " — playing" : ""} — song actions available with Shift+F10">
     <div class="idx${on ? " playing" : ""}">${on ? SVG.bars(11) : index + 1}</div>
     ${card ? "" : statusMarks("track", track.id)}
-    <div class="thumb">${track.artwork ? artImg(track.artwork, "", true, track.album || track.title) : ""}${card ? `<button type="button" class="snext" title="Play next" aria-label="Play next" onclick="event.stopPropagation();queueSong(${track.id}, true)">${SVG.toNext(16)}</button>` : ""}${on && card ? `<span class="nowbars" aria-hidden="true">${SVG.bars(14)}</span>` : ""}</div>
-    <div class="st"><span class="sttext"><b>${esc(track.title)}</b>${gone ? `<span class="gone-badge" title="Checked ${track.source_checked ? new Date(track.source_checked * 1000).toLocaleString() : "recently"} — the downloaded file still plays">${esc(gone)}</span>` : ""}${removed ? `<span class="removed-badge">Removed</span>` : ""}</span><div class="rowactions">${listeningSaveControl("track", track.id)}</div></div>
+    <div class="thumb">${art ? artImg(art, "", true, track.album || track.title) : ""}${card && Number(track.bpm) > 0 ? `<span class="bpm" title="Detected tempo">${Math.round(Number(track.bpm))}</span>` : ""}${card ? `<button type="button" class="snext" title="Play next" aria-label="Play next" onclick="event.stopPropagation();queueSong(${track.id}, true)">${SVG.toNext(16)}</button>` : ""}${on && card ? `<span class="nowbars" aria-hidden="true">${SVG.bars(14)}</span>` : ""}</div>
+    <div class="st"><span class="sttext"><b>${esc(track.title)}</b>${gone ? `<span class="gone-badge" title="Checked ${track.source_checked ? new Date(track.source_checked * 1000).toLocaleString() : "recently"} — the downloaded file still plays">${esc(gone)}</span>` : ""}${removed ? `<span class="removed-badge">Removed</span>` : ""}<span class="kept-badge" title="Kept on this device — plays without a connection" hidden>Kept</span></span><div class="rowactions">${listeningSaveControl("track", track.id)}</div></div>
     <div class="sartist">${esc(track.artist_name || "—")}</div>
-    <div class="listtags">${card ? "" : sourceTag(track)}</div>
+    <!-- A card carries its tempo on the cover, so the tag column would repeat it. -->
+    <div class="listtags">${card ? "" : sourceTag(track) + (Number(track.bpm) > 0 ? `<span class="bpm" title="Detected tempo">${Math.round(Number(track.bpm))}</span>` : "")}</div>
     <div class="salbum">${card && setAlbum ? "" : esc(track.album || "")}</div>
     ${opts.quietVotes ? '<div class="votes"></div>' : voteRow("track", track.id)}
     <div class="sdur">${track.playable ? fmtClock(track.duration) : esc(track.status || "missing")}</div>

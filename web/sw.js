@@ -1,6 +1,7 @@
 'use strict';
-const CACHE = 'hardlylistening-static-v10';
+const CACHE = 'hardlylistening-static-v20';   // v20: the drive section in dialogs.css (HL-228)
 const AUDIO = 'hardlylistening-audio-v1';   // named in web/index.html as well
+const ART = 'hardlylistening-artwork-v1';   // named in web/index.html as well
 // The app's stylesheet is a tree (app.css imports each owner under @layer). Every file in it
 // is precached, because the browser fetches each import as its own request: a missing entry
 // would leave an offline page unstyled. Adding a stylesheet means adding it here.
@@ -11,7 +12,7 @@ const STYLES = [
   '/styles/components/library-row.css', '/styles/components/library-cards.css',
   '/styles/components/social.css', '/styles/components/player.css',
   '/styles/components/playback-queue.css', '/styles/components/queue-view.css',
-  '/styles/components/feed.css', '/styles/components/artist.css',
+  '/styles/components/feed.css', '/styles/components/member.css', '/styles/components/artist.css',
   '/styles/components/activity.css', '/styles/components/dialogs.css',
   '/styles/components/status.css', '/styles/components/preferences.css',
   '/styles/components/genres.css', '/styles/components/lyrics.css',
@@ -19,8 +20,11 @@ const STYLES = [
 // Feature scripts the shell loads by URL. index.html is never cached (it is authenticated HTML),
 // but a cached copy of its scripts is what lets a same-origin reload paint without the network.
 const SCRIPTS = ['/js/playback-queue.js', '/js/playback.js', '/js/repo-discovery.js', '/js/social-feed.js', '/js/library.js'];
+// The head's own scripts. They are not under /js/, but the shell cannot boot without them:
+// preferences paints the save controls, genres the filter chip, lyrics the song pane.
+const HEAD_SCRIPTS = ['/preferences.js', '/genres.js', '/lyrics.js'];
 const STATIC = ['/offline.html','/lifecycle.js','/icon-192.png','/icon-512.png','/app.webmanifest',
-                ...STYLES, ...SCRIPTS];
+                ...STYLES, ...SCRIPTS, ...HEAD_SCRIPTS];
 // The app shell and the last library listing (HL-309). Both are the signed-in member's own
 // data on the device that asked for it — the same trust boundary as the kept audio — and
 // both live in the versioned CACHE, so a deploy throws them away rather than serving an
@@ -32,7 +36,10 @@ self.addEventListener('install', event => {
 self.addEventListener('install', event => { self.skipWaiting(); });
 self.addEventListener('activate', event => {
   event.waitUntil(self.clients.claim());
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('hardlylistening-static-') && key !== CACHE).map(key => caches.delete(key)))));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys
+    .filter(key => (key.startsWith('hardlylistening-static-') && key !== CACHE) ||
+                   (key.startsWith('hardlylistening-artwork-') && key !== ART))
+    .map(key => caches.delete(key)))));
 });
 
 // ---------------------------------------------------------------- offline audio
@@ -78,6 +85,36 @@ async function cachedAudio(request, url) {
   headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
   headers.set('Content-Length', String(slice.size));
   return new Response(slice, { status: 206, headers });
+}
+
+// -------------------------------------------------------------- offline artwork
+// A kept song's cover is kept too, so it is not a title over an empty tile with no network.
+// The page fills this cache (`keepArtwork` in index.html) for the songs the listener keeps;
+// the worker only answers from it. Writing on every cover the library happens to draw would
+// grow without a budget — one wall of covers is not one kept song.
+//
+//   * `/api/art/<digest>` is content-addressed (the URL changes when the picture does), so
+//     a kept copy is immutable and served without asking the server;
+//   * `/api/track/<id>/artwork` is a track's *current* picture, so the network answers first
+//     and the kept copy is only the fallback when it cannot.
+//
+// Provider CDN artwork is not handled at all: it is cross-origin, opaque to this worker, and
+// the app asks our own route whenever a digest is known.
+const ART_DIGEST = /^\/api\/art\/[a-f0-9]{32}$/;
+const TRACK_ART = /^\/api\/track\/\d+\/artwork$/;
+async function keptArtwork(request, url){
+  const cache = await caches.open(ART);
+  if (ART_DIGEST.test(url.pathname)){
+    const hit = await cache.match(url.pathname);
+    if (hit) return hit;                 // immutable: the digest names these exact bytes
+  }
+  try {
+    return await fetch(request);
+  } catch (error) {
+    const hit = await cache.match(url.pathname);
+    if (hit) return hit;
+    throw error;
+  }
 }
 
 // -------------------------------------------------------------- offline shell
@@ -135,6 +172,11 @@ self.addEventListener('fetch', event => {
   // route — auth, headers, a missing file — stays the server's business.
   if (AUDIO_PATH.test(url.pathname)) {
     event.respondWith(cachedAudio(request, url));
+    return;
+  }
+  // A cover, kept beside the audio it belongs to.
+  if (ART_DIGEST.test(url.pathname) || TRACK_ART.test(url.pathname)) {
+    event.respondWith(keptArtwork(request, url));
     return;
   }
   // The entry navigation, network first: what the server just sent is what paints, and a

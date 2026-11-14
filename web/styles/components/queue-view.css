@@ -13,28 +13,6 @@
 
 .pill.ignored{opacity:.55}
 
-.followrow{display:flex;gap:12px;align-items:center;padding:11px 14px;background:var(--panel);
-  border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
-
-.followrow .name{font-weight:600}
-
-.followrow .acts{display:flex;gap:6px;flex:0 0 auto}
-
-.followrow .acts button{padding:6px 10px;font-size:12.5px}
-
-.followrow .acts .syncbtn{display:inline-grid;place-items:center;width:32px;padding:0}
-
-.followrow .acts .syncbtn.busy svg{animation:syncspin .9s linear infinite}
-
-.followbox{display:flex;gap:8px;margin-bottom:12px}
-
-.followbox input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;
-  border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
-
-@media (max-width:640px){
-  .followbox{flex-direction:column}
-}
-
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
   margin-bottom:12px;overflow:hidden}
 
@@ -195,11 +173,10 @@
 
 .pq-now .pq-tag.now{display:none}
 
-.feedcard,.followrow{padding:16px}
+.feedcard{padding:16px}
 
 @media(max-width:720px){
-.feedacts,.followrow .acts{flex-wrap:wrap}
-.followrow{flex-wrap:wrap}
+.feedacts{flex-wrap:wrap}
 }
 
 @media(max-width:720px){

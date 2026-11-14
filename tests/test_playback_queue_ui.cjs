@@ -2,19 +2,22 @@
 const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright');
 const html=fs.readFileSync('web/index.html','utf8');const css=require('./_css.cjs').appCss();
 const markup=html.slice(html.indexOf('<aside id="playback-panel"'),html.indexOf('<script src="/js/playback-queue.js">')).split('<script>')[0];
+// The clear queue confirmation lives outside the aside; the queue module wires its close.
+const confirmDlg=html.slice(html.indexOf('<dialog id="queue-confirm"'),html.indexOf('</dialog>',html.indexOf('<dialog id="queue-confirm"'))+9);
 // The queue and the playlist editor are their own file now. Its header comment is dropped so the
 // fixture evaluates the same statements it used to slice out of index.html.
 const script=fs.readFileSync('web/js/playback-queue.js','utf8').replace(/^\/\*[\s\S]*?\*\/\n/,'');
 const queueSong=html.slice(html.indexOf('function queueSong('),html.indexOf('function playTrackNow('));
 (async()=>{const browser=await chromium.launch({headless:true});try{for(const width of [1280,390]){
  const page=await browser.newPage({viewport:{width,height:1100}});let network=0;await page.route('**/*',r=>{network++;r.abort()});
- await page.goto('about:blank');await page.setContent(`${require('./_css.cjs').styleTag()}${markup}`);
+ await page.goto('about:blank');await page.setContent(`${require('./_css.cjs').styleTag()}${markup}${confirmDlg}`);
  await page.addScriptTag({content:`
  const memory={};const localStorage={getItem:k=>memory[k]??null,setItem:(k,v)=>memory[k]=v};
  let libAll=[1,2,3,4].map(id=>({id,title:'Song '+id,artist_name:'Artist',playable:id!==4})),currentRows=libAll,libQueue=[],playingId=null,libIndex=-1,playbackQueueEdited=false;
  let playerAudio={src:'',play(){throw Error('Media forbidden')}},calls=[],posts=[],conflict=false;
  let aheadAudio=new Map(),aheadJobs=new Set();
  function esc(s){return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')}
+ function $(s){return document.querySelector(s)}
  function showToast(){} function playTrackNow(id){calls.push(['now',id])}
  let fixture={id:8,title:'Mine',can_edit:true,track_ids:[1,2],owner_id:'me'};
  async function fetch(url){return {ok:true,json:async()=>url==='/api/playlists'?{playlists:[fixture,{id:9,title:'Other',can_edit:false,track_ids:[3]}]}:{playlist:fixture}}}
@@ -53,6 +56,10 @@ await page.evaluate(()=>openPlaylistEditor());await page.locator('#playlist-choi
  await run('conflict=true');await page.locator('#playlist-members [data-id="1"] [data-action="remove"]').click();await page.waitForTimeout(30);assert((await page.locator('#playlist-message').textContent()).includes('reload'));assert.deepEqual(await run('fixture.track_ids'),[4,2,1]);
  await page.locator('#playlist-choice').selectOption('9');assert.equal(await page.locator('#playlist-members button').count(),0);
  await run('conflict=false');await page.locator('#playlist-name').fill('New list');await page.getByRole('button',{name:'Create playlist',exact:true}).click();await page.waitForTimeout(30);assert.deepEqual(await run('posts.at(-1)'),['/api/playlists',{title:'New list',track_ids:[]}]);
- assert(await run('document.documentElement.scrollWidth<=innerWidth'));await page.getByRole('button',{name:'Close playlist editor'}).click();await page.getByRole('button',{name:'Clear queue',exact:true}).click();assert.deepEqual(await run('libQueue'),[]);assert.equal(await run("memory['hl.playbackQueue.v1']"),'[]');assert.equal(network,0);
+ assert(await run('document.documentElement.scrollWidth<=innerWidth'));await page.getByRole('button',{name:'Close playlist editor'}).click();// The broom in the drawer header is the clear path now, and it asks before it clears.
+ await page.locator('#pqclear').click();await page.waitForTimeout(50);
+ assert(await page.evaluate(()=>document.getElementById('queue-confirm').open));
+ await page.locator('#queue-confirm button[value="go"]').click();await page.waitForTimeout(50);
+ assert.deepEqual(await run('libQueue'),[]);assert.equal(await run("memory['hl.playbackQueue.v1']"),'[]');assert.equal(network,0);
  await page.close();console.log(`Playback queue/editor ${width}: pointer/touch/cancel, keyboard moves, persistence/no autoplay, owner contract, create/pending membership/conflict/readback and overflow PASS`);
 }}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

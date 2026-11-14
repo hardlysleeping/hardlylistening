@@ -1,9 +1,13 @@
-"""Personal saved scope and read-only Subsonic subset. No acquisition/network IO.
+"""The player-facing surface: device sessions and the read-only Subsonic subset.
 
-Device secrets are random, returned once and SHA256-hashed at rest. This first
-milestone supports password authentication (p), not legacy MD5 salt/token auth.
-Saving a playlist snapshots its current membership; later catalog additions do
-not silently expand a member's scope. Removing a save never deletes media.
+The saved scope and the folder tree moved into the Library package (LIB-001): `library/saves.py`,
+`library/folders.py` and `library/playlists.py` hold the rules, `library/api.py` the two HTTP
+adapters, and this module keeps what is genuinely the surface — device credentials, the request
+routing and the `/rest/` XML/JSON envelope. The names below stay importable because the queue and
+`server.py` call them (`want_playlist`, `deliver_track`, `forget_track`).
+
+Device secrets are random, returned once and SHA256-hashed at rest. This milestone supports
+password authentication (p), not legacy MD5 salt/token auth. No acquisition or network IO.
 """
 import hashlib
 import hmac
@@ -13,12 +17,14 @@ import re
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
 from security import SECURITY, Denied
-from library import playback, service
-from library.browser_downloads import local_path
+from library import folders as library_folders
+from library import playback, saves as library_saves, service
 
 
 def schema(store, security):
     security.schema(store)
+    library_saves.schema(store)
+    library_folders.schema(store)
     with store.lock:
         store.conn.executescript('''
         CREATE TABLE IF NOT EXISTS listening_devices (
@@ -30,41 +36,6 @@ def schema(store, security):
           -- token-only client can connect. NULL means password auth only; see SECURITY.md.
           token_secret TEXT,
           created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS listening_tracks (
-          member_id TEXT NOT NULL REFERENCES members(id),
-          track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-          PRIMARY KEY(member_id,track_id));
-        CREATE TABLE IF NOT EXISTS listening_playlists (
-          member_id TEXT NOT NULL REFERENCES members(id),
-          playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-          PRIMARY KEY(member_id,playlist_id));
-        CREATE TABLE IF NOT EXISTS listening_playlist_tracks (
-          member_id TEXT NOT NULL, playlist_id INTEGER NOT NULL,
-          track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-          position INTEGER NOT NULL,
-          PRIMARY KEY(member_id,playlist_id,track_id),
-          FOREIGN KEY(member_id,playlist_id) REFERENCES listening_playlists(member_id,playlist_id) ON DELETE CASCADE);
-        CREATE TABLE IF NOT EXISTS listening_folders (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          parent_id INTEGER, name TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
-          created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(member_id,id),
-          FOREIGN KEY(member_id,parent_id) REFERENCES listening_folders(member_id,id) ON DELETE CASCADE);
-        -- A download that should join someone's library once the file is
-        -- written. Filled when Download is pressed on the Feed, emptied by the
-        -- queue: a queued row would list a song that cannot play yet, and a
-        -- failed one would list a song that never will.
-        CREATE TABLE IF NOT EXISTS library_intents (
-          member_id TEXT NOT NULL REFERENCES members(id),
-          track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-          PRIMARY KEY(member_id,track_id));
-        CREATE TABLE IF NOT EXISTS listening_folder_tracks (
-          member_id TEXT NOT NULL, folder_id INTEGER NOT NULL,
-          track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-          position INTEGER NOT NULL DEFAULT 0,
-          PRIMARY KEY(member_id,folder_id,track_id),
-          FOREIGN KEY(member_id,folder_id) REFERENCES listening_folders(member_id,id) ON DELETE CASCADE);
         ''')
         # Devices that predate token auth keep a NULL secret and stay password-only.
         columns = {r[1] for r in store.conn.execute('PRAGMA table_info(listening_devices)')}
@@ -74,52 +45,18 @@ def schema(store, security):
 
 
 def want_playlist(store, member_id: str, playlist_id: int) -> int:
-    """Downloading from the Feed also puts the release in the library.
-
-    Songs the repository already holds go in straight away; the rest wait in
-    `library_intents` so the library is never given a placeholder row.
-    """
-    if not member_id or not playlist_id:
-        return 0
-    schema(store, SECURITY)
-    with store.lock:
-        rows = [dict(r) for r in store.conn.execute(
-            'SELECT t.* FROM tracks t JOIN playlist_tracks pt ON pt.track_id=t.id'
-            ' WHERE pt.playlist_id=?', (playlist_id,))]
-        for track in rows:
-            if local_path(store, track):
-                store.conn.execute(
-                    'INSERT OR IGNORE INTO listening_tracks(member_id,track_id) VALUES(?,?)',
-                    (member_id, track['id']))
-            else:
-                store.conn.execute(
-                    'INSERT OR IGNORE INTO library_intents(member_id,track_id) VALUES(?,?)',
-                    (member_id, track['id']))
-        store.conn.commit()
-    return len(rows)
+    """Downloading from the Feed also puts the release in the library (`library/saves.py`)."""
+    return library_saves.want_playlist(store, member_id, playlist_id)
 
 
 def deliver_track(store, track_id: int) -> int:
     """The queue wrote this track: hand it to everyone who pressed Download."""
-    schema(store, SECURITY)
-    with store.lock:
-        members = [r[0] for r in store.conn.execute(
-            'SELECT member_id FROM library_intents WHERE track_id=?', (track_id,))]
-        for member_id in members:
-            store.conn.execute(
-                'INSERT OR IGNORE INTO listening_tracks(member_id,track_id) VALUES(?,?)',
-                (member_id, track_id))
-        store.conn.execute('DELETE FROM library_intents WHERE track_id=?', (track_id,))
-        store.conn.commit()
-    return len(members)
+    return library_saves.deliver_track(store, track_id)
 
 
 def forget_track(store, track_id: int) -> None:
     """The download ended without a file; drop the promise rather than save it."""
-    schema(store, SECURITY)
-    with store.lock:
-        store.conn.execute('DELETE FROM library_intents WHERE track_id=?', (track_id,))
-        store.conn.commit()
+    return library_saves.forget_track(store, track_id)
 
 
 def browser(handler, store, security):
@@ -129,7 +66,9 @@ def browser(handler, store, security):
         import nowplaying
         return nowplaying.dispatch(handler, store, security)
     if urlparse(handler.path).path.startswith('/api/listening/preferences') \
-            or urlparse(handler.path).path == '/api/listening/pin-order':
+            or urlparse(handler.path).path in ('/api/listening/pin-order', '/api/listening/eq',
+                                               '/api/listening/playback',
+                                               '/api/listening/cues'):
         import preferences
         return preferences.browser(handler, store, security)
     schema(store, security)
@@ -173,23 +112,16 @@ def browser(handler, store, security):
                 pass
         handler.close_connection = True
         return
+    if path in ('/api/listening/saves', '/api/listening/folders'):
+        from library import api as library_api
+        call = library_api.saves if path.endswith('/saves') else library_api.folders
+        return call(handler, store, security)
     with store.lock:
         if handler.command == 'GET':
             if path == '/api/listening/devices':
                 rows = [dict(r) for r in store.conn.execute(
                     'SELECT id,label,revoked,created FROM listening_devices WHERE member_id=? ORDER BY created,id', (uid,))]
                 handler.json({'devices': rows})
-            elif path == '/api/listening/saves':
-                handler.json({'tracks': [r[0] for r in store.conn.execute('SELECT track_id FROM listening_tracks WHERE member_id=?', (uid,))],
-                              'playlists': [r[0] for r in store.conn.execute('SELECT playlist_id FROM listening_playlists WHERE member_id=?', (uid,))],
-                              'playlist_tracks': [dict(r) for r in store.conn.execute(
-                                  'SELECT playlist_id,track_id,position FROM listening_playlist_tracks WHERE member_id=? ORDER BY playlist_id,position,track_id', (uid,))],
-                              'folder_tracks': [dict(r) for r in store.conn.execute(
-                                  'SELECT folder_id,track_id,position FROM listening_folder_tracks WHERE member_id=? ORDER BY folder_id,position,track_id', (uid,))]})
-            elif path == '/api/listening/folders':
-                folders = [dict(r) for r in store.conn.execute(
-                    'SELECT id,parent_id,name,position FROM listening_folders WHERE member_id=? ORDER BY position,id', (uid,))]
-                handler.json({'folders': folders})
             else:
                 raise Denied(404, 'No such endpoint')
             return
@@ -214,95 +146,10 @@ def browser(handler, store, security):
             return
         if path == '/api/listening/devices/revoke':
             store.conn.execute('UPDATE listening_devices SET revoked=1 WHERE id=? AND member_id=?', (str(body.get('id', '')), uid))
-        elif path == '/api/listening/saves':
-            kind, identity, saved = body.get('kind'), body.get('id'), body.get('saved')
-            import preferences
-            virtual = kind == 'playlist' and isinstance(identity, str) and identity in preferences.VIRTUAL_PLAYLISTS
-            if type(saved) is not bool:
-                raise Denied(400, 'kind, id and boolean saved required')
-            if virtual:
-                # A computed playlist saves its songs: there is no playlist row to
-                # reference, and removing it removes exactly those songs again.
-                ids = preferences.virtual_tracks(store, uid, identity)
-                if saved:
-                    store.conn.executemany('INSERT OR IGNORE INTO listening_tracks VALUES(?,?)',
-                                           [(uid, track_id) for track_id in ids])
-                else:
-                    store.conn.executemany('DELETE FROM listening_tracks WHERE member_id=? AND track_id=?',
-                                           [(uid, track_id) for track_id in ids])
-                store.conn.commit()
-                handler.json({'saved': saved, 'tracks': len(ids)})
-                return
-            if kind not in ('track', 'playlist') or type(identity) is not int or identity < 1:
-                raise Denied(400, 'kind, positive integer id and boolean saved required')
-            table = 'tracks' if kind == 'track' else 'playlists'
-            if not store.conn.execute('SELECT id FROM ' + table + ' WHERE id=?', (identity,)).fetchone():
-                raise Denied(404, 'Not found')
-            target = 'listening_' + table
-            column = kind + '_id'
-            if saved:
-                store.conn.execute(f'INSERT OR IGNORE INTO {target}(member_id,{column}) VALUES(?,?)', (uid, identity))
-                if kind == 'playlist':
-                    store.conn.execute('INSERT OR IGNORE INTO listening_playlist_tracks SELECT ?,playlist_id,track_id,position FROM playlist_tracks WHERE playlist_id=?', (uid, identity))
-            else:
-                store.conn.execute(f'DELETE FROM {target} WHERE member_id=? AND {column}=?', (uid, identity))
-        elif path == '/api/listening/folders':
-            action = body.get('action')
-            if action == 'create':
-                name, parent = body.get('name'), body.get('parent_id')
-                if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80 or any(ord(c) < 32 for c in name):
-                    raise Denied(400, 'Folder name must be 1–80 printable characters')
-                if parent is not None and (type(parent) is not int or parent < 1 or not store.conn.execute(
-                        'SELECT id FROM listening_folders WHERE id=? AND member_id=?', (parent, uid)).fetchone()):
-                    raise Denied(404, 'Parent folder not found')
-                clean = name.strip()
-                if store.conn.execute('SELECT id FROM listening_folders WHERE member_id=? AND parent_id IS ? AND lower(name)=lower(?)',
-                                      (uid, parent, clean)).fetchone():
-                    raise Denied(409, 'A folder with that name already exists here')
-                position = store.conn.execute('SELECT COALESCE(MAX(position),-1)+1 FROM listening_folders WHERE member_id=? AND parent_id IS ?',
-                                              (uid, parent)).fetchone()[0]
-                cur = store.conn.execute('INSERT INTO listening_folders(member_id,parent_id,name,position) VALUES(?,?,?,?)',
-                                         (uid, parent, clean, position))
-                folder_id = cur.lastrowid
-            elif action in ('rename', 'delete'):
-                folder_id, name = body.get('folder_id'), body.get('name')
-                if type(folder_id) is not int or folder_id < 1:
-                    raise Denied(400, 'Positive folder_id required')
-                row = store.conn.execute('SELECT id,parent_id FROM listening_folders WHERE id=? AND member_id=?', (folder_id, uid)).fetchone()
-                if not row:
-                    raise Denied(404, 'Folder not found')
-                if action == 'delete':
-                    store.conn.execute('DELETE FROM listening_folders WHERE id=? AND member_id=?', (folder_id, uid))
-                else:
-                    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80 or any(ord(c) < 32 for c in name):
-                        raise Denied(400, 'Folder name must be 1–80 printable characters')
-                    clean = name.strip()
-                    if store.conn.execute('SELECT id FROM listening_folders WHERE member_id=? AND parent_id IS ? AND id<>? AND lower(name)=lower(?)',
-                                          (uid, row['parent_id'], folder_id, clean)).fetchone():
-                        raise Denied(409, 'A folder with that name already exists here')
-                    store.conn.execute('UPDATE listening_folders SET name=? WHERE id=? AND member_id=?', (clean, folder_id, uid))
-            elif action in ('add_track', 'remove_track'):
-                folder_id, track_id = body.get('folder_id'), body.get('track_id')
-                if type(folder_id) is not int or folder_id < 1 or type(track_id) is not int or track_id < 1:
-                    raise Denied(400, 'Positive folder_id and track_id required')
-                if not store.conn.execute('SELECT id FROM listening_folders WHERE id=? AND member_id=?', (folder_id, uid)).fetchone():
-                    raise Denied(404, 'Folder not found')
-                if not store.conn.execute('SELECT id FROM tracks WHERE id=?', (track_id,)).fetchone():
-                    raise Denied(404, 'Track not found')
-                if action == 'add_track':
-                    pos = store.conn.execute('SELECT COALESCE(MAX(position),-1)+1 FROM listening_folder_tracks WHERE member_id=? AND folder_id=?',
-                                             (uid, folder_id)).fetchone()[0]
-                    store.conn.execute('INSERT OR IGNORE INTO listening_folder_tracks(member_id,folder_id,track_id,position) VALUES(?,?,?,?)',
-                                       (uid, folder_id, track_id, pos))
-                else:
-                    store.conn.execute('DELETE FROM listening_folder_tracks WHERE member_id=? AND folder_id=? AND track_id=?',
-                                       (uid, folder_id, track_id))
-            else:
-                raise Denied(400, 'Unknown folder action')
         else:
             raise Denied(404, 'No such endpoint')
         store.conn.commit()
-    handler.json({'ok': True, **({'id': folder_id} if path == '/api/listening/folders' and action == 'create' else {})})
+    handler.json({'ok': True})
 
 
 def catalog(store, uid):

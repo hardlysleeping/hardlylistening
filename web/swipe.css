@@ -33,3 +33,37 @@ main{max-width:520px;margin:0 auto;padding:16px 14px calc(20px + env(safe-area-i
 .actions button:hover{border-color:#ffffff33}.actions button:active{transform:scale(.96)}
 .empty{color:var(--dim);font-size:13.5px;text-align:center;margin:30px 0}
 @media(max-width:420px){main{padding:12px 10px calc(16px + env(safe-area-inset-bottom))}#deck{min-height:300px}.actions button{min-height:58px}}
+
+/* ==== The compact player, borrowed from the library (styles/components/player.css) ====
+   This page has no nav rail and no waveform renderer, so three things are set here and
+   nothing else: the bar keeps clear of the phone's home indicator, it is held to the deck's
+   own column on a desktop, and the scrub draws a real line instead of the library's canvas
+   wave (which this page does not build). */
+:root{--safe-b:env(safe-area-inset-bottom,0px);--nav-h:0px}
+
+@media (min-width:761px){
+  /* The deck is 520 px wide; a 1072 px bar under it reads as another page's player. */
+  body #player,body #player.on{width:min(520px,calc(100vw - 32px))}
+}
+
+/* The bar is fixed over the page, so the deck's action row would sit under it on a short
+   screen. Main already carries `min-height:100dvh`: adding the bar's own height to its
+   bottom padding shrinks the content box instead of pushing the page taller. */
+body:has(#player.on) main{padding-bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+
+/* The bar has no heart and no expand button, so the title may use the band they reserve. */
+body #player.on #plmeta{right:14px}
+
+/* No canvas under this input: the native track is the progress line. Same heights and
+   colours as the fullscreen fader, so the two pages read as one player. */
+body #player.on #plseek{bottom:3px;height:18px}
+body #player.on #plseek::-webkit-slider-runnable-track{height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent) var(--bar-played,0%),#3a3d47 var(--bar-played,0%))}
+body #player.on #plseek::-webkit-slider-thumb{-webkit-appearance:none;width:0;height:0;margin:0;
+  box-shadow:none}
+body #player.on #plseek::-moz-range-track{height:3px;border-radius:2px;background:#3a3d47}
+body #player.on #plseek::-moz-range-progress{height:3px;border-radius:2px;background:var(--accent)}
+body #player.on #plseek::-moz-range-thumb{width:0;height:0;border:0;box-shadow:none}
+
+/* The transport is prev/play/next/mute/volume here; nothing sits in the right-hand band. */
+body #player.on #plnext[disabled]{opacity:.3;cursor:default}

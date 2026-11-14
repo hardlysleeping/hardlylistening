@@ -108,6 +108,53 @@ def rekordbox(store, playlist_id: int | None = None) -> tuple[str, str]:
     return ("\n".join(out), title + ".rekordbox.xml")
 
 
+def usb_document(tracks: list[dict], title: str) -> str:
+    """Rekordbox XML for files written to a drive by `usb_export` (HL-228).
+
+    The same document shape as `rekordbox()`, but each row is a file *on the drive* and
+    carries what a CDJ reads from the XML: `AverageBpm` when the tempo is known, and the
+    member's hot cues as `POSITION_MARK`s. There is no `Tonality`: this app has no key
+    detection, and an empty attribute would claim otherwise. `TotalTime` is 0 for the same
+    reason — the length was never measured here, so it is not invented.
+    """
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<DJ_PLAYLISTS Version="1.0.0">',
+           '  <PRODUCT Name="HardlyListening" Version="1.0" Company="HardlyListening"/>',
+           f'  <COLLECTION Entries="{len(tracks)}">']
+    for index, track in enumerate(tracks, 1):
+        location = "file://localhost" + quote(str(track["target"]))
+        attrs = [
+            f'TrackID="{index}"',
+            f'Name={quoteattr(track.get("title") or "")}',
+            f'Artist={quoteattr(track.get("artist") or "")}',
+            f'Album={quoteattr(track.get("album") or "")}',
+            f'TotalTime="{int(round(track.get("duration") or 0))}"',
+            f'Kind={quoteattr((track.get("kind") or "MP3") + " File")}',
+            f'Location={quoteattr(location)}',
+        ]
+        bpm = round(float(track.get("bpm") or 0), 1)
+        if bpm > 0:
+            attrs.append(f'AverageBpm="{bpm}"')
+        cues = track.get("cues") or []
+        if not cues:
+            out.append("    <TRACK " + " ".join(attrs) + "/>")
+            continue
+        out.append("    <TRACK " + " ".join(attrs) + ">")
+        for cue in cues:
+            slot = int(cue.get("slot") or 0)
+            start = round(float(cue.get("position") or 0), 3)
+            out.append(f'      <POSITION_MARK Name={quoteattr(f"Cue {slot}")} Type="0"'
+                       f' Start="{start}" Num="{slot}"/>')
+        out.append("    </TRACK>")
+    out += ["  </COLLECTION>", "  <PLAYLISTS>",
+            '    <NODE Type="0" Name="ROOT" Count="1">',
+            f'      <NODE Name={quoteattr(title)} Type="1" KeyType="0" Entries="{len(tracks)}">']
+    for index in range(1, len(tracks) + 1):
+        out.append(f'        <TRACK Key="{index}"/>')
+    out += ["      </NODE>", "    </NODE>", "  </PLAYLISTS>", "</DJ_PLAYLISTS>", ""]
+    return "\n".join(out)
+
+
 def build(store, fmt: str, playlist_id: int | None = None) -> tuple[str, str]:
     if fmt == M3U8:
         return m3u8(store, playlist_id)

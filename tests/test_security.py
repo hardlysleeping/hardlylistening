@@ -108,7 +108,7 @@ class SecurityHTTP(unittest.TestCase):
         cookie=h['Set-Cookie'].split(';')[0]
         headers={'Cookie':cookie,'Origin':'https://music.example'}
         self.assertEqual(self.request('/api/state',headers=headers)[0],200)
-        for path in ('/api/settings','/api/import','/api/library/move','/api/pause','/api/track/1/source','/api/members/create','/api/members/invite','/api/members/revoke','/api/members'):
+        for path in ('/api/settings','/api/storage','/api/import','/api/library/move','/api/pause','/api/track/1/source','/api/members/create','/api/members/invite','/api/members/revoke','/api/members'):
             self.assertEqual(self.request(path,'POST',headers,'{}')[0],403)
         # /login is a public page but must never strand a member who is already
         # signed in on this device.
@@ -247,6 +247,9 @@ class SecurityHTTP(unittest.TestCase):
         queue=Mock()
         queue.ingest.side_effect=lambda url:{'playlist_id':self.store.playlist('new','fixture',url),'queued':0}
         self.user();h={'Cookie':self.token(),'Origin':'https://music.example'}
+        # Acquisition is a grant of its own (HL-219); this test is about ownership.
+        from acquisitions import grant as grant_acquisition
+        grant_acquisition(self.store, 'u1')
         with patch.object(server,'boot',return_value=(self.store,queue)):
             self.assertEqual(self.request('/api/add','POST',h,'{"url":"https://example.com/set"}')[0],200)
         pid=self.store.conn.execute('SELECT playlist_id FROM member_playlists').fetchone()[0]

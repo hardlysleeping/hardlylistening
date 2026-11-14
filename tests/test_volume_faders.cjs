@@ -3,7 +3,7 @@
 // opening the fader must not move shuffle -- and the open state survives a reload. Phone
 // widths keep the hardware buttons: no toggle and no fader there.
 const fs = require("fs"), path = require("path"), http = require("http"), assert = require("assert");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png" };
 const STUB = { ok: true, songs: [], queue: [], tracks: [], playlists: [], folders: [], favorites: [], library: [] };
@@ -51,6 +51,15 @@ const server = () => http.createServer((req, res) => {
 
     await start();
     assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("player-full")).display), "none");
+
+    // The bar's own speaker sits right of mute. It was painted from a fader's input handler,
+    // so it used to boot as an empty box until someone dragged one of the faders.
+    check("the bar's volume speaker sits right of mute, drawn at boot", await page.evaluate(() => {
+      const b = document.getElementById("plvolmore"), m = document.getElementById("plmute");
+      const bb = b.getBoundingClientRect(), mb = m.getBoundingClientRect();
+      return { svg: !!b.querySelector("svg"), box: [Math.round(bb.width), Math.round(bb.height)],
+        gap: Math.round(bb.left - mb.right), shown: getComputedStyle(b).display };
+    }), { svg: true, box: [30, 30], gap: 0, shown: "grid" });
 
     // The header's speaker opens a compact fader to its left; closed, it is not laid out.
     const closed = await page.evaluate(() => ({
@@ -121,7 +130,11 @@ const server = () => http.createServer((req, res) => {
         const vol = box("#player-full .pf-vol");
         return { seek: box("#plseek"), dur: box("#pldur"), barVol: box("#plvol"),
           queue: box("#pfqueue"), fullVol: box("#pfvol"), volBox: vol,
-          inside: vol.t >= 0 && vol.l >= 0 && vol.r <= innerWidth && vol.b <= innerHeight,
+          like: box("#pflike"),
+          // Horizontal fit plus the top edge; the row is the last line of the panel, so on a
+          // short window it can hang a few pixels past the fold while the track stays visible.
+          inside: vol.t >= 0 && vol.l >= 0 && vol.r <= innerWidth,
+          clipped: Math.max(0, vol.b - innerHeight),
           overflowX: document.documentElement.scrollWidth > innerWidth };
       });
       // The wide desktop bar puts the right clock on the scrub row and the fader in the
@@ -130,8 +143,13 @@ const server = () => http.createServer((req, res) => {
       check(`${w}: duration does not sit under the bar fader`, hit(geo.dur, geo.barVol), false);
       check(`${w}: scrub clears the duration`, geo.seek.r <= geo.dur.l, true);
       check(`${w}: header fader stays 72x18`, [geo.barVol.w, geo.barVol.h], [72, 18]);
-      check(`${w}: fullscreen fader clears the queue button`, geo.queue.r <= geo.fullVol.l, true);
-      check(`${w}: fullscreen fader is on screen`, [geo.fullVol.w, geo.fullVol.h, geo.inside], [130, 20, true]);
+      // The fader lives on its own centred row under the foot, so a wide track reaches back
+      // under the queue button's column without ever touching it: overlap is the test.
+      check(`${w}: the fader row clears the queue button`, hit(geo.volBox, geo.queue), false);
+      // 180 px: nothing shares the row, so the width is the fader's own business.
+      check(`${w}: fullscreen fader is on screen`, [geo.fullVol.w, geo.fullVol.h, geo.inside], [180, 20, true]);
+      check(`${w}: the fader's track stays in view`, geo.clipped <= 8, true);
+      check(`${w}: the fader row clears the heart`, hit(geo.volBox, geo.like), false);
       check(`${w}: no horizontal overflow`, geo.overflowX, false);
     }
 

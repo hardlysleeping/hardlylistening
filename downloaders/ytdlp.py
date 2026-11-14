@@ -59,7 +59,7 @@ QUALIFIERS = {"remix", "remixed", "live", "cover", "sped", "spedup", "nightcore"
 
 
 def bin_path() -> str:
-    for cand in (shutil.which("yt-dlp"), str(Path.home() / ".local/bin/yt-dlp"),
+    for cand in (shutil.which("yt-dlp"), str(Path.home() / ".local" / "bin" / "yt-dlp"),
                  "/usr/local/bin/yt-dlp", "/usr/bin/yt-dlp"):
         if cand and Path(cand).exists():
             return cand

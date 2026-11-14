@@ -2,8 +2,13 @@
 
 `ARCH-002`. A facade, not a move. Every function here answers the same question the module it
 delegates to already answers, with the same arguments and the same return value — the difference is
-that callers stop reaching into `db.Store`, `discovery.subscriptions` and `discovery.tracklist`
-directly, so Repo has exactly one entry point and `Library` can be trusted not to depend on it.
+that callers stop reaching into `db.Store`, `repo.subscriptions` and `repo.catalogue` directly,
+so Repo has exactly one entry point and `Library` can be trusted not to depend on it.
+
+The implementation lives beside this file (REPO-014): `repository.py` (the artist page),
+`catalogue.py` (releases and tracklists), `subscriptions.py` (following an artist),
+`acquisition.py` (putting work in the download queue) and `api.py` (the HTTP-shaped helpers).
+This file stays the only import a caller needs.
 
 Two rules this module exists to make checkable:
 
@@ -19,10 +24,10 @@ the functions underneath so that delegation later cannot quietly change an answe
 """
 from __future__ import annotations
 
-from discovery import subscriptions as _subscriptions
-from discovery import tracklist as _tracklist
-from discovery.artist_profile import profile as _artist_profile
+from repo import catalogue as _catalogue
 from repo import federation as _federation
+from repo import repository as _repository
+from repo import subscriptions as _subscriptions
 
 
 # -- the snapshot ---------------------------------------------------------------------------------
@@ -44,17 +49,17 @@ def artist(store, name: str) -> dict:
     name = (name or "").strip()
     if not name:
         raise ValueError("name is required")
-    return _artist_profile(store, name)
+    return _repository.profile(store, name)
 
 
-def releases(store, watch_id: int, offset: int = 0, limit: int = _tracklist.PAGE) -> dict:
+def releases(store, watch_id: int, offset: int = 0, limit: int = _catalogue.PAGE) -> dict:
     """The releases behind one follow, one page at a time."""
-    return _tracklist.catalogue(store, int(watch_id), offset=offset, limit=limit)
+    return _catalogue.catalogue(store, int(watch_id), offset=offset, limit=limit)
 
 
 def tracks(url: str) -> list[dict]:
     """The songs inside one album. A user-initiated read; never part of a poll."""
-    return _tracklist.tracks(url)
+    return _catalogue.tracks(url)
 
 
 # -- subscriptions --------------------------------------------------------------------------------
@@ -86,7 +91,7 @@ def subscribe(store, url: str = "", *, name: str = "", provider: str = "",
               member_id: str = "") -> dict:
     """Follow by link, or resolve the link from the artist's name.
 
-    `discovery.subscriptions.subscribe` refuses an empty link with "paste an artist link"; the
+    `repo.subscriptions.subscribe` refuses an empty link with "paste an artist link"; the
     name path is how an artist page subscribes an artist whose source link the library does not
     have.
     """

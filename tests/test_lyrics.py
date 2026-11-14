@@ -14,6 +14,23 @@ class Parser(unittest.TestCase):
         self.assertEqual(lyrics.parse_lrc('[offset:1000]\n[00:02]a')[0]['time'], 1)
         self.assertEqual(lyrics.parse_lrc('broken'), [])
 
+    def test_word_timing_inside_a_line(self):
+        """Enhanced LRC puts `<mm:ss.xx>` inside the line body. A line that has them carries
+        `words`; a line that does not is exactly the shape it always was, so every existing
+        reader and fixture keeps working."""
+        lines = lyrics.parse_lrc('[00:10.00]<00:10.00>Hello <00:10.40>there\n[00:12.00]Plain line')
+        self.assertEqual(lines[0], {'time': 10.0, 'text': 'Hello there',
+                                    'words': [{'time': 10.0, 'text': 'Hello'},
+                                              {'time': 10.4, 'text': 'there'}]})
+        self.assertEqual(lines[1], {'time': 12.0, 'text': 'Plain line'})
+        # The file's own clock applies to the words too, not only to the line.
+        self.assertEqual(lyrics.parse_lrc('[offset:-500]\n[00:10.00]<00:10.00>Hi')[0]['words'][0]['time'], 10.5)
+        # An empty mark (`<00:10.50>` with no text behind it) is a timing, not a word, and a
+        # line with no words is exactly the old shape rather than a line with an empty list.
+        self.assertNotIn('words', lyrics.parse_lrc('[00:10]Hi<00:10.5>')[0])
+        self.assertTrue(lyrics.payload({'syncedLyrics': '[00:10]<00:10>Hi'}, 't')['word_timed'])
+        self.assertFalse(lyrics.payload({'syncedLyrics': '[00:10]Hi'}, 't')['word_timed'])
+
     def test_provider_validation(self):
         track = {'title':'Song', 'artist_name':'Artist', 'album':'Album','duration':100}
         data = {'trackName':'Song','artistName':'Artist','albumName':'Album','duration':101,'syncedLyrics':'[00:01]Hi'}
@@ -63,7 +80,49 @@ class LyricsHTTP(unittest.TestCase):
                 self.assertNotIn(b'source_url',raw)
             self.assertEqual(lookup.call_count,1)
         self.assertEqual(self.request('/api/track/999999/lyrics',headers=self.headers)[0],404)
-        self.assertEqual(self.request(route,'POST',dict(self.headers,Origin='https://music.example'),'{}')[0],405)
+        self.assertEqual(self.request(route,'POST',dict(self.headers,Origin='https://music.example'),'{}')[0],400)
+
+    def test_an_edit_wins_over_the_provider_copy_and_survives_a_reload(self):
+        route = f'/api/track/{self.track_id}/lyrics'
+        provider = lyrics.payload({'syncedLyrics': '[00:01]Wrong words', 'plainLyrics': 'Wrong words'}, 'LRCLIB')
+        write = dict(self.headers, Origin='https://music.example')
+        with patch('lyrics.lookup', return_value=provider) as lookup:
+            self.assertEqual(json.loads(self.request(route, headers=self.headers)[2])['lines'][0]['text'], 'Wrong words')
+            # Saving does not need the provider at all.
+            code, _, raw = self.request(route, 'POST', write, json.dumps({'text': '[00:01]<00:01>Right <00:01.4>words'}))
+            self.assertEqual(code, 200)
+            saved = json.loads(raw)
+            self.assertEqual(saved['lines'][0]['text'], 'Right words')
+            self.assertEqual(saved['source'], 'Edited copy')
+            self.assertEqual(saved['editor'], 'Friend')
+            # Word timing survives the round trip when the member leaves the marks in place.
+            self.assertEqual([w['text'] for w in saved['lines'][0]['words']], ['Right', 'words'])
+            # A reload is a fresh GET served from the edit, not from the provider or its cache.
+            again = json.loads(self.request(route, headers=self.headers)[2])
+            self.assertEqual(again['lines'][0]['text'], 'Right words')
+            # And it wins over a local sidecar as well: the app's own correction is later.
+            audio = self.root / 'song.mp3'
+            audio.write_bytes(b'fixture, never played')
+            with self.store.lock:
+                self.store.conn.execute('UPDATE tracks SET file=? WHERE id=?', (str(audio), self.track_id))
+                self.store.conn.commit()
+            audio.with_suffix('.lrc').write_text('[00:01]Sidecar words')
+            self.assertEqual(json.loads(self.request(route, headers=self.headers)[2])['lines'][0]['text'], 'Right words')
+            # Resetting drops the correction and answers with what the track says now.
+            code, _, raw = self.request(route, 'POST', write, json.dumps({'reset': True}))
+            self.assertEqual(code, 200)
+            self.assertEqual(json.loads(raw)['lines'][0]['text'], 'Sidecar words')
+            self.assertNotIn('editor', json.loads(raw))
+            # A correction with no timestamps at all is plain lyrics, not a refusal.
+            code, _, raw = self.request(route, 'POST', write, json.dumps({'text': 'Just the words'}))
+            self.assertEqual(code, 200)
+            self.assertEqual(json.loads(raw)['status'], 'plain')
+            self.assertEqual(json.loads(raw)['text'], 'Just the words')
+            # Too large for the app's own limit is refused rather than stored.
+            code, _, _ = self.request(route, 'POST', write, json.dumps({'text': 'x' * (512 * 1024 + 1)}))
+            self.assertEqual(code, 400)
+            self.assertEqual(lookup.call_count, 1)   # the cache answered the first GET
+        self.assertEqual(self.request('/api/track/999999/lyrics', 'POST', write, json.dumps({'text': 'x'}))[0], 404)
 
     def test_sidecar_and_escape(self):
         audio = self.root/'song.mp3'

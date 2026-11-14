@@ -20,8 +20,14 @@
   header{position:sticky;top:0;z-index:30;background:rgba(13,13,17,.95);
     backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
   .bar{display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap}
-  .brand{font-weight:700;font-size:16px}
+  .brand{font-weight:700;font-size:16px;color:var(--text);text-decoration:none}
+  .brand:hover{color:var(--text)}
   .brand span{color:var(--accent)}
+  /* The mixer is a page you leave: the title goes back, and so does this. */
+  .backlink{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;
+    padding:5px 9px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--text);text-decoration:none;white-space:nowrap}
+  .backlink:hover{background:#262631;color:var(--text)}
   .grow{flex:1}
   button{font:inherit;border-radius:9px;border:1px solid var(--line);
     background:var(--panel2);color:var(--text);padding:7px 12px;cursor:pointer}
@@ -35,7 +41,7 @@
      different grid altogether (see the max-width:900px block) — the old
      `max-width:860px` override here fought it, pinning deck B into a second
      implicit column while the grid declared one. */
-  .decks{display:grid;grid-template-columns:1fr 90px 1fr;gap:12px;align-items:stretch}
+  .decks{display:grid;grid-template-columns:1fr 136px 1fr;gap:12px;align-items:stretch}
 
   .deck{background:var(--panel);border:1px solid var(--line);border-radius:16px;
     padding:12px;display:grid;gap:10px;border-top:3px solid var(--a)}
@@ -91,8 +97,11 @@
 
   .mid{background:var(--panel);border:1px solid var(--line);border-radius:16px;
     padding:12px;display:grid;gap:10px;align-content:start;justify-items:center}
-  .cross{display:grid;gap:6px;justify-items:center}
+  .cross{display:grid;gap:6px;justify-items:center;width:100%}
   .cross input[type=range]{width:100%;accent-color:var(--accent2)}
+  /* "A 50 · B 50" on one line: at the rail's width it used to wrap, which read as a
+     second, broken fader label. */
+  .cross .time{white-space:nowrap;text-align:center}
   .meter{width:12px;height:120px;background:#0a0a0e;border:1px solid var(--line);
     border-radius:6px;position:relative;overflow:hidden}
   .meter i{position:absolute;bottom:0;left:0;right:0;height:0;background:linear-gradient(
@@ -420,7 +429,8 @@ footer{color:#5f5f72;font-size:12px;padding:0 14px 24px;text-align:center}
 <body>
 <header>
   <div class="bar">
-    <div class="brand">Hardly<span>Listening</span> · Mixer</div>
+    <a class="backlink" href="/" title="Back to HardlyListening">‹ Back</a>
+    <a class="brand" href="/" title="Back to HardlyListening">Hardly<span>Listening</span> · Mixer</a>
     <span class="livechip" id="livechip" title="Shared room — everyone here controls the same decks">connecting</span>
     <div class="roster" id="roster"></div>
     <div class="grow"></div>
@@ -1020,7 +1030,7 @@ function loadTrack(id, track){
   $("#play" + id).textContent = "Play";
   paintBpm(id);
   publishDeck(id, {track_id: track.id, playing: false, position: 0});
-  if (step === 0) { step = 1; showStep(); }
+  if (step === 0) { step = 1; showStep(true); }
 }
 
 // ---------------------------------------------------------------- jog discs
@@ -2271,7 +2281,9 @@ const STEPS = [
    when:"Two basslines at once is the most common beginner mud. Cut, switch, restore.", target:".deck[data-deck='B'] [data-learn='low']"},
 ];
 let step = 0;
-function showStep(){
+// `reveal` is for a person turning the tour: the boot paint must not move the page, or
+// the mixer opens scrolled past its own header card.
+function showStep(reveal){
   const s = STEPS[step];
   $("#learn-title").textContent = s.title;
   $("#learn-body").textContent = s.body;
@@ -2279,11 +2291,13 @@ function showStep(){
   $$(".steps .dot").forEach((d, i) => d.classList.toggle("done", i <= step));
   $$(".flash").forEach(el => el.classList.remove("flash"));
   const target = document.querySelector(s.target);
-  if (target) { target.classList.add("flash"); target.scrollIntoView({block:"nearest", behavior:"smooth"}); }
+  if (!target) return;
+  target.classList.add("flash");
+  if (reveal) target.scrollIntoView({block:"nearest", behavior:"smooth"});
 }
-$("#stepnext").onclick = () => { step = (step + 1) % STEPS.length; showStep(); };
+$("#stepnext").onclick = () => { step = (step + 1) % STEPS.length; showStep(true); };
 $("#stepnext").textContent = "Start the tour";
-showStep();
+showStep(false);
 
 wireDeck("A"); wireDeck("B");
 loadQueues();

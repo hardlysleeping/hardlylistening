@@ -6,7 +6,7 @@ import time
 import unittest
 
 from db import Store
-from library.playlists import folder, MARKER
+from library.playlist_files import folder, MARKER
 from library.import_files import move_library
 
 

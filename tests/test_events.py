@@ -50,7 +50,8 @@ class Publisher(unittest.TestCase):
         self.assertEqual(len(heard), 1)
 
     def test_the_accounts_code_no_longer_imports_the_feed(self):
-        source = (Path(__file__).resolve().parent.parent / 'security.py').read_text()
+        import security
+        source = Path(security.__file__).read_text()
         self.assertNotIn('import activity', source,
                          'security.py must publish an event, not write the Feed')
         self.assertNotIn('activity.', source, 'the Feed is not Core\'s to write')

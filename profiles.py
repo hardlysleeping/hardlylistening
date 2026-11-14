@@ -45,9 +45,11 @@ def profile(store, member_id: str, limit: int = 40) -> dict | None:
                "icon": member["profile_icon"] or "music", "role": member["role"]}
 
         # -- listening history: plays counted per track -------------------------
+        # The dated log, not the feed's trimmed window: the same table every number on
+        # this page is computed from.
         rows = store.conn.execute(
-            "SELECT track_id, COUNT(*) AS plays, MAX(ts) AS last FROM activity"
-            " WHERE member_id=? AND kind='listen' GROUP BY track_id"
+            "SELECT track_id, COUNT(*) AS plays, MAX(ts) AS last FROM listen_events"
+            " WHERE member_id=? GROUP BY track_id"
             " ORDER BY last DESC LIMIT ?", (member_id, limit)).fetchall()
         listens = []
         for row in rows:
@@ -108,14 +110,24 @@ def profile(store, member_id: str, limit: int = 40) -> dict | None:
             party = []   # no party has ever run on this database
 
         counts = store.conn.execute(
-            "SELECT (SELECT COUNT(*) FROM activity WHERE member_id=? AND kind='listen') AS listens,"
+            "SELECT (SELECT COUNT(*) FROM listen_events WHERE member_id=?) AS listens,"
             " (SELECT COUNT(*) FROM activity WHERE member_id=? AND kind='add') AS adds,"
             " (SELECT COUNT(*) FROM social_votes WHERE member_id=?) AS votes,"
-            " (SELECT COUNT(DISTINCT track_id) FROM activity WHERE member_id=? AND kind='listen') AS distinct_tracks",
+            " (SELECT COUNT(DISTINCT track_id) FROM listen_events WHERE member_id=?) AS distinct_tracks",
             (member_id, member_id, member_id, member_id)).fetchone()
+
+    # The Listening section's first paint rides with the profile, so opening a name
+    # does not need a second request before it can show numbers. A period switch asks
+    # `/api/stats/<id>` for the rest.
+    try:
+        import stats as stats_module
+        listening_stats = stats_module.summary(store, member_id, "week")
+    except Exception:
+        listening_stats = None
 
     return {"member": who, "listens": listens, "adds": adds, "playlists": playlists,
             "saves": saves, "votes": votes, "party_votes": party,
+            "stats": listening_stats,
             "counts": {k: counts[k] for k in counts.keys()}}
 
 

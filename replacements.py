@@ -1,10 +1,22 @@
-"""Explicit staged replacements. Retained media is never removed by this module."""
+"""Explicit staged replacements. Retained media is only ever removed by `collect`."""
 import json
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
 from downloaders import ytdlp
+
+#: How long a replaced file stays available for a reverse. A person can change it
+#: (`replacements_keep_days`); `0` keeps everything, which is what this module did before
+#: there was a collector.
+KEEP_DAYS = 30
+#: The collector's own cadence. It also runs once at boot.
+COLLECT_EVERY = 6 * 3600
+
+_stop = threading.Event()
+_guard = threading.Lock()
+_thread = None
 
 
 def schema(store):
@@ -12,7 +24,13 @@ def schema(store):
         id INTEGER PRIMARY KEY, track_id INTEGER NOT NULL, job_id INTEGER NOT NULL,
         created REAL NOT NULL, old_file TEXT NOT NULL, old_url TEXT NOT NULL,
         old_pinned INTEGER NOT NULL, new_url TEXT NOT NULL, new_file TEXT NOT NULL,
-        status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', hidden INTEGER NOT NULL DEFAULT 0)''')
+        status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', hidden INTEGER NOT NULL DEFAULT 0,
+        pruned REAL NOT NULL DEFAULT 0)''')
+    # A database created before retention existed has the table without the column: adding it
+    # here keeps `CREATE TABLE IF NOT EXISTS` from being a lie about an old file.
+    columns = {row[1] for row in store.conn.execute('PRAGMA table_info(source_replacements)')}
+    if 'pruned' not in columns:
+        store.conn.execute('ALTER TABLE source_replacements ADD COLUMN pruned REAL NOT NULL DEFAULT 0')
 
 
 def pending(store, job_id):
@@ -116,6 +134,13 @@ def _relocate(queue, store, row, written: Path) -> Path:
         target = _unique(target, store, row['track_id'])
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(written), str(target))
+    # This path now holds different bytes. If they are also in the playback cache, that copy is
+    # the old song, so drop it. A cache row failing to clear is not a failed replacement.
+    try:
+        from library import storage
+        storage.cache_forget(store, storage.key_for(store, target), remove=True)
+    except Exception:                           # noqa: BLE001 — see the comment
+        pass
     return target
 
 
@@ -206,6 +231,12 @@ def reverse(store, rid):
         row = store.conn.execute('SELECT * FROM source_replacements WHERE id=?', (rid,)).fetchone()
         if not row or row['status'] != 'completed':
             raise ValueError('Only a completed replacement can be reversed')
+        if row['pruned']:
+            # The copy existed and was let go on a known day: say when, so the answer is a
+            # fact about this library rather than a missing-file error from further down.
+            when = time.strftime('%Y-%m-%d', time.localtime(row['pruned']))
+            raise ValueError('The previous file was collected on ' + when
+                             + ' and cannot be restored; change the source again to get another copy')
         _restore_retained(store, row)
         track, job = store.track_by_id(row['track_id']), store.job(row['job_id'])
         if not job or job['status'] != 'completed' or pending(store, row['job_id']):
@@ -248,3 +279,170 @@ def entries(store):
     with store.lock:
         schema(store)
         return [dict(id=-r['id'], track_id=r['track_id'], job_id=r['job_id'], created=r['created'], title=t['title'] if t else '', artist=t['artist_name'] if t else '', prior_url=r['old_url'], chosen_url=r['new_url'], candidates='[]', reason=r['error'] or 'Explicit staged source replacement; previous media retained', status='replacement: ' + r['status']) for r in store.conn.execute('SELECT * FROM source_replacements WHERE hidden=0 ORDER BY id DESC LIMIT 200') for t in [store.track_by_id(r['track_id'])]]
+
+
+# ---- retention ------------------------------------------------------------------
+# A swap keeps two things under `.replacements/`: the media it replaced (so `reverse` can
+# put it back) and the scratch directory the new file downloaded into. Both used to stay
+# forever — the module's own docstring promised it — so the folder grew with every source
+# change and nothing ever decided when a keep had done its job.
+#
+# The decision is a window, per replacement, and it is the whole policy: inside it a
+# reverse works, outside it the copy is collected and the row says so, so `reverse` answers
+# with the truth instead of half-working. `0` turns collection off entirely.
+
+def keep_days(store) -> float:
+    """The retention window in days, from settings; the default is `KEEP_DAYS`."""
+    return store.setting_float('replacements_keep_days', KEEP_DAYS)
+
+
+def _collect_folder(folder: Path, store, ref: str) -> tuple[int, int]:
+    """Delete the files under `folder`, one log line each, then the folders themselves."""
+    freed = 0
+    files = 0
+    for path in sorted(p for p in folder.rglob('*') if p.is_file()):
+        size = path.stat().st_size
+        # Logged before the unlink, not after: a line that never had its removal must not
+        # look like one that did.
+        store.log(f'collected {path.name} ({size} bytes) from {folder.name}', 'info', ref)
+        try:
+            path.unlink()
+        except OSError as error:
+            store.log(f'could not collect {path.name}: {error}', 'warn', ref)
+            continue
+        freed += size
+        files += 1
+    for path in sorted((p for p in folder.rglob('*') if p.is_dir()),
+                       key=lambda p: len(p.parts), reverse=True):
+        try:
+            path.rmdir()
+        except OSError:
+            pass
+    try:
+        folder.rmdir()
+    except OSError:
+        pass
+    return freed, files
+
+
+def collect(store, now: float = 0, limit: int = 500) -> dict:
+    """Remove what a reverse can no longer need, and report what went.
+
+    Two kinds of thing live under `.replacements/`, and they are decided differently:
+
+    * **retained media** (`retained/<id>/`) — the file a completed swap replaced. A row
+      inside the window is never touched, whatever else is true of it: that is what the
+      window is. A row past it has its copy removed and is marked `pruned`, so `reverse`
+      refuses with the reason instead of failing on a missing file.
+    * **staging directories** (`<uuid>/`) — download scratch space. An empty one goes at
+      once (a finished swap moves its file out, so the directory is litter). One that still
+      holds something goes only when its replacement is over *and* the window has passed;
+      one a queued or downloading row still points at is never touched, at any age.
+
+    Nothing outside `.replacements/` is read or written: the library tree is not this
+    function's business, and canonical media is never globbed.
+    """
+    with store.lock:
+        schema(store)
+        rows = [dict(r) for r in store.conn.execute(
+            'SELECT id,track_id,created,status,new_file,pruned FROM source_replacements'
+            ' ORDER BY id')]
+        store.conn.commit()
+    days = keep_days(store)
+    now = time.time() if not now else now
+    report = {'kept': 0, 'removed': 0, 'bytes': 0, 'staging': 0, 'dirs': 0, 'rows': 0,
+              'window_days': days, 'reason': ''}
+    root = Path(store.setting('root')).expanduser()
+    base = root / '.replacements'
+    if not base.is_dir():
+        return report
+    if days <= 0:
+        report['reason'] = 'retention is off: replacements_keep_days is 0'
+        return report
+    cutoff = now - days * 86400
+    live = {'queued', 'downloading'}
+    done = {'completed', 'reversed', 'failed', 'cancelled', 'interrupted'}
+    owner = {Path(r['new_file']).parent.name: r for r in rows if r['new_file']}
+    busy = {name for name, row in owner.items() if row['status'] in live}
+
+    # 1. The media a swap parked, oldest first.
+    for row in rows:
+        if row['pruned'] or row['status'] not in done or not (row['created'] < cutoff):
+            continue
+        if report['rows'] >= limit:
+            break
+        folder = base / 'retained' / str(row['id'])
+        if not folder.is_dir():
+            continue
+        freed, files = _collect_folder(folder, store, f'replacement:{row["id"]}')
+        report['rows'] += 1
+        report['removed'] += files
+        report['bytes'] += freed
+        if files:
+            with store.lock:
+                store.conn.execute('UPDATE source_replacements SET pruned=? WHERE id=?',
+                                   (now, row['id']))
+                store.conn.commit()
+
+    # 2. The scratch directories.
+    for folder in sorted(p for p in base.iterdir() if p.is_dir() and p.name != 'retained'):
+        row = owner.get(folder.name)
+        if folder.name in busy:
+            report['kept'] += 1
+            continue
+        content = [p for p in folder.rglob('*') if p.is_file()]
+        if not content:
+            # Litter from a swap that moved its file out. No window: nothing to lose.
+            try:
+                folder.rmdir()
+                report['dirs'] += 1
+            except OSError:
+                report['kept'] += 1
+            continue
+        if row is not None and (row['status'] in live or not (row['created'] < cutoff)):
+            report['kept'] += 1
+            continue
+        if row is None and folder.stat().st_mtime >= cutoff:
+            # No row names it and it is recent: something may be writing right now.
+            report['kept'] += 1
+            continue
+        freed, files = _collect_folder(
+            folder, store, f'replacement:{row["id"]}' if row else 'replacement:orphan')
+        report['staging'] += files
+        report['dirs'] += 1
+        report['removed'] += files
+        report['bytes'] += freed
+
+    if report['removed']:
+        store.log(f'Replacement retention collected {report["removed"]} file(s), '
+                  f'{report["bytes"]} bytes (window {days:g} days)', 'info')
+    return report
+
+
+def start(store, interval: float = COLLECT_EVERY) -> bool:
+    """Run the collector at boot and then every `interval` seconds, in one thread.
+
+    A daemon, not a scheduler job: collection is housekeeping that has to happen whether or
+    not anybody downloads anything, and it must not hold up the queue.
+    """
+    global _thread
+    with _guard:
+        if _thread is not None and _thread.is_alive():
+            return False
+        _thread = threading.Thread(target=_loop, args=(store, interval),
+                                   name='replacement-retention', daemon=True)
+        _thread.start()
+        return True
+
+
+def stop() -> None:
+    _stop.set()
+
+
+def _loop(store, interval: float) -> None:
+    while not _stop.is_set():
+        try:
+            collect(store)
+        except Exception as error:                  # noqa: BLE001 — never kill the process
+            store.log(f'Retention collection failed: {error}', 'warn')
+        _stop.wait(interval)

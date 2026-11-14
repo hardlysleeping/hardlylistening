@@ -8,9 +8,11 @@ This document is the authority for *placement*. Behaviour is unchanged by it. No
 in the database; ownership is declared and the code is moved behind service facades one card at a
 time (`PLAN.md` § Platform separation).
 
-Measured 2026-11-11 against the live tree (excluding `backups/`): **26 top-level modules, 6
+Measured 2026-11-14 against the live tree (excluding `backups/`): **26 top-level modules, 6
 packages, 63 tables created by code (56 exist in the live database, 7 are created on first use),
-56 distinct route literals plus 10 prefix-dispatched subtrees.**
+42 literal routes in `ROUTES` plus the prefix-dispatched subtrees in `boundary()`** (a route that
+needs its own method check, a member read or a schemaless body lives there rather than in the
+table, so the two numbers are counted differently and neither grows on its own).
 
 ---
 
@@ -56,28 +58,29 @@ Top-level modules (26):
 | module | owner | owns |
 | --- | --- | --- |
 | `server.py` | Core | HTTP dispatch, static, boot — the composition root. It legitimately imports every domain; nothing imports it. |
-| `security.py` | Core | members, credentials, identities, sessions, invites, rate limits, Origin/CSRF |
+| `security.py` | Core | an alias of `core.security` (ARCH-009): `import security` returns that module object, the old name is what every module imports |
+| `config.py` | Core | an alias of `core.config` (ARCH-009): the two socket options, the two surfaces, the declared media root |
 | `auth_admin.py` | Core | local admin bootstrap/recovery |
-| `db.py` | Core **+ Repo** | connection and schema migration (Core); `Store`'s repository accessors over tracks/playlists/downloads (Repo). The split is ARCH-002; the file does not move. |
-| `user_playlists.py` | Repo | shared playlists over canonical ids (`playlists`, `playlist_tracks`) |
+| `db.py` | Core **+ Repo** | an alias of `core.db` (ARCH-009). Connection and schema migration are Core's; `Store`'s repository accessors over tracks/playlists/downloads are Repo's. The split is ARCH-002; the file does not move. |
+| `user_playlists.py` | Library | **the HTTP edge only** (LIB-001): route shape, accepted body keys, rate limit, and the Activity write after the transaction. The domain — validation, ownership, membership — is `library/playlists.py`, and the on-disk M3U projection is `library/playlist_files.py` |
 | `search.py` | Repo | provider search; one result into the acquisition queue |
 | `deletion.py` | Repo | deleting a shared playlist/album, and the files only it needed |
 | `genres.py` | Repo | shared EDM taxonomy (`genre_labels`) + its admin endpoints |
 | `ranking.py` | Repo | source-pick learning (`source_picks`) |
 | `decisions.py` | Repo | metadata decision audit (`match_decisions`) |
-| `replacements.py` | Repo | staged source replacements (`source_replacements`) |
+| `replacements.py` | Repo | staged source replacements (`source_replacements`) and their retention: `collect` removes a previous copy once its window passes, marks the row `pruned`, and `reverse` refuses with the date — `docs/replacement-retention.md` |
 | `podcasts.py` | Repo | podcast feeds and episode acquisition (`listening_podcast_*`) |
-| `listening.py` | Library | devices, saves, folders, personal preferences routes — **and today the Subsonic entry point (`rest`, `envelope`, `song`, `key`)**, which is Adapter code still living in a Library file. SUB-010/011 removed its query layer (member state now comes from `library/service.py`); moving the dispatch itself into `subsonic.py` is the part still open |
+| `listening.py` | Library | device sessions and the request routing — **and today the Subsonic entry point (`rest`, `envelope`, `song`, `key`)**, which is Adapter code still living in a Library file. SUB-010/011 removed its query layer; moving the dispatch itself into `subsonic.py` is the part still open. Saves and folders moved to `library/` in LIB-001 and the three names the queue calls (`want_playlist`, `deliver_track`, `forget_track`) delegate to `library/saves.py` |
 | `nowplaying.py` | Library | resume state (`listening_now`) |
 | `preferences.py` | Library | favourites, pins, album likes, theme, UI snapshot |
 | `zip_export.py` | Library | a member's own library as a ZIP |
 | `radio.py` | Library | member-scoped radio stations |
 | `shares.py` | Library | capability share links + the no-login player |
-| `swipe.py` | Library | a member's triage of Repo songs |
+| `swipe.py` | Library | a member's triage of Repo songs. A decision writes one `swipe_swipes` row and nothing else: `drop` keeps the song out of that member's feed only, `keep`/`like` also save it to the member's library. No route deletes a `tracks` row |
 | `lyrics.py` | Playback | lyrics cache and playback metadata |
 | `mixer_room.py` | Playback | mixer audio streams |
-| `activity.py` | Social | the Activity log (`activity`) |
-| `social/` | Social | `service.py` is the entry point (ARCH-005); `discussion.py` holds comments, votes, likes and summaries, `api.py` is the HTTP adapter (`social_*`, `song_boosts`); Activity and profiles stay their own modules for now |
+| `activity.py` | Social | alias of `social.activity` (SOCIAL-001): the queue, Subsonic and the web routes still import the old path, and `sys.modules` makes it the same module object |
+| `social/` | Social | `service.py` is the only entry point (ARCH-005). It owns nothing; each function delegates to the module that holds the query: `activity.py` (the log: `record`, `log_play`, `listen`, `feed`, `day_key`, kinds), `boosts.py` (the 24-hour slot: `boost`, `current_boost`, `active_boosts`, `BOOST_TTL`), `comments.py` (comments, votes, summaries, `annotate`/`album_id`, `validate_target`, `schema`), `likes.py` (a like on a comment), and `discussion.py`, which is a re-export facade over `comments` + `likes` for `social/__init__.py` and `api.py`. `api.py` is the HTTP adapter (`social_*`, `song_boosts`); `profiles.py` stays its own module |
 | `profiles.py` | Social | the member profile page (reads Library and Repo) |
 | `party.py` | Party | rooms, guests, sessions, presence, votes, skips, chat |
 | `subsonic.py` | Adapter | OpenSubsonic surface; translates and encodes, and owns no member state — stars, ratings, plays and bookmarks are `library/service.py`'s, and `schema()` only delegates there (SUB-011). It does own the protocol facts (`PROTOCOL_VERSION`, `EXTENSIONS`, transcode targets) that `/api/v1/capabilities` reports |
@@ -86,12 +89,22 @@ Packages:
 
 | package | owner | owns |
 | --- | --- | --- |
+| `core/` | Core | `security.py` (members, credentials, identities, sessions, invites, rate limits, Origin/CSRF), `config.py` (runtime settings) and `db.py` (connection, schema, migrations). The top-level names are aliases, not copies: each puts this module object into `sys.modules` (ARCH-009). Core must know nothing about discovery, downloads, Activity or Subsonic |
+
+**Aliases are not copies.** `sys.modules["db"] is core.db`, and the same for `config` and
+`security`. A `from core.db import *` shim looks equivalent and is not: it splits the attributes, so
+`mock.patch.object(db, "DB_PATH")` patches an object the server never reads. That mistake let one
+full test run write to the live library (`tests/test_core_aliases.py` now pins the identity), and
+`db.connect()` refuses the install's own database from a test process (`tests/test_db_guard.py`).
 | `engine/` | Repo | acquisition queue and scheduler |
 | `downloaders/` | Repo | yt-dlp invocation and AI match helpers |
 | `providers/` | Repo | provider adapters (SoundCloud, Apple Music, generic) |
-| `repo/` | Repo | `service.py`: the entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue; `federation.py` holds the acquisition descriptor and the node identity, and nothing outside the package may import it except `service.py` |
-| `discovery/` | Repo | artist profile, subscriptions, tracklist — the provider-facing reads `repo/service.py` delegates to |
-| `library/` | **Repo today, Library tomorrow** | artwork, art store, id3 art, imports, import rules, metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser export, playlist views — see §7 |
+| `repo/` | Repo | `service.py`: the only entry point (ARCH-002) — snapshot, artists, releases, subscriptions, catalogue; beside it `repository.py` (the artist page), `catalogue.py` (releases and tracklists), `subscriptions.py` (following an artist), `acquisition.py` (how work enters the queue), `api.py` (the HTTP-shaped helpers), `federation.py` (the acquisition descriptor and the node identity — nothing outside the package may import it except `service.py`, `mirror.py`), `discovery.py`, `mirror.py` (REPO-014) |
+| `discovery/` | Repo | **aliases only** (`sys.modules`, not copies): `artist_profile.py` → `repo.repository`, `tracklist.py` → `repo.catalogue`, `subscriptions.py` → `repo.subscriptions`. The implementation moved into `repo/` in REPO-014; the old paths stay because tests and the facade import them |
+| `library/` | **Repo today, Library tomorrow** | `service.py` (the player's reads and personal writes), `playback.py`, and from LIB-001 `saves.py` (saved scope + download intents), `folders.py` (the personal tree), `playlists.py` (member playlists), `playlist_files.py` (the M3U/JSON projection), `api.py` (the HTTP adapter for the two listening paths), `storage.py` (where a recording's bytes live: local by default, an S3-compatible bucket opt-in — it owns the key namespace, so one track row names the same object in either mode; also the bounded playback cache under `paths.STORAGE_CACHE_DIR`, whose eviction can never reach the media root); `uploads.py` (the mirror queue: which finished file is waiting for the bucket, how many times it has tried and why it stopped; plus `migrate()` — the administrator-requested walk of an existing library — `restore()` — a verified object back to the root — and the `storage_migrations` record of who asked and when); `funkwhale.py` (the optional publish step: one finished track uploaded to an instance, then the upload polled until it reports a track, because "accepted" is not "delivered"); plus artwork, art store, id3 art, imports, import rules, metadata repair, playlist backup, quota, source health, tempo analysis and DJ/browser export — see §7 |
+| `acquisitions.py` | **its own** (a root module, like `extensions.py`) | who may start work: one grant row per member, and a `may_acquire()` that reads the grant and never a role. Membership, player access and administration do not imply it; the first run grants existing administrators once (`granted_by='migration'`) so an upgrade does not lock the operator out. Admin surface: `GET`/`POST /api/acquisitions` |
+| `extensions.py` | **its own** (a root module, like `stats.py` and `shares.py`) | the opt-in extension host's bookkeeping: manifest validation, the closed capability set, the install → enable → revoke → remove lifecycle. It deliberately **executes nothing** — the loader is the module below — so what is permitted can be tested and revoked without a process. `acquisition` is reserved, never granted here (EXT-ACQUIRE owns it) |
+| `extension_host.py` | **its own** (root module) | the executing half of HL-218: one enabled extension per run in a child process (`python3 -I -B`, cwd = the extension's directory, environment of `PATH`/`HOME`/locale only), with a line-delimited JSON protocol. Every call is mediated against the stored grant *at that moment* (`library.read` → `library.service.catalog` projected to ten fields with **no `file` and no `source_url`**; `social.read` → `social.service.feed`; `network` → declared hosts, https, no redirects, 2 MiB cap), and every call and run lands in `extension_calls`/`extension_runs` (bounded). `library.write`, `social.write` and `background` are **refused by name** — grants the host does not offer yet. **Not a sandbox**: same uid and filesystem, so an extension is trusted code and enabling it is the decision. `extension_shim.py` is the child half and imports nothing from this application |
 | `tools/` | none | operator scripts, not imported by the server |
 | `edge-fallback/` | infrastructure | Cloudflare Worker, no Python domain |
 
@@ -152,17 +165,20 @@ Never merge these, in schema, in queries or in UI copy.
 
 ## 5. Route ownership
 
-`server.py` holds 56 distinct literal patterns plus prefix subtrees. Prefixes are assigned here;
+`server.py` holds 42 literal patterns in `ROUTES` plus the prefix subtrees in `boundary()`.
+Prefixes are assigned here;
 a new route takes its owner from this table rather than from the module that happens to handle it.
 
 | owner | routes |
 | --- | --- |
-| **Core** | `/api/health`, `/api/state`, `/api/settings`, `/api/members*`, `/api/member/*`, `/api/auth/*`, `/api/account*`, `/api/signup*`, `/api/signup-invite`, `/api/admin/signup-invite` |
-| **Repo** | `/api/federation` (read-only mirror status), `/api/tracks`, `/api/add`, `/api/pause`, `/api/cooldown/clear`, `/api/failed/retry`, `/api/queue/*`, `/api/import`, `/api/import/upload`, `/api/artist`, `/api/artist/art*`, `/api/catalogue`, `/api/feed*`, `/api/subscriptions*`, `/api/search`, `/api/playlist/(id)/{apple-backup,requeue,remove,verify}`, `/api/release/(id)/remove`, `/api/track/(id)/{artwork,bpm,move,retry,skip,source,unpick}`, `/api/track/queue`, `/api/library` (shared snapshot), `/api/library/{grab,move,verify,tempo,titles}`, `/api/genres*`, `/api/decisions*`, `/api/tempo/status`, `/api/titles/status` |
-| **Library** | `/api/listening/*`, `/api/shares*`, `/api/swipe*`, `/api/library/export`, `/api/library/download`, `/api/track/(id)/download`, `/api/playlist/(id)/download`, `/api/art/(hash)` (the cover a head unit fetches: capability URL, anonymous on purpose) |
+| **Core** | `/api/health`, `/api/state`, `/api/settings`, `/api/members*`, `/api/member/*`, `/api/auth/*`, `/api/account*`, `/api/signup*`, `/api/signup-invite`, `/api/admin/signup-invite`, `/theme.css` (the session's `--user-*` colours as a stylesheet: the one page asset that is per-member, linked from `<head>` so the first paint is right) |
+| **Repo** | `/api/federation` (read-only mirror status), `/api/tracks`, `/api/add`, `/api/pause`, `/api/cooldown/clear`, `/api/failed/retry`, `/api/queue/*`, `/api/import`, `/api/import/upload`, `/api/artist`, `/api/artist/art*`, `/api/catalogue`, `/api/feed*`, `/api/subscriptions*`, `/api/search`, `/api/playlist/(id)/{apple-backup,requeue,remove,verify}`, `/api/release/(id)/remove`, `/api/track/(id)/{artwork,bpm,move,retry,skip,source,unpick}`, `/api/track/queue`, `/api/library` (shared snapshot), `/api/library/{grab,move,verify,tempo,titles}`, `/api/genres*`, `/api/decisions*`, `/api/replacements/collect` (collect previous media whose retention window has passed — `docs/replacement-retention.md`), `/api/tempo/status`, `/api/titles/status` |
+| **Library** | `/api/listening/*`, `/api/storage` (admin read: mode/bucket/region/prefix and whether the configuration is usable — never the credential — plus upload totals, recent migrations and the cache report), `/api/storage/migrate` and `/api/storage/restore` (admin, CSRF: queue the existing library; put one object back on disk verified), `/api/shares*`, `/api/swipe*`, `/api/library/export`, `/api/library/usb/plan` and `/api/library/usb/start` (a removable drive: the plan, then the copy — `docs/usb-export.md`), `GET /api/library/usb` (job status), `/api/library/download`, `/api/track/(id)/download`, `/api/playlist/(id)/download`, `/api/art/(hash)` (the cover a head unit fetches: capability URL, anonymous on purpose) |
 | **Playback** | `/api/track/(id)/audio`, `/api/mixer`, `/api/mixer/stream`, `/api/playback/events` (bounded telemetry, member-scoped) |
 | **Social** | `/api/activity`, `/api/activity/listen`, `/api/social*`, `/api/boost`, `/api/profile` |
 | **Party** | `/api/party*` |
+| **Extensions** | `/api/extensions` (list installed + on disk + recent runs), `/api/extensions/install`, `/api/extensions/(id)/{enable,revoke,remove,run}`, `/api/extensions/(id)/calls` — administrator-only, CSRF-checked; installation names a directory an administrator already placed under `paths.EXTENSIONS_DIR` and never accepts code over HTTP |
+| **Acquisition grants** | `GET`/`POST /api/acquisitions` (list, grant, revoke — administrator-only) |
 | **Adapter** | `/rest/*.view` (every Subsonic endpoint) |
 
 ### The `/api/library` trap
@@ -227,7 +243,8 @@ domain is correct: it is the composition root.
 ## 7. The `library/` package name
 
 `library/` currently holds **Repo-side** code: artwork, art store, id3 art, imports, import rules,
-metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser exports,
+metadata repair, playlist backup, quota, source health, tempo analysis, DJ/browser exports
+(including preparation of a removable drive, `usb_export.py` — `docs/usb-export.md`),
 playlist views. The personal-Library facades (`library/service.py`, `library/playback.py`) will
 join that package because the plan names them there.
 

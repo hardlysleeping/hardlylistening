@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 import replacements
-from db import Store
+from db import RELEASE_KINDS, Store
 from downloaders import ai_match, ytdlp
 import ranking
 from library import store as library_store
@@ -147,7 +147,11 @@ class Queue:
             source_url=release.source_url)
         playlist_id = self.store.playlist(
             release.title, release.provider, url,
-            kind="url", artwork=release.artwork)
+            # The row groups this batch of work; what it *is* decides whether any list
+            # of playlists may show it. A downloaded album or song is a release, so it
+            # keeps its own kind instead of claiming to be a playlist.
+            kind=(release.release_type if release.release_type in RELEASE_KINDS else "url"),
+            artwork=release.artwork)
 
         queued = 0
         reused = 0
@@ -516,6 +520,14 @@ class Queue:
                 "UPDATE tracks SET file=?, size=? WHERE id=?",
                 (str(written), written.stat().st_size, track["id"]))
             self.store.conn.commit()
+            # Mirror mode: offer the finished file to the bucket. A queued upload is a second
+            # copy, never a move — the local file above is the one that plays. This is a no-op
+            # (one settings read) on a server with no bucket, and it never fails the download.
+            try:
+                from library import uploads
+                uploads.offer(self.store, written)
+            except Exception:
+                pass
             # The row may have been queued before the release's cover was recorded,
             # so an empty artwork column is filled from the release now that the
             # track is on disk. A cover already on the row is never overwritten.

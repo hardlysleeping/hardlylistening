@@ -171,22 +171,32 @@ function subscriptionSeat(group){
 function feedGroupRow(group){
   const open = openFeedArtists.has(group.name);
   const letter = (group.name || "?").slice(0, 1).toUpperCase();
-  // A collapsed group keeps its newest release cut off at the waist, and the
-  // chevron underneath says the rest is one tap away.
+  const name = escapeHtml(group.name);
+  const releases = group.items.length;
+  // The fold lives at the row's edge and is always on screen: the portrait and the name
+  // are the door to the artist's page, so without it a collapsed group had no visible way
+  // back open (the only cue was a faint chevron under a faded preview). A collapsed group
+  // still keeps its newest release cut off at the waist, now with a strip that names what
+  // opening it would show.
   return `<div class="feedgroup">
     <div class="feedghead${open ? " open" : ""}" data-artist="${escapeHtml(group.name)}"
       role="button" tabindex="0" aria-expanded="${open}">
       <span class="feedgart">${letter}${
         group.art ? `<img src="${escapeHtml(group.art)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>
-      <span class="feedgname">${escapeHtml(group.name)}</span>
+      <span class="feedgname">${name}</span>
       <span class="feedgmeta">${group.new ? `<span class="pill new">${group.new} new</span>` : ""}${
         group.latest ? `<span>${group.latest}</span>` : ""}</span>
       ${subscriptionSeat(group)}
+      <button type="button" class="feedgfold" data-fold="${name}"
+        aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} ${releases} release${
+          releases === 1 ? "" : "s"} from ${name}"
+        title="${open ? "Hide" : "Show"} releases">${SVG.chevronDown(18)}</button>
     </div>
     <div class="feedgbody"${open ? "" : " hidden"}>${group.items.map(i => feedCard(i)).join("")}</div>
     <div class="feedgpeek" data-peek="${escapeHtml(group.name)}" aria-hidden="true"${open ? " hidden" : ""}>
       <div class="feedgpeekrows">${group.items.slice(0, 3).map(i => feedCard(i, true)).join("")}</div>
-      <div class="feedgmore" aria-hidden="true">${SVG.chevronDown(18)}</div>
+      <div class="feedgmore" aria-hidden="true">${SVG.chevronDown(16)}<span>Show ${
+        releases} release${releases === 1 ? "" : "s"}</span></div>
     </div>
   </div>`;
 }
@@ -207,6 +217,16 @@ function toggleGroup(head){
   const peek = group.querySelector(".feedgpeek");
   if (body) body.hidden = !open;
   if (peek) peek.hidden = open;
+  // The fold button carries the same state, because it is the control most people
+  // will press and a screen reader reads its label, not the head's attribute.
+  const fold = head.querySelector(".feedgfold");
+  if (fold){
+    const count = body ? body.querySelectorAll(".feedrel").length : 0;
+    fold.setAttribute("aria-expanded", String(open));
+    fold.setAttribute("aria-label",
+      `${open ? "Hide" : "Show"} ${count} release${count === 1 ? "" : "s"} from ${name}`);
+    fold.title = `${open ? "Hide" : "Show"} releases`;
+  }
 }
 
 // ---- release rows: an album opens to its songs, each downloadable on its own ----
@@ -668,21 +688,28 @@ let feedArtistReturn = null;    // {watchId, name, art} while the Repo was enter
 let artistPageArt = "";
 function forgetFeedArtistReturn(){ feedArtistReturn = null; }
 
-function repoArtistNamed(name){
+// Which downloaded artist this name belongs to, in one set of rows. `rows` exists because
+// "downloaded" is a property of the repository, not of whichever Library scope is on screen:
+// a song the player is playing lives in the shared pool even when the tab shows saved songs.
+function repoArtistNamed(name, rows){
   const key = String(name || "").trim().toLowerCase();
   if (!key) return null;
-  const found = artistsOf(scopedTracks()).find(a =>
+  const found = artistsOf(rows || scopedTracks()).find(a =>
     String(a.name || "").trim().toLowerCase() === key);
   return found ? found.name : null;
 }
 
 function openArtistInRepo(name){
-  const repoName = repoArtistNamed(name);
+  // "In Repo" means the repository, so the shared pool decides — not the saved subset.
+  const repoName = repoArtistNamed(name, typeof libAll === "undefined" ? null : libAll) ||
+                   repoArtistNamed(name);
   if (!repoName){
     showToast(`Nothing downloaded from ${name} yet`);
     return;
   }
   feedArtistReturn = {watchId: artistPageWatch, name, art: artistPageArt};
+  // The page reads whichever scope is showing; this one only exists in the shared pool.
+  setLibraryScope("shared");
   showLibraryTab();
   openArtistByName(repoName);
 }
@@ -792,6 +819,10 @@ function renderFeed(){
       toggle();
     };
     b.onkeydown = event => {
+      // The fold is a real button inside this role="button" head. Its own Enter/Space
+      // already produces a click that bubbles up to the head's onclick, so handling the
+      // key here as well would toggle twice and leave the group exactly as it was.
+      if (event.target.closest(".feedgfold")) return;
       if (event.key === "Enter" || event.key === " "){ event.preventDefault(); toggle(); }
     };
   });

@@ -213,7 +213,7 @@ textarea,input[type=text],input[type=number],select{
 
 }
 
-:is(.iconbtn,.splay,.sdl,.aplay,.plartwrap,.mdclose)>svg{
+:is(.iconbtn,.splay,.sdl,.aplay,.plartwrap)>svg{
   display:block
 }
 

@@ -1,7 +1,8 @@
 # Plan — Subsonic surface: completeness, bookmarks, shares, jukebox, sonic, radio, podcasts, chat
 
-Status: Phase 0, 1, 2, 6 shipped; Phase 5 shipped as the Subsonic CRUD only (see that section for
-what is not built). Phase 3 (jukebox), 4 (sonic analysis) and 7 (chat) open.
+Status (2026-11-13): Phase 0, 1, 2, 3, 6 and 7 shipped; Phase 5 shipped as the Subsonic CRUD only
+(see that section for what is not built). Phase 4 is half done: tempo ships and Auto DJ reads it;
+the fingerprint/similarity half is HL-205 and is the only part that needs numpy.
 Decisions are locked; do not re-open them while building.
 
 ## Locked decisions
@@ -91,19 +92,51 @@ has saved songs; the full Python suite passes; one release, service restarted, h
 
 ## Phase 3 — Jukebox inside Party mode
 
-- Room state gains `deck` (device id, heartbeat, position, volume, playing) beside the voting queue.
-- The party host page can "Run the room on this device": heartbeat every 5 s with position; a missed
-  heartbeat releases the deck and the room falls back to per-guest playback.
-- Control: `get`, `status`, `set` (index), `start`, `stop`, `skip`, `add`, `clear`, `remove`, `shuffle`,
-  `setGain` via `POST /api/party/<id>/jukebox`, restricted to the deck owner or an admin.
-- Party UI: deck bar, "controlled by <name>'s phone", queue actions that act on the deck.
-- Subsonic `jukeboxControl` maps 1:1 onto those actions.
-- Risk: two decks claiming at once, and advance/vote races — one atomic claim, one advancing write.
+Shipped 2026-11-13 (HL-204). The ownership question is the aux-host lease that already existed:
+`party.control()` holds a 30-second `host_until` with a hashed `host_token`
+(`claim`/`heartbeat`/`next`/`release`), so there is exactly one deck and a client steers it rather
+than becoming a second speaker.
+
+- **Room state** carries `deck` beside the queue: `playing`, `gain`, `position`, `host_active`, and
+  `controlled_by` (the host's display name). `playing` is true only while a lease is live, so the
+  status cannot claim a speaker that is gone. `party_rooms` gains `deck_playing`, `deck_gain`,
+  `deck_position`, `deck_updated`; `party_entries` gains `position`. Old rooms migrate through
+  guarded `ALTER TABLE`s — the defaults describe a room that never had a deck.
+- **Commands** — `get`, `status`, `set`, `start`, `stop`, `add`, `clear`, `remove`, `shuffle`,
+  `setGain` over `POST /api/party/<id>/jukebox` (GET is `get`), one transaction each, members only
+  (`member_identity`), 90 actions per member per window. `start` is refused 409 when no lease is
+  live; `setGain` is 0–1; `remove` takes an index in the room's own order.
+- **The order stays the room's.** Waiting entries sort by votes descending, then `position`, then
+  id. `set` writes the order a client asked for into `position`, so it is honoured among tracks
+  nobody has voted on, and a vote still moves a track up. `shuffle` permutes `position`.
+- **Heartbeat** carries the host's playback position (bounded 0–24 h) and whether its audio element
+  is playing; `next` resets the position to 0. The deck's position is therefore measured, not
+  guessed, and `playing` has one honest source — the device making sound — so a remote `stop`
+  really stops it and a local pause is not undone by the next poll.
+- **Party UI**: the deck bar (`#deckbar`, `#deckstate`, `#deckactions`, `#decktoggle`,
+  `#deckgainrow`, `#deckgain`) names the device — "Host's device — playing" — and every member sees
+  who holds it; only members get play/pause and the room fader. The host applies gain to
+  `audio.volume`, sends `audio.currentTime` and `!audio.paused` on each heartbeat (and at once on a
+  local play/pause), and pauses or resumes when the deck's `playing` says the room should. Guests see the bar but have no
+  controls, because guests cannot play the catalog.
+- **A lapsed lease** leaves the room with no deck: the bar says so and any member can claim it.
+  There is no per-guest speaker fallback — the catalog is member-only.
+- **Subsonic `jukeboxControl`** maps 1:1: `status` → `jukeboxStatus`, `get` → `jukeboxPlaylist`
+  (the playing track at index 0, then the waiting queue, so `currentIndex` points at it), every
+  other action → `jukeboxStatus`. `party.control_room` finds the
+  member's room by presence, else a room they created or whose deck they hold; no room ⇒ error 30,
+  never a new party invented for the client.
+- **Races pinned** by tests: a second claim on a live lease is 409, and an advance whose `expected`
+  entry is stale does not move the room (409).
+- Proof: `tests/test_party_jukebox.py` (15), `tests/test_subsonic_jukebox.py` (14),
+  `tests/test_party_ui.cjs` (deck bar), `node tests/visual/snap.cjs` PASS (the party page is its own
+  stylesheet, so the player baselines are untouched).
 
 ## Phase 4 — Audio analysis: BPM, sonic similarity, sonic path
 
-BPM already works (`library/analysis.py` beat-grid fit, `library/tempo.py` worker, `bpm/bpm_conf/
-bpm_source/bpm_at` columns). This phase adds the sonic half, with numpy allowed.
+BPM works and is in use (`library/analysis.py` beat-grid fit, `library/tempo.py` worker,
+`bpm/bpm_conf/bpm_phase/bpm_source/bpm_at` columns; Auto DJ sequences on it, HL-303). This phase
+adds the sonic half — the only part that wants numpy.
 
 - `library/fingerprint.py`: ffmpeg decode → log-mel/chroma/spectral-contrast vector (~64 dims, L2 normalised),
   stored in `track_features(track_id PRIMARY KEY, vector BLOB, version, analysed)`.
@@ -152,9 +185,16 @@ records what exists, then what the original plan asked for and did not ship.
 Discuss (`social_comments`) is per-item commentary with votes; Subsonic chat is a room timeline. They stay
 separate; merging would put room chatter on song pages or strip discussion of its target.
 
-- `party_messages(id, party, actor, body, created, expires)`, expiring with the room.
-- Party page: Chat panel beside the queue.
-- Subsonic: `addChatMessage`, `getChatMessages` → the member's current room; no room ⇒ error 30 / empty.
+- Shipped as `party_chat(id, party, author, display_name, profile_icon, body, created)`, scoped to a
+  24-hour room by construction and keeping the newest 500 rows per room. Name and icon come from the
+  server's identity for that actor, so a submitted profile is refused rather than trusted.
+- Party page: the Chat panel beside the queue (`web/party.js`), text nodes only.
+- Shipped (HL-210): `addChatMessage`, `getChatMessages` map onto the member's current room —
+  `party.room_for` reads the newest open room the identity is still present in (`party_presence`,
+  the room's own "who is here" rule), `getChatMessages` filters by `since` in milliseconds and
+  answers an empty list with no room, `addChatMessage` answers error 30 with no room, the author is
+  the authenticated member (a submitted `username` is ignored) and the body keeps the room's
+  1–1000-character rule. `tests/test_subsonic_chat.py`.
 
 ## Ordering
 

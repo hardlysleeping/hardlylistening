@@ -30,15 +30,23 @@ def _archived_name(relative: Path) -> Path:
 def _to_mp3(source: Path, target: Path) -> None:
     if not shutil.which('ffmpeg'):
         raise ValueError('ffmpeg is not installed, so %s cannot be converted to MP3' % source.name)
-    done = subprocess.run(
-        ['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-map', '0:a:0',
-         '-c:a', 'libmp3lame', '-b:a', EXPORT_MP3_BITRATE,
-         '-map_metadata', '0', '-id3v2_version', '3', str(target)],
-        capture_output=True, text=True, timeout=300)
+    args = ['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-map', '0:a:0',
+            '-c:a', 'libmp3lame', '-b:a', EXPORT_MP3_BITRATE,
+            '-map_metadata', '0', '-id3v2_version', '3']
+    # A staged copy is written as `<name>.part`, and ffmpeg guesses the muxer from the
+    # extension: without this line it refuses a name it does not recognise.
+    if target.suffix.lower() != '.mp3':
+        args += ['-f', 'mp3']
+    done = subprocess.run(args + [str(target)], capture_output=True, text=True, timeout=300)
     if done.returncode != 0 or not target.is_file() or not target.stat().st_size:
         lines = (done.stderr or '').strip().splitlines()
         raise ValueError('could not convert %s to MP3 for export: %s'
                          % (source.name, lines[-1] if lines else 'ffmpeg failed'))
+
+
+# One converter for every delivery copy: the ZIP and the USB drive write the same MP3 at
+# the same bitrate, so a track sounds the same whichever way it left this machine.
+to_mp3 = _to_mp3
 
 
 def _clean(value: str, fallback: str) -> str:

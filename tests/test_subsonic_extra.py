@@ -98,7 +98,9 @@ class SubsonicSurface(unittest.TestCase):
     def test_unimplemented_endpoints_say_so(self):
         # `downloadPodcastEpisode` left this list with HL-209: it stores the episode under
         # the member's cap instead of refusing, so it is covered by its own suite.
-        for endpoint in ('jukeboxControl', 'addChatMessage'):
+        # `addChatMessage` / `getChatMessages` left this list with HL-210: they read and write the
+        # party room rather than refusing, and `tests/test_subsonic_chat.py` covers them.
+        for endpoint in ('jukeboxControl', 'hls'):
             response = self.response(endpoint)
             self.assertEqual(response['status'], 'failed')
             self.assertEqual(response['error']['code'], 30)

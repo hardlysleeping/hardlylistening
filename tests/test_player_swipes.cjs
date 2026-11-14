@@ -1,7 +1,7 @@
 // Swipe gestures on the player: up opens, down closes, left/right change track — and
 // only when the gesture really travelled.
 const http = require("http"), fs = require("fs"), path = require("path");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const WEB = path.join(__dirname, "..", "web");
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
 const server = http.createServer((req, res) => {

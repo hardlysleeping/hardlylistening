@@ -45,7 +45,9 @@ const check = (n, ok, d) => ok ? console.log("PASS " + n + (d ? " — " + d : ""
     const geo = await p.evaluate(() => {
       const nav = document.getElementById("appnav").getBoundingClientRect();
       const group = document.querySelector("#appnav .navmain").getBoundingClientRect();
-      const tabs = [...document.querySelectorAll("#appnav .navmain .tab")].map(b => b.textContent.trim());
+      // More draws `...` and names itself with aria-label; read the name, not the glyph.
+      const tabs = [...document.querySelectorAll("#appnav .navmain .tab")]
+        .map(b => (b.getAttribute("aria-label") || b.textContent).trim());
       const btn = [...document.querySelectorAll("#appnav .navmain .tab")].find(b => b.id === "btn-more").getBoundingClientRect();
       return { nav: [Math.round(nav.top), Math.round(nav.height)],
         groupCentre: Math.round(group.left + group.width / 2), rowCentre: Math.round(nav.left + nav.width / 2),
@@ -77,33 +79,27 @@ const check = (n, ok, d) => ok ? console.log("PASS " + n + (d ? " — " + d : ""
     check("the menu is right-aligned to the button", menu.rightAligned);
     check("the menu is vertical", menu.vertical);
     check("the menu holds the secondary pages",
-      menu.labels.join("|") === "Settings|Party|Mixer|Swipe|Export library (.zip)", menu.labels.join("|"));
+      menu.labels.join("|") === "Settings|Party|Mixer|Swipe|Export library (.zip)|Send to a DJ app",
+      menu.labels.join("|"));
     await p.keyboard.press("Escape");
     await p.evaluate(() => document.querySelector("#appnav").classList.remove("more-open"));
 
-    // ---- the right-hand cluster is a Library-page thing -------------------
-    const quick = async () => p.evaluate(() => {
-      const q = document.getElementById("navquick");
-      const nav = document.getElementById("appnav").getBoundingClientRect();
-      const r = q.getBoundingClientRect();
-      return { visible: !q.hidden && getComputedStyle(q).display !== "none",
-        rightAligned: q.hidden ? null : Math.abs(r.right - (nav.right - parseFloat(getComputedStyle(document.getElementById("appnav")).paddingRight))) <= 2,
-        labels: [...q.querySelectorAll(".tab")].map(b => b.textContent.trim()).join("|") };
-    });
-    check("Queue: no right-hand cluster", !(await quick()).visible);
-    await p.evaluate(() => document.querySelector('.tab[data-view="library"][data-scope="shared"]').click());
-    await p.waitForTimeout(300);
-    check("Repo: no right-hand cluster", !(await quick()).visible);
+    // ---- one row of five, and the pages only in the panel ------------------
+    // The secondary pages used to repeat right-aligned in the row on the Library tab.
+    // They do not any more: the panel is the only place they live, which is what the
+    // five-destination row above asserts. A page that grew a second cluster would show up
+    // here as an element in `#appnav` outside `.navmain` and `#navpanel`.
     await p.evaluate(() => document.querySelector('.tab[data-view="library"][data-scope="mine"]').click());
     await p.waitForTimeout(400);
-    const lib = await quick();
-    check("Library: the pages sit right-aligned in the row", lib.visible && lib.rightAligned, JSON.stringify(lib));
-    check("Library: all four are there",
-      lib.labels === "Party|Mixer|Swipe|Export library (.zip)", lib.labels);
+    const clusters = await p.evaluate(() => [...document.getElementById("appnav").children]
+      .map(el => el.id || el.className).filter(name => !["navmain", "navpanel"].includes(name)));
+    check("Library: no second cluster in the row", clusters.length === 0, clusters.join(","));
 
     // ---- export asks before it downloads ---------------------------------
     downloads.length = 0;
-    await p.click("#navquick [data-export]");
+    await p.click("#btn-more");
+    await p.waitForTimeout(150);
+    await p.click("#exportbtn");
     await p.waitForTimeout(500);
     const ask = await p.evaluate(() => ({
       open: document.getElementById("dlg-export-confirm").open,
@@ -114,7 +110,9 @@ const check = (n, ok, d) => ok ? console.log("PASS " + n + (d ? " — " + d : ""
     await p.evaluate(() => document.getElementById("dlg-export-confirm").close("cancel"));
     await p.waitForTimeout(300);
     check("cancel downloads nothing", downloads.length === 0, downloads.join(","));
-    await p.click("#navquick [data-export]");
+    await p.click("#btn-more");
+    await p.waitForTimeout(150);
+    await p.click("#exportbtn");
     await p.waitForTimeout(200);
     await p.click("#exp-confirm-go");
     await p.waitForTimeout(700);
@@ -139,14 +137,15 @@ const check = (n, ok, d) => ok ? console.log("PASS " + n + (d ? " — " + d : ""
     await m.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "load" });
     await m.waitForTimeout(400);
     const phone = await m.evaluate(() => {
-      const tabs = [...document.querySelectorAll("#appnav > .navmain > .tab")].map(b => b.textContent.trim());
+      const tabs = [...document.querySelectorAll("#appnav > .navmain > .tab")]
+        .map(b => (b.getAttribute("aria-label") || b.textContent).trim());
       const bar = document.getElementById("appnav").getBoundingClientRect();
       return { tabs, bottomBar: Math.round(bar.bottom) === window.innerHeight,
-        quickHidden: document.getElementById("navquick").hidden };
+        clusters: [...document.getElementById("appnav").children].length };
     });
     check("phone keeps the five destinations", phone.tabs.join(",") === "Queue,Feed,Repo,Library,More", phone.tabs.join(","));
     check("phone: the bar is still the bottom dock", phone.bottomBar);
-    check("phone: no right-hand cluster", phone.quickHidden);
+    check("phone: the nav is the dock and the panel, nothing else", phone.clusters === 2, String(phone.clusters));
     await m.click("#btn-more");
     await m.waitForTimeout(200);
     const sheet = await m.evaluate(() => {
@@ -158,9 +157,9 @@ const check = (n, ok, d) => ok ? console.log("PASS " + n + (d ? " — " + d : ""
     });
     check("phone: More opens the sheet above the dock", sheet.shown && sheet.aboveBar, JSON.stringify(sheet));
     check("phone: same pages in the sheet",
-      sheet.labels === "Settings|Party|Mixer|Swipe|Export library (.zip)", sheet.labels);
+      sheet.labels === "Settings|Party|Mixer|Swipe|Export library (.zip)|Send to a DJ app", sheet.labels);
     await m.close();
   } finally { await browser.close(); srv.close(); }
-  console.log(failures ? failures + " FAILED" : "top row PASS: centred, More menu, Library cluster, export confirm");
+  console.log(failures ? failures + " FAILED" : "top row PASS: centred, More menu, one row, export confirm");
   process.exit(failures ? 1 : 0);
 })();

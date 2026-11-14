@@ -33,6 +33,10 @@
   loadListeningSaves = async function(){
     await originalLoad();
     try { state = await listeningGet('preferences'); } catch (_) { state = null; }
+    // The equalizer belongs to the player, not this module; hand it the saved bands.
+    if (state && typeof window.eqLoad === 'function') window.eqLoad(state.eq);
+    // AutoDJ follows the member between devices the same way the equalizer does.
+    if (state && typeof window.autoDjLoad === 'function') window.autoDjLoad(state.playback);
   };
   const originalTracks = scopedTracks;
   scopedTracks = function(){
@@ -94,6 +98,9 @@
     title="${esc(m.name)} liked this" aria-label="${esc(m.name)} liked this">${profileSymbol(m.icon)}</button>`;
   // Four covers make the classic 2x2; one would look like a broken tile.
   const VIRTUAL = { favorites: 'Favorites', 'public-favorites': "Everyone's Favorites" };
+  // A yearly top 100 is virtual too, but its name carries the year: `top-100:2026`.
+  const YEAR_ID = id => /^top-100:(\d{4})$/.exec(String(id == null ? '' : id));
+  const virtualName = id => VIRTUAL[id] || (YEAR_ID(id) ? YEAR_ID(id)[1] + ' Top 100' : null);
   const dynSaved = list => !!list.length && list.every(t => (listeningSaves?.tracks || []).includes(t.id));
   // Adding a computed playlist means saving its songs, one by one, through the same
   // endpoint a song's plus uses. Every song in the library is the finished state.
@@ -123,10 +130,30 @@
     const cards = [];
     // Favorites is yours. Everyone's Favorites is the Repository's own list — it is not
     // yours to add or remove, so it belongs beside the shared playlists, not in My Library.
-    if (libraryScope === 'mine') cards.push(dynCard({open:'favorites', title:'Favorites', list:mine, by:me}));
+    if (libraryScope === 'mine'){
+      cards.push(dynCard({open:'favorites', title:'Favorites', list:mine, by:me}));
+      // One card per year with plays. The songs are computed on read (a 24-hour cache),
+      // so the card can never hold a list that has drifted from the plays underneath it.
+      for (const card of (state.years || [])) cards.push(yearCard(card));
+    }
     else cards.push(dynCard({open:'public', title:"Everyone's Favorites", list:pub.map(e => e.track),
       by: `${people.size} member${people.size === 1 ? '' : 's'}`, extra:'public'}));
     return cards.join('');
+  }
+  // "Your 2026 Top 100": the year's most played songs, playable, pinnable and saveable
+  // like any playlist. It has no row in `playlists`; the list is derived, never copied.
+  function yearCard(card){
+    const id = 'top-100:' + card.year;
+    const title = card.year + ' Top 100';
+    const songs = Number(card.tracks) || 0;
+    return `<div class="plcard dyn" data-open-year="${card.year}" tabindex="0" role="button" aria-label="${esc(title)}">
+      ${playlistCollage(card.artwork || [], title)}
+      <div class="pbody">
+        <div class="pt">${esc(title)}</div>
+        <div class="ps"><span class="plcount">${songs} song${songs === 1 ? '' : 's'}</span><span class="plby">${Number(card.plays) || 0} plays</span></div>
+        <div class="pacts">${control('pin', 'playlist', id)}</div>
+      </div>
+    </div>`;
   }
   function publicRow({track, likers}){
     const on = playingId === track.id;
@@ -148,9 +175,12 @@
     // A computed playlist has no row in `playlists`; its pin resolves to the same list
     // the card shows, so the strip can name it and open it.
     const virtualPin = target => {
-      if (!VIRTUAL[target]) return null;
-      const list = target === 'favorites' ? favTracks() : publicEntries().map(e => e.track);
-      return {title: VIRTUAL[target], artwork: list.map(t => t.artwork).find(Boolean) || ''};
+      const name = virtualName(target);
+      if (!name) return null;
+      const list = target === 'favorites' ? favTracks()
+        : target === 'public-favorites' ? publicEntries().map(e => e.track) : [];
+      const card = (state.years || []).find(c => 'top-100:' + c.year === target);
+      return {title: name, artwork: list.map(t => t.artwork).find(Boolean) || (card?.artwork || [])[0] || ''};
     };
     const tiles = state.pins.slice(0, PIN_LIMIT).map(p => {
       const item = p.kind === 'track' ? libAll.find(t=>String(t.id)===p.target)
@@ -266,8 +296,31 @@
         <p class="dynsub">${pub.length} song${pub.length === 1 ? '' : 's'} liked by ${people.size} member${people.size === 1 ? '' : 's'} · most liked first</p>
         <div class="favlist">${pub.map(publicRow).join('') || '<div class="empty">Nobody has liked a song yet.</div>'}</div>`;
     }
+    if (detail?.kind === 'year') {
+      const year = detail.year;
+      if (detail.rows === undefined) { loadYear(year); return `<p class="dynsub">Loading ${year}…</p>`; }
+      const rows = detail.rows;
+      return `<button type="button" data-close-favorites>← Playlists</button>
+        <h2>${year} Top 100</h2>
+        <p class="dynsub">${rows.length} song${rows.length === 1 ? '' : 's'} · most played first · recomputed daily</p>`
+        + (rows.length ? renderSongs(rows, '')
+           : '<div class="empty">No plays recorded in this year yet.</div>');
+    }
     return originalDetail(rows);
   };
+  // The list is computed on the server from the dated play log, capped at 100 and cached
+  // for a day; the client only needs the ids it already has rows for.
+  async function loadYear(year){
+    try {
+      const response = await fetch('/api/stats?year=' + encodeURIComponent(year), {cache: 'no-store'});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+      const rows = (data.top_tracks || []).map(row => libAll.find(t => t.id === row.id)).filter(Boolean);
+      if (!detail || detail.kind !== 'year' || detail.year !== year) return;
+      detail.rows = rows;
+      renderLibrary();
+    } catch (error) { showToast(error.message); }
+  }
   // A liked-by row is a play target; keep the keyboard equivalent of its tabindex.
   document.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -387,10 +440,13 @@
 
   // Capture before row/card inline handlers: personal actions never start playback.
   document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-pref-action],[data-open-favorites],[data-open-public],[data-close-favorites],[data-open-pin-kind],[data-dyn-save],[data-fav-id]');
+    const button = event.target.closest('[data-pref-action],[data-open-favorites],[data-open-public],[data-open-year],[data-close-favorites],[data-open-pin-kind],[data-dyn-save],[data-fav-id]');
     if (!button) return;
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     if (button.hasAttribute('data-open-favorites')) { detail={kind:'favorites'}; renderLibrary(); return; }
+    if (button.hasAttribute('data-open-year')) {
+      detail={kind:'year', year:Number(button.dataset.openYear)}; renderLibrary(); return;
+    }
     if (button.hasAttribute('data-open-public')) { detail={kind:'public-favorites'}; renderLibrary(); return; }
     if (button.hasAttribute('data-close-favorites')) { detail=null; renderLibrary(); return; }
     if (button.dataset.favId) { toggleSongPlayback(Number(button.dataset.favId)); return; }
@@ -406,6 +462,7 @@
     if (pinClickMuted) return;
     if (button.dataset.openPinKind){
       const kind=button.dataset.openPinKind, id=button.dataset.openPinId;
+      if (kind==='playlist' && YEAR_ID(id)) { detail={kind:'year', year:Number(YEAR_ID(id)[1])}; renderLibrary(); return; }
       if (kind==='playlist' && VIRTUAL[id]) { detail={kind: id==='favorites' ? 'favorites' : 'public-favorites'}; renderLibrary(); return; }
       if (kind==='track') { detail=null; libView='songs'; $('#libsearch').value=libAll.find(t=>String(t.id)===id)?.title || ''; }
       else if (kind==='album') detail={kind:'album',key:id};

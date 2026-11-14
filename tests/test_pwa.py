@@ -42,7 +42,12 @@ class PWA(unittest.TestCase):
             index = fh.read()
         entry = re.search(r'<link rel="stylesheet" href="(/styles/app.css)">', index)
         self.assertTrue(entry, 'index.html must load the stylesheet entry point')
-        self.assertEqual(index.count('rel="stylesheet"'), 1, 'one stylesheet entry point only')
+        # One *file* entry point. `/theme.css` is the second link and the only allowed one:
+        # the server answers it from the session's own palette, so there is no file to walk
+        # and nothing to precache — and it must stay out of the worker's cache, which is
+        # shared by whoever uses this browser next.
+        self.assertEqual(index.count('rel="stylesheet"'), 2, 'app.css plus the session palette')
+        self.assertEqual(index.count('href="/theme.css"'), 1, 'the palette link appears once')
 
         def walk(url, seen=None):
             seen = seen if seen is not None else {}
@@ -77,18 +82,36 @@ class PWA(unittest.TestCase):
         self.assertEqual(precached, set(tree), 'sw.js must precache exactly the stylesheet tree')
         self.assertRegex(sw, r"hardlylistening-static-v\d+")
         self.assertNotIn('/polish.css', sw)
+        # The palette is per member, so it is the one stylesheet the cache must never hold.
+        self.assertNotIn('/theme.css', sw)
 
     def test_feature_scripts_are_precached(self):
         """The page's scripts have moved out of index.html a component at a time. A script the
-        page loads from /js/ but the worker does not precache is an app that cannot boot from
+        page loads by URL but the worker does not precache is an app that cannot boot from
         the cache — the same failure the stylesheet test guards, one file type over."""
         with open(os.path.join(WEB, 'index.html'), encoding='utf-8') as fh:
             index = fh.read()
-        loaded = set(re.findall(r'<script src="(/js/[^"]+)"', index))
-        self.assertTrue(loaded, 'index.html loads no /js/ scripts at all')
+        loaded = set(re.findall(r'<script src="([^"]+)"', index))
+        self.assertTrue(loaded, 'index.html loads no scripts by URL at all')
         with open(os.path.join(WEB, 'sw.js'), encoding='utf-8') as fh:
             sw = fh.read()
-        static = set(re.findall(r"'(/js/[^']+)'", sw))
+        static = set(re.findall(r"'(/[^']+\.js)'", sw))
         self.assertEqual(static, loaded, 'sw.js must precache exactly the scripts index.html loads')
         for url in loaded:
             self.assertTrue(os.path.isfile(os.path.join(WEB, url.lstrip('/'))), 'missing script ' + url)
+
+    def test_artwork_is_kept_beside_the_audio(self):
+        """A kept song with no cover is a title over an empty tile offline. The worker keeps
+        the two same-origin artwork shapes, and the page declares the same cache name it
+        fills — a name that only one side knows is a cache nothing ever reads."""
+        with open(os.path.join(WEB, 'sw.js'), encoding='utf-8') as fh:
+            sw = fh.read()
+        with open(os.path.join(WEB, 'index.html'), encoding='utf-8') as fh:
+            index = fh.read()
+        self.assertIn("hardlylistening-artwork-v1", sw)
+        self.assertIn("hardlylistening-artwork-v1", index)
+        self.assertIn('keptArtwork', sw)
+        self.assertRegex(sw, r"\\/api\\/art\\/\[a-f0-9\]\{32\}")
+        self.assertRegex(sw, r"\\/api\\/track\\/\\d\+\\/artwork")
+        self.assertIn('keepArtwork', index)
+        self.assertIn('paintOfflineMarks', index)

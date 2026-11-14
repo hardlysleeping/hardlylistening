@@ -162,6 +162,16 @@ class ImportAndMove(unittest.TestCase):
         self.assertTrue(json.loads(body)["ok"])
         move.assert_called_once_with(self.store, str(self.root / "new"))
 
+    def test_a_refused_move_answers_400_with_the_reason(self):
+        library = self.root / "library"
+        library.mkdir()
+        self.store.set_settings({"root": str(library)})
+        code, body = self.post("/api/library/move", "admin1", {"to": str(library / "nested")})
+        self.assertEqual(code, 400)
+        self.assertIn("inside the current one", json.loads(body)["error"])
+        self.assertEqual(self.store.setting("root"), str(library))
+        self.assertFalse((library / "nested").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

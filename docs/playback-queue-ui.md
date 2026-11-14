@@ -11,7 +11,7 @@
 
 ## Verification
 
-Run with `NODE_PATH=/home/bazzite/.hermes/cache/scratch/hardlylistening-ui-deps/node_modules`:
+Run with `NODE_PATH` pointing at a `node_modules` directory that has Playwright installed:
 
 ```
 node tests/test_playback_queue_ui.cjs

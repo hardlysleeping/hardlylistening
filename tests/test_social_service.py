@@ -37,10 +37,10 @@ class Wiring(unittest.TestCase):
         with patch.object(service._activity, 'listen') as listen:
             service.listen(store, member, 7)
             listen.assert_called_once_with(store, member, 7)
-        with patch.object(service._activity, 'current_boost', return_value=None) as current:
+        with patch.object(service._boosts, 'current_boost', return_value=None) as current:
             service.current_boost(store, 'u1', 5.0)
             current.assert_called_once_with(store, 'u1', 5.0)
-        with patch.object(service._activity, 'active_boosts', return_value=[]) as active:
+        with patch.object(service._boosts, 'active_boosts', return_value=[]) as active:
             service.active_boosts(store, 10, 2.0)
             active.assert_called_once_with(store, 10, 2.0)
         with patch.object(service._profiles, 'profile', return_value=None) as profile:
@@ -53,19 +53,19 @@ class Wiring(unittest.TestCase):
     def test_discussion_is_passed_through(self):
         store = object()
         member = {'id': 'u1', 'role': 'member'}
-        with patch.object(service._discussion, 'summary', return_value={}) as summary:
+        with patch.object(service._comments, 'summary', return_value={}) as summary:
             service.summary(store, 'track', '7', member)
             summary.assert_called_once_with(store, 'track', '7', member)
-        with patch.object(service._discussion, 'batch', return_value={}) as batch:
+        with patch.object(service._comments, 'batch', return_value={}) as batch:
             service.batch(store, 'track', ['7'], member, latest=3)
             batch.assert_called_once_with(store, 'track', ['7'], member, latest=3)
-        with patch.object(service._discussion, 'vote', return_value={}) as vote:
+        with patch.object(service._comments, 'vote', return_value={}) as vote:
             service.vote(store, 'track', '7', member, 1)
             vote.assert_called_once_with(store, 'track', '7', member, 1)
-        with patch.object(service._discussion, 'like', return_value={}) as like:
+        with patch.object(service._likes, 'like', return_value={}) as like:
             service.like(store, 'track', '7', member, 3)
             like.assert_called_once_with(store, 'track', '7', member, 3)
-        with patch.object(service._discussion, 'comment', return_value={}) as comment:
+        with patch.object(service._comments, 'comment', return_value={}) as comment:
             service.comment(store, 'track', '7', member, comment_id=3, delete=True)
             comment.assert_called_once_with(store, 'track', '7', member, body=None,
                                             comment_id=3, delete=True)

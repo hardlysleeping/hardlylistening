@@ -192,7 +192,11 @@ so a pinned or re-ordered provider listing cannot flood the feed.
   more than half the people present agree (a room of one skips instantly), chat keeps
   the last 500 messages, and one member holds a 30-second host lease to advance playback.
 * `/swipe` — one Repository song at a time: right adds it to your library, left drops
-  it, up adds and likes it. Tap plays; the arrow keys do the same.
+  it, up adds and likes it. A drop is your own note — the song leaves *your feed* and
+  stays in the Repository for everyone else. Tap plays, and the library's compact player
+  comes up with it: prev replays the last audition, next auditions the card underneath
+  without deciding it, and the volume is the level you set in the library. The arrow keys
+  make the decisions.
 * `/dj` — the mixer, described below.
 
 ## Mixer (/dj)
@@ -243,7 +247,9 @@ What it deliberately does not do, because a browser cannot:
 ## Layout
 
 ```
-db.py                  schema, settings, jobs, the /api/state snapshot
+db.py                  alias of core/db.py; schema, settings, jobs, the /api/state snapshot
+core/                  db.py, config.py, security.py — one database, runtime settings, accounts
+                       (the top-level names are the same module objects, ARCH-009)
 providers/base.py      Provider contract: identify / resolve / new_releases
 providers/soundcloud.py  sets, tracks, artist pages (direct audio)
 providers/apple_music.py playlists, albums, songs (metadata only)
@@ -257,9 +263,8 @@ web/dj.html            the mixer board
 web/party.js           the room client (queue, votes, chat, host lease)
 web/swipe.js           one Repository card at a time
 subsonic.py            Subsonic / OpenSubsonic surface for phone players
-sdk/                   client for the Subsonic surface and the capability document (docs/client-sdk.md)
-docs/server-domains.md who owns which module, table and route (Core/Repo/Library/Playback/Social)
-docs/server-packaging.md  headless VPS layout, systemd unit, Docker image, backup boundary
+sdk/                   client library: OpenSubsonic calls and the capability document
+                       (`docs/client-sdk.md`)
 ```
 
 `download_jobs` holds the state of every track: `queued`, `resolving`,

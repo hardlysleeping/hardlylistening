@@ -13,6 +13,10 @@
 <meta name="apple-mobile-web-app-title" content="Listening">
 <meta name="theme-color" content="#101014">
 <link rel="stylesheet" href="/styles/app.css">
+<!-- The member's saved colours, from a cookie-scoped stylesheet: a link in the head is
+     parsed before the first paint, so the theme is right on a cold load instead of after
+     the script's fetch. Anonymous and signed-out visitors get the stock three. -->
+<link rel="stylesheet" href="/theme.css">
 <script src="/preferences.js" defer></script>
 <script src="/genres.js" defer></script>
 <script src="/lyrics.js" defer></script>
@@ -25,7 +29,7 @@
 </div>
 <header>
   <div class="bar">
-    <div class="brand">Hardly<span>Listening</span></div>
+    <button type="button" class="brand" id="brandhome" title="Library" aria-label="HardlyListening — your library">Hardly<span>Listening</span></button>
     <canvas class="hdr-wave" id="hdr-wave" aria-hidden="true"></canvas>
     <span class="pvol-inline" id="plvolslot">
       <input type="range" id="plvol" min="0" max="100" value="100" title="Volume" aria-label="Volume">
@@ -53,14 +57,16 @@
         <path d="M18.6 5.9a2.9 2.9 0 0 1 .8 2" opacity=".75"/>
       </svg>
     </button>
-    <button class="who" id="who" hidden onclick="toggleUserMenu(event)" aria-label="My profile and sign out" aria-haspopup="menu" aria-expanded="false"></button>
-    <button id="btn-signout" hidden>Sign out</button>
-    <div class="usermenu" id="usermenu" role="menu" hidden>
-      <button type="button" role="menuitem" onclick="hideUserMenu();openProfile()">Profile</button>
-      <button type="button" role="menuitem" onclick="hideUserMenu();openThemeDialog()">Colours…</button>
-      <button type="button" role="menuitem" onclick="hideUserMenu();openOfflineDialog()">Offline audio…</button>
-      <button type="button" role="menuitem" id="usermenu-viewasuser" hidden onclick="hideUserMenu();toggleViewAsUser()">View as user</button>
-      <button type="button" role="menuitem" onclick="hideUserMenu();document.getElementById('btn-signout').click()">Sign out</button>
+    <div class="userwrap">
+      <button class="who" id="who" hidden onclick="toggleUserMenu(event)" aria-label="My profile and sign out" aria-haspopup="menu" aria-expanded="false"></button>
+      <button id="btn-signout" hidden>Sign out</button>
+      <div class="usermenu" id="usermenu" role="menu" hidden>
+        <button type="button" role="menuitem" onclick="hideUserMenu();openProfile()">Profile</button>
+        <button type="button" role="menuitem" onclick="hideUserMenu();openThemeDialog()">Colours…</button>
+        <button type="button" role="menuitem" onclick="hideUserMenu();openOfflineDialog()">Offline audio…</button>
+        <button type="button" role="menuitem" id="usermenu-viewasuser" hidden onclick="hideUserMenu();toggleViewAsUser()">View as user</button>
+        <button type="button" role="menuitem" onclick="hideUserMenu();document.getElementById('btn-signout').click()">Sign out</button>
+      </div>
     </div>
   </div>
 </header>
@@ -84,11 +90,17 @@
     <a href="/dj" class="tab navlink" role="menuitem" style="text-decoration:none">Mixer</a>
     <a href="/swipe" class="tab navlink" role="menuitem" style="text-decoration:none">Swipe</a>
     <button class="tab" id="exportbtn" data-export role="menuitem" title="Your saved songs as a ZIP with an M3U8 inside">Export library (.zip)</button>
+    <button class="tab" id="djexportbtn" role="menuitem" title="A playlist file for a DJ app, or the set copied onto a drive">Send to a DJ app</button>
   </div>
 </nav>
 
 <main>
   <section id="view-queue">
+  <!-- The page's own header row, the shape `#view-library` opens with: a title, then the
+       section row. The counts stay in `#qstrip` below, where they belong to each chip. -->
+  <div class="libtop">
+    <h2>Queue</h2>
+  </div>
   <div class="seg qsegtabs" role="tablist" aria-label="Queue">
     <button class="segbtn on" id="qtab-queue" role="tab" aria-selected="true" onclick="setQueueTab('queue')">Queue</button>
     <button class="segbtn" id="qtab-search" role="tab" aria-selected="false" onclick="setQueueTab('search')">Search</button>
@@ -140,22 +152,56 @@
   </section>
 
   <section id="view-feed" hidden>
-    <!-- Feed is Activity only: what people did. Releases and the follows are catalogue,
-         so they live in the Repository, next to Browse (UI-020…023). -->
+    <div class="libtop" id="feedtop">
+      <h2>Feed</h2>
+    </div>
+    <!-- Two readings of the same play log: Activity is the log itself, Popular is the
+         chart built from it across every member. The selector is the Repository's own
+         row (`nav.seg`), so the two sections are chosen the same way. -->
+    <nav class="seg" id="feedtabs" role="tablist" aria-label="Feed section">
+      <button class="on" id="ftab-activity" role="tab" aria-selected="true"
+        onclick="setFeedTab('activity')">Activity</button>
+      <button id="ftab-popular" role="tab" aria-selected="false"
+        onclick="setFeedTab('popular')">Popular</button>
+    </nav>
     <div id="feedpane-activity">
       <div class="hint" id="acterr" style="margin:-2px 0 10px"></div>
       <div id="activitylist"></div>
     </div>
-  </section>
-
-  <dialog id="memberdlg" class="memberdlg">
-    <div class="mdhead">
-      <span class="mdicon" id="mdicon"></span>
-      <div class="mdwho"><b id="mdname"></b><small id="mdmeta"></small></div>
-      <button class="mdclose" type="button" aria-label="Close" onclick="closeMember()">×</button>
+    <div id="feedpane-popular" hidden>
+      <!-- The same selector again, for the window. Calendar windows: today, this week
+           from Monday, this month from the 1st. -->
+      <nav class="seg" id="feedperiods" role="group" aria-label="Chart period">
+        <button class="on" data-period="day" aria-pressed="true"
+          onclick="setPopularPeriod('day')">Day</button>
+        <button data-period="week" aria-pressed="false"
+          onclick="setPopularPeriod('week')">Week</button>
+        <button data-period="month" aria-pressed="false"
+          onclick="setPopularPeriod('month')">Month</button>
+        <button data-period="year" aria-pressed="false"
+          onclick="setPopularPeriod('year')">Year</button>
+        <button data-period="all" aria-pressed="false"
+          onclick="setPopularPeriod('all')">All time</button>
+      </nav>
+      <div class="hint" id="populare" style="margin:-2px 0 10px"></div>
+      <div id="popularlist"></div>
     </div>
-    <div class="mdbody" id="mdbody"></div>
-  </dialog>
+    <!-- A member's profile is a page, not a dialog: it is read, it scrolls with the
+         document, and on a phone it takes the column instead of floating a box over the
+         list it was opened from. It lives in the Feed section so the tabs, the saved
+         navigation state and the section plumbing stay exactly as they were. -->
+    <section class="memberpage" id="memberpage" hidden aria-labelledby="mpname">
+      <button type="button" class="mpback" onclick="closeMemberPage()"><span aria-hidden="true">‹</span>Back</button>
+      <header class="mphero">
+        <span class="mpface" id="mpface" aria-hidden="true"></span>
+        <div class="mpwho">
+          <h2 class="mpname" id="mpname"></h2>
+          <p class="mpmore" id="mpmore"></p>
+        </div>
+      </header>
+      <div id="mpbody"></div>
+    </section>
+  </section>
 
   <section id="view-library" hidden>
     <div id="libcooldown" class="libnote" role="status" hidden>Cooling down — the server asked for a pause.</div>
@@ -338,7 +384,7 @@
       <div id="feedartistpage" hidden></div>
     </div>
     <div id="repopane-subscribed" hidden>
-      <div class="followbox" data-admin-only>
+      <div class="followbox">
         <input id="followurl" placeholder="Paste an artist page — soundcloud.com/name or music.apple.com/…/artist/…" autocomplete="off">
         <button class="primary" id="followbtn">Subscribe</button>
       </div>
@@ -350,6 +396,9 @@
 </main>
 
 <div id="player">
+  <!-- Only present while AutoDJ is mixing: the bar itself is the control surface, this is
+       the status light. A child of the bar, so it disappears with the bar. -->
+  <span class="autodj-tab" id="autodj-tab"><span class="dot" aria-hidden="true"></span>AutoDJ</span>
   <button type="button" class="qgrip" id="qgrip" aria-label="Show or hide the queue" title="Show or hide the queue"><span aria-hidden="true">▲</span></button>
   <button type="button" class="iconbtn small" id="pllike" title="Like song" aria-label="Like song" aria-pressed="false">&#9825;</button>
   <span class="plsave" id="plsave"></span>
@@ -366,22 +415,32 @@
       <button class="iconbtn big" id="plplay" title="Play" aria-label="Play"></button>
       <button class="iconbtn" id="plnext" title="Next" aria-label="Next"></button>
       <button class="iconbtn small" id="plmute" title="Mute" aria-label="Mute" aria-pressed="false"></button>
+      <button class="iconbtn small" id="plvolmore" title="Volume" aria-label="Volume" aria-haspopup="dialog"
+        aria-expanded="false" aria-controls="plvolmenu"></button>
     </div>
-    <div class="pend"></div>
+    <!-- The bar's right-hand slot. The Lyrics button lives here rather than in the old
+         `.pvol` group: that group held the volume control until the fader moved to the top
+         bar, and it has been hidden in the bar ever since, which is why the button inside it
+         could never be seen (HL-227). -->
+    <div class="pend"><button type="button" id="pllyrics" title="Lyrics and karaoke view" disabled>Lyrics</button></div>
 
   </div>
   <span class="ptime" id="pltime">0:00</span>
   <canvas class="plwave-seek" aria-hidden="true"></canvas>
   <input class="pseek" type="range" id="plseek" min="0" max="1000" value="0" aria-label="Seek">
   <span class="ptime" id="pldur">0:00</span>
-  <div class="pvol">
-    <button type="button" id="pllyrics" title="Lyrics and karaoke view" disabled>Lyrics</button>
-  </div>
+</div>
+<!-- The compact bar's volume: a speaker beside mute opens this fader. It lives outside the bar
+     because the bar clips its own overflow, so nothing inside it can rise above it. -->
+<div class="plvol-menu" id="plvolmenu" role="dialog" aria-label="Volume">
+  <input type="range" id="plvolv" min="0" max="100" step="1" value="100" title="Volume" aria-label="Volume">
 </div>
 <audio id="player-audio" preload="metadata"></audio>
 
 <div id="player-full" role="dialog" aria-modal="true" aria-label="Now playing">
   <button class="pf-tab" id="pfclose" type="button" aria-label="Close fullscreen player" title="Close">⌄</button>
+  <button class="pf-autodj" id="pf-autodj" type="button" aria-pressed="false"
+    title="AutoDJ — pick the next song by tempo and mix it in"><span class="dot" aria-hidden="true"></span>AutoDJ</button>
   <div class="pf-body">
     <div class="pf-top" id="pf-top">
     <div class="pf-stage">
@@ -390,9 +449,20 @@
         <span class="pf-grooves" aria-hidden="true"></span><img id="pfart" alt="Album art on the record label"><span class="pf-spindle" aria-hidden="true"></span>
       </div>
       <div id="lyrics-overlay" aria-label="Lyrics" hidden>
-        <div class="lyrics-tools"><span id="lyrics-status" role="status"></span><button id="lyrics-karaoke" aria-pressed="false" disabled>Karaoke</button><button id="lyrics-fullscreen" type="button">Fullscreen</button><button id="lyrics-close" aria-label="Hide lyrics">×</button></div>
+        <div class="lyrics-tools"><span id="lyrics-status" role="status"></span><button id="lyrics-edit" type="button" disabled>Edit</button><button id="lyrics-karaoke" aria-pressed="false" disabled>Karaoke</button><button id="lyrics-fullscreen" type="button">Fullscreen</button><button id="lyrics-close" aria-label="Hide lyrics">×</button></div>
         <div id="lyrics-body"></div>
       </div>
+      </div>
+      <!-- Four hot cues per member per track: tap an empty pad to stamp the playhead, tap a
+           set pad to jump back to it, hold (or right-click) a set pad to clear it. One row of
+           four, centred on the record's lower edge: the pads overlay the vinyl rather than
+           sitting beside it, which is what keeps them inside the stage on a phone — a pair
+           pushed out past the disc was clipped by the overlay's edge. -->
+      <div class="pf-cues" id="pf-cues" role="group" aria-label="Cue points">
+        <button class="pf-cue" type="button" data-cue="0"><span class="pf-cue-key">A</span><span class="pf-cue-time">—</span></button>
+        <button class="pf-cue" type="button" data-cue="1"><span class="pf-cue-key">B</span><span class="pf-cue-time">—</span></button>
+        <button class="pf-cue" type="button" data-cue="2"><span class="pf-cue-key">C</span><span class="pf-cue-time">—</span></button>
+        <button class="pf-cue" type="button" data-cue="3"><span class="pf-cue-key">D</span><span class="pf-cue-time">—</span></button>
       </div>
     </div>
     <div class="pf-text">
@@ -401,6 +471,22 @@
     </div>
     </div>
     <div class="pf-queue-slot" id="pf-queue-slot"></div>
+    <div class="pf-eq" id="pf-eq" hidden>
+      <div class="pf-eq-head">
+        <b>Equalizer</b>
+        <button type="button" id="pf-eq-bypass" aria-pressed="false">Bypass</button>
+        <button type="button" id="pf-eq-flat">Flat</button>
+        <button type="button" id="pf-eq-close" aria-label="Close the equalizer">Close</button>
+      </div>
+      <div class="pf-eq-bands" id="pf-eq-bands"></div>
+      <label class="pf-eq-loud" for="pf-eq-loudness">
+        <input type="checkbox" id="pf-eq-loudness">
+        <span><b>Loudness</b> — bass lift and softer highs, with a limiter so it cannot clip.</span>
+      </label>
+      <p class="pf-eq-note">Boosting bands above 0 dB can push the mix into clipping.
+        On iPhone an active equalizer keeps audio inside the page, so leaving it bypassed
+        keeps playback alive when the screen locks.</p>
+    </div>
     <input class="pf-seek" type="range" id="pfseek" min="0" max="1000" value="0" aria-label="Seek">
     <div class="pf-times"><span id="pftime">0:00</span><span id="pfdur">0:00</span></div>
     <div class="pf-ctrl">
@@ -411,14 +497,34 @@
       <button class="iconbtn small" id="pfrepeat" type="button" title="Repeat" aria-label="Repeat"></button>
     </div>
     <div class="pf-foot">
-      <span class="pfsave" id="pfsave"></span>
-      <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
-      <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue" aria-expanded="false">☰</button>
-      <button type="button" id="pflyrics" disabled>Lyrics</button>
-      <div class="pf-vol">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <input type="range" id="pfvol" min="0" max="100" step="1" value="100" title="Volume" aria-label="Volume">
+      <!-- Three groups: the DJ tools on the left, the queue alone in the centre, and the
+           "is this mine" controls with the lyrics reading on the right. Reading order is Cue,
+           equalizer, queue, save, heart, Lyrics; the groups sit at the edges so the row uses
+           the width instead of huddling in the middle. Cue and Lyrics keep their words because
+           a word is what makes them legible (one opens pads, one opens a reading); everything
+           else is a glyph in the same 55 px box, so each group reads as one kind of control.
+           Both words are buttons, not `.iconbtn`, so they take their width from the label and
+           still share the row's baseline. -->
+      <div class="pf-side pf-start">
+        <button type="button" class="iconbtn" id="pfcues" aria-pressed="false" aria-controls="pf-cues"
+          title="Cue points" aria-label="Cue points">Cue</button>
+        <button type="button" class="iconbtn" id="pfeq" aria-expanded="false" aria-controls="pf-eq"
+          title="Equalizer" aria-label="Equalizer"><svg viewBox="0 0 24 24" width="27" height="27" fill="none"
+          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 4v6.2"/><path d="M6 14.6V20"/><path d="M12 4v2.6"/><path d="M12 11V20"/><path d="M18 4v10.4"/><path d="M18 18.8V20"/><circle cx="6" cy="12.4" r="2.2"/><circle cx="12" cy="8.8" r="2.2"/><circle cx="18" cy="16.6" r="2.2"/></svg></button>
       </div>
+      <button type="button" class="iconbtn" id="pfqueue" title="Playback queue" aria-label="Playback queue" aria-expanded="false">☰</button>
+      <div class="pf-side pf-end">
+        <span class="pfsave" id="pfsave"></span>
+        <button type="button" class="iconbtn" id="pflike" title="Like song" aria-label="Like song" aria-pressed="false">♡</button>
+        <button type="button" id="pflyrics" disabled>Lyrics</button>
+      </div>
+    </div>
+    <!-- Desktop only, on its own centred row under the foot: the fader is a wide control and
+         putting it in the right group made that group wider than its lane, so it pushed into
+         the queue. Under the row it reads as the row's volume, not as a fourth button. -->
+    <div class="pf-vol">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input type="range" id="pfvol" min="0" max="100" step="1" value="100" title="Volume" aria-label="Volume">
     </div>
   </div>
 </div>
@@ -486,9 +592,11 @@
 <dialog id="dlg-offline" class="smallconfirm">
   <form method="dialog">
     <h2>Offline audio</h2>
-    <p>A song you have played is kept on this device, so playing it again starts from disk
-      instead of the network. The oldest copy goes first when the space is needed. This is a
-      per-device setting, and a browser may still clear copies if its storage runs short.</p>
+    <p>A song you have played is kept on this device with its cover, so playing it again
+      starts from disk instead of the network, and the library still shows what you kept with
+      no connection. The oldest copy goes first when the space is needed, and the app says so
+      when that happens. This is a per-device setting, and a browser may still clear copies if
+      its storage runs short.</p>
     <div class="field">
       <label for="offline-budget">Keep up to</label>
       <select id="offline-budget" onchange="setOfflineBudget(this.value)">
@@ -503,6 +611,24 @@
     <div class="dlg-foot">
       <button type="button" class="chip small" onclick="clearOfflineAudio()">Remove copies</button>
       <button value="cancel" class="primary">Close</button>
+    </div>
+  </form>
+</dialog>
+<!-- The lyrics editor (HL-227). It speaks the file's own format, so a saved correction keeps
+     its line and word timings; the server stores it against the track, where a provider
+     refresh cannot replace it. -->
+<dialog id="dlg-lyrics-edit" class="smallconfirm lyricsedit">
+  <form id="lyrics-edit-form">
+    <h2>Edit lyrics</h2>
+    <p>One line per row, with its time in square brackets — <code>[00:12.34]</code>. A word's
+      own time goes in angle brackets before it, <code>&lt;00:12.34&gt;word</code>; leave the
+      marks you are not changing. Saved lyrics stay until "Use the original".</p>
+    <textarea id="lyrics-edit-text" rows="14" spellcheck="false" aria-label="Lyrics text"></textarea>
+    <p id="lyrics-edit-status" class="hint" role="status"></p>
+    <div class="dlg-foot">
+      <button type="button" class="chip small" id="lyrics-edit-reset">Use the original</button>
+      <button type="button" class="chip small" onclick="document.getElementById('dlg-lyrics-edit').close()">Cancel</button>
+      <button type="submit" class="primary">Save</button>
     </div>
   </form>
 </dialog>
@@ -565,8 +691,19 @@
       </div>
       <div class="hint">Only files that exist on this machine are listed. Paths are absolute,
         so the DJ app has to be on this PC (or the library moved first).</div>
-      <div class="dlg-foot" style="justify-content:flex-start">
+      <div class="field">
+        <label for="usbpath">Or copy it onto a drive</label>
+        <input id="usbpath" placeholder="/media/you/DISK — the drive's folder on this PC"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="hint">The same set is written into a <b>HardlyListening</b> folder on the
+        drive, with a Rekordbox XML and an M3U8 beside it pointing at those files, so the DJ
+        computer imports it with no second copy step. Nothing on the drive is deleted.</div>
+      <div class="usbplan" id="usbplan" role="status" aria-live="polite" hidden></div>
+      <div class="dlg-foot" style="justify-content:flex-start;flex-wrap:wrap">
         <a class="btn primary" id="expgo" download>Download export</a>
+        <button type="button" class="chip small" id="usbcheck">Check drive</button>
+        <button type="button" class="btn" id="usbgo" hidden>Copy to drive</button>
       </div>
     </div>
   </form>
@@ -1749,10 +1886,26 @@ fetch("/api/listening/theme", {cache: "no-store"})
   .then(data => applyTheme(data && data.theme))
   .catch(() => {});
 
+function placeUserMenu(){
+  // The panel is anchored to the chip, not to the bar: a chip on the left half of the screen
+  // opens it rightward from its left edge, a chip on the right half opens it leftward under
+  // its right edge, and either placement is then pulled back inside the viewport. Without the
+  // pull a chip that wraps to the right end of a narrow bar would put the panel off screen.
+  const menu = $("#usermenu"), chip = $("#who").getBoundingClientRect();
+  const wrap = menu.parentElement.getBoundingClientRect();
+  const pad = 8, width = menu.offsetWidth;
+  const right = (chip.left + chip.width / 2 < innerWidth / 2)
+    ? wrap.right - chip.left - width          // panel's left edge at the chip's left edge
+    : wrap.right - chip.right;                 // panel's right edge at the chip's right edge
+  const least = wrap.right - (innerWidth - pad);       // the rightward limit
+  const most = wrap.right - pad - width;               // the leftward limit
+  menu.style.right = Math.min(Math.max(right, least), most) + "px";
+}
 function toggleUserMenu(event){
   if (event) event.stopPropagation();
   const menu = $("#usermenu");
   menu.hidden = !menu.hidden;
+  if (!menu.hidden) placeUserMenu();
   $("#who").setAttribute("aria-expanded", String(!menu.hidden));
 }
 function hideUserMenu(){
@@ -2504,6 +2657,7 @@ const SORT_KEYS = {
   artist:     {label: "Artist",         type: "text", dir: "asc"},
   album:      {label: "Album",          type: "text", dir: "asc"},
   duration:   {label: "Time",           type: "num", dir: "asc"},
+  bpm:        {label: "Tempo",          type: "num", dir: "asc"},
   votes_all:  {label: "Most votes",     type: "num", dir: "desc"},
 };
 let libSort = localStorage.getItem("hl.librarySort") || "recent";
@@ -2607,9 +2761,7 @@ async function restoreNowState(){
   if (pick.time) playerAudio.addEventListener('loadedmetadata', () => {
     try { playerAudio.currentTime = pick.time; } catch (_) {}
   }, {once: true});
-  $("#plart").src = row.artwork ? artHQ(row.artwork) : "";
-  if (typeof applyPlayerArtwork === "function") applyPlayerArtwork();
-  $("#plart").style.visibility = row.artwork ? "visible" : "hidden";
+  paintPlayerCover(row);
   paintPlTitle(row.title || "Untitled");
   paintPlayerSub(row);
   $("#player").classList.add("on");
@@ -2725,6 +2877,10 @@ const SVG = {
   repeat: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
   repeatOne: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><path d="M12 10v4" stroke-width="2.4"/></svg>`,
   volume: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  // The fader's own speaker, not the mute flag's: two waves read as "level" beside a
+  // one-wave speaker that means "sound on" and a crossed one that means muted. The three
+  // sat next to each other as identical icons until this one gained the second wave.
+  volumeUp: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="M15.6 9.4a4 4 0 0 1 0 5.2M18.2 7a7 7 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   mute: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h3.5L13 19V5L7.5 9H4Z"/><path d="m16 9 5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   plus: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
   check: s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4.5 4.5L19 7"/></svg>`,
@@ -2784,14 +2940,46 @@ function coverArt(row){
 // that was never drawn has no `art_hash`, and the car would keep the provider URL.
 const artAsked = new Set();
 function ensureArt(row){
-  if (!row || !row.id || row.art_hash || artAsked.has(row.id)) return;
+  if (!row || !row.id || row.art_hash || artAsked.has(row.id)) return null;
   artAsked.add(row.id);
-  fetch(`/api/track/${row.id}/artwork`, {credentials: "same-origin"})
+  // The promise is returned so a caller that is *showing* this row can repaint when the digest
+  // lands. Callers that only prefetch ignore it, exactly as before.
+  return fetch(`/api/track/${row.id}/artwork`, {credentials: "same-origin"})
     .then(r => {
       const hash = r.headers.get("X-Art-Hash");
       if (hash && /^[a-f0-9]{32}$/.test(hash)) row.art_hash = hash;
+      return row;
     })
-    .catch(() => {});
+    .catch(() => null);
+}
+// The player bar draws the cover the media session publishes, by the same rule: the copy the
+// server stores, named by its digest, and the provider URL only until that digest is known.
+// The bar used to point at the provider CDN directly, so the picture on screen — and the
+// `--player-art` tint built from it — depended on SoundCloud or Apple answering. A row whose
+// picture has never been extracted asks the server once and is repainted when the digest lands.
+function paintPlayerCover(row){
+  const art = $("#plart");
+  if (!art) return;
+  const url = coverArt(row);
+  art.onerror = () => {
+    art.onerror = null;
+    // A digest with nothing behind it is the one case the stored copy cannot answer: fall back
+    // to the provider, and hide rather than draw a broken image when that fails too.
+    const fallback = row && row.artwork ? artHQ(row.artwork) : "";
+    if (fallback && art.getAttribute("src") !== fallback){ art.src = fallback; return; }
+    art.removeAttribute("src");
+    art.style.visibility = "hidden";
+    applyPlayerArtwork();
+  };
+  if (url) art.src = url; else art.removeAttribute("src");
+  art.style.visibility = url ? "visible" : "hidden";
+  applyPlayerArtwork();
+  if (row && !row.art_hash){
+    const asked = ensureArt(row);
+    if (asked && typeof asked.then === "function"){
+      asked.then(() => { if (playingId === row.id) paintPlayerCover(row); }, () => {});
+    }
+  }
 }
 function artImg(url, cls, lazy, key){
   const hq = artHQ(url);
@@ -3260,7 +3448,6 @@ function playerSub(row){
   return [row && row.artist_name, albumFor(row)].filter(Boolean).join(" · ");
 }
 
-
 // Playback of the next queued song should not wait for the network. The audio
 // route is no-store (a Range stream for seeking), so the only way to start
 // instantly is to hold the bytes here as a Blob. Two tracks at most.
@@ -3278,7 +3465,6 @@ function aheadTrim(keepId){
 function prefetchAudio(id){
   if (!id || playingId === null || aheadAudio.has(id) || aheadJobs.has(id)) return;
   if (navigator.connection && navigator.connection.saveData) return;
-  // Pull the cover now so the car's metadata update does not wait on the CDN.
   // Pull the cover now so the car's metadata update does not wait on the CDN. Learn the row's
   // digest too: `ensureArt` is what turns the car's artwork URL into our own for a song whose
   // picture has never been extracted.
@@ -3475,6 +3661,10 @@ function playFromLibrary(id, options){
   const row = (libQueue.find(t => t.id === id)) || currentRows.find(t => t.id === id);
   if (!row) return;
   const wasPlaying = playingId;
+  // The tempo the listener was just hearing, so AutoDJ can match the new one to it. Read
+  // before `playingId` moves.
+  const previousRow = wasPlaying == null ? null :
+    (libQueue.find(t => t.id === wasPlaying) || (libAll || []).find(t => t.id === wasPlaying) || null);
   // -1 means "this track is not one of the queued ones": the queue is untouched and
   // everything in it becomes up next. Never rebuild the queue from a single play.
   libIndex = libQueue.findIndex(t => t.id === id);
@@ -3499,12 +3689,14 @@ function playFromLibrary(id, options){
   const cached = aheadAudio.get(id);
   playerAudio.src = cached || `/api/track/${id}/audio`;
   playerAudio.dataset.ahead = cached ? "1" : "";
+  // AutoDJ carries the tempo of the song before it into this one, within the 6 % a pitch
+  // lock can hide, so consecutive picks share a beat instead of jumping. Nothing else
+  // touches the element: no second player, no second session.
+  autoDjMatch(autoDjBpm(previousRow), autoDjBpm(row));
   // The Feed's Activity tab learns about plays from here: one beacon per track
   // start, deduped again server-side so a reload or a seek storm cannot spam it.
   reportListen(id);
-  $("#plart").src = row.artwork ? artHQ(row.artwork) : "";
-  if (typeof applyPlayerArtwork === "function") applyPlayerArtwork();
-  $("#plart").style.visibility = row.artwork ? "visible" : "hidden";
+  paintPlayerCover(row);
   paintPlTitle(row.title || "Untitled");
   paintPlayerSub(row);
   $("#player").classList.add("on");
@@ -3525,6 +3717,13 @@ function playFromLibrary(id, options){
   // A new track means a new "next three": refresh the buffer and the row states
   // now instead of waiting for canplay, so the panel never shows a stale tag.
   prefetchAhead();
+  // AutoDJ remembers what just played (so it does not loop back onto it) and tops the
+  // queue back up to three picks ahead for the next mix.
+  if (typeof autoDj !== "undefined" && autoDj){
+    autoDjRecent.push(id);
+    if (autoDjRecent.length > 40) autoDjRecent = autoDjRecent.slice(-40);
+    autoDjEnsure();
+  }
 }
 
 /**
@@ -3613,6 +3812,8 @@ function paintFullPlayer(){
   art.style.visibility = row.artwork ? "visible" : "hidden";
   paintPfTitle(row.title || "Untitled");
   paintPlayerSub(row, true);
+  // The guard keeps a repaint from re-fetching the same track's cues.
+  if (cueTrack !== playingId) loadCues(playingId);
   $("#pfseek").value = playerAudio.duration ? (playerAudio.currentTime / playerAudio.duration) * 1000 : 0;
   paintSeekFill();
   $("#pftime").textContent = fmtClock(playerAudio.currentTime);
@@ -3663,9 +3864,16 @@ function paintPfTitle(text){
 // `albumFor` still names the set a song came from when it has no release; only a real
 // release becomes a link, because a set name has no album page to open.
 function openArtistFromPlayer(name){
-  const repo = repoArtistNamed(name);
+  // The player plays from the whole repository, so an artist heard there has to open even
+  // when the Library tab is showing only saved songs. `scopedTracks()` is that saved subset;
+  // `libAll` is everything on disk. Only a name in neither really has nothing downloaded.
+  const saved = repoArtistNamed(name);
+  const repo = saved || repoArtistNamed(name, libAll);
   if (!repo){ showToast(`Nothing downloaded from ${name} yet`); return; }
   if (document.body.classList.contains("fullplayer")) closeFullPlayer();
+  // The artist page is built from the scope on show, so an artist that is only in the shared
+  // pool has to be shown from the shared pool or it would land on an empty page.
+  if (!saved) setLibraryScope("shared");
   showLibraryTab();
   openArtistByName(repo);
 }
@@ -3707,6 +3915,7 @@ function paintPlayerSub(row, full){
   const release = !!realAlbum(row);
   host.textContent = "";
   host.dataset.mqKey = "";
+  host.classList.remove("artist-only");
   if (artist){
     const a = document.createElement("a");
     a.className = "psub-a";
@@ -3732,14 +3941,24 @@ function paintPlayerSub(row, full){
     }
     host.append(el);
     // The bar is still display:none on the first paint, so measure once more after the
-    // frame that shows it; one retry per distinct line, never a loop.
-    const key = (full ? "f|" : "c|") + album;
-    if (!el.clientWidth && host.dataset.mqKey !== key){
+    // frame that shows it; one retry per distinct line, never a loop. The test is the
+    // bar's own width: the release may legitimately be squeezed to nothing by a long
+    // artist, and a zero-width box would otherwise retry forever.
+    const key = (full ? "f|" : "c|") + artist + "|" + album;
+    if (!host.clientWidth && host.dataset.mqKey !== key){
       host.dataset.mqKey = key;
       requestAnimationFrame(() => paintPlayerSub(row, full));
       return;
     }
     fitMarquee(el, album, full ? "pfmqt" : "plmqt");
+  }
+  // The artist outranks the release: when the name alone is wider than the line it scrolls
+  // inside its own box instead of being cut, and the release keeps whatever room is left.
+  // Compact bar only — the fullscreen line has the room to show both names in one go.
+  const artistEl = host.querySelector(".psub-a");
+  if (!full && artistEl && artistEl.scrollWidth > artistEl.clientWidth + 2){
+    host.classList.add("artist-only");
+    fitMarquee(artistEl, artist, "plmqt");
   }
 }
 
@@ -3807,6 +4026,10 @@ function closeFullPlayer(){
   const full = $("#player-full");
   fullPullSeq++;                                     // a pending dismiss is moot now
   if (full.classList.contains("queue-open")) showFullQueue(false);
+  if (full.classList.contains("eq-open")) eqToggle(false);
+  // Whichever sheet was open lifted the title; the next open starts from the layout again.
+  const head = document.querySelector("#player-full .pf-text");
+  if (head) head.style.transform = "";
   full.classList.remove("on", "artmode");   // the record is the default next time it opens
   document.body.classList.remove("fullplayer");
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
@@ -4128,6 +4351,10 @@ function paintSeekFill(){
   if (!seek) return;
   const v = Math.max(0, Math.min(1000, Number(seek.value) || 0));
   seek.style.setProperty("--pf-played", (v / 10) + "%");
+  // The same share drives the ring around the fullscreen play button, so the button and the
+  // seek line always tell the same story (0 = empty ring, 1000 = a full circle).
+  const ring = $("#pfplay");
+  if (ring) ring.style.setProperty("--pf-progress", String(v / 1000));
 }
 function paintFullPlayerPosition(time){
   const at=Number.isFinite(time)?time:(playerAudio.currentTime||0);
@@ -4223,10 +4450,11 @@ pfDisc.addEventListener('keydown',event=>{
 playerAudio.addEventListener('loadstart',()=>{pfDiscPhase=0;pfDisc.classList.remove('spinning','dragging');pfDisc.style.animationDelay='0s';pfDisc.style.transform='rotate(0deg)';pfDiscDrag=null;
   // A new track invalidates the decoded scratch copy; re-decode only if the popup is open.
   pfScratchRelease(); if(fullPlayerOpen()) pfScratchPrepare();});
-// Double-tap the cover to swap the record for the sleeve, and the sleeve for the record.
-// The tap is measured on the disc itself — a drag has travelled, a hold has lasted, so
-// neither counts, and a tap anywhere else in the player is not this gesture.
-let pfCoverTaps = 0, pfCoverDown = null;
+// One tap swaps the record for the sleeve and the sleeve for the record. The hit test is the
+// cover's own box: 44% of the disc in record mode, the whole disc in art mode, so the same
+// rule reads as "tap the label" and then "tap anywhere on the sleeve". A drag has travelled
+// and a hold has lasted, so neither counts as a tap.
+let pfCoverDown = null;
 pfDisc.addEventListener('pointerdown', event => {
   if (event.button > 0) return;
   pfCoverDown = {id: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp};
@@ -4238,15 +4466,18 @@ pfDisc.addEventListener('pointerup', event => {
   if (!down || down.id !== event.pointerId) return;
   if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 10) return;   // a scrub
   if (event.timeStamp - down.at > 500) return;                                   // a hold
-  if (event.timeStamp - pfCoverTaps > 380){ pfCoverTaps = event.timeStamp; return; }
-  pfCoverTaps = 0;
+  const box = $("#pfart")?.getBoundingClientRect();
+  if (!box || !box.width) return;
+  const inside = event.clientX >= box.left && event.clientX <= box.right
+              && event.clientY >= box.top && event.clientY <= box.bottom;
+  if (!inside) return;
   setCoverArt(!$("#player-full").classList.contains("artmode"));
 });
 function setCoverArt(on){
   const full = $("#player-full");
   full.classList.toggle("artmode", !!on);
   pfDisc.setAttribute("aria-description",
-    on ? "Album art. Double-tap to show the record again." : "Record. Double-tap to show the album art.");
+    on ? "Album art. Tap to show the record again." : "Record. Tap the label to show the album art.");
   paintPfDisc();
 }
 for(const event of ['play','pause','timeupdate','loadedmetadata','durationchange'])playerAudio.addEventListener(event,paintPfDisc);
@@ -4275,6 +4506,30 @@ $("#pfqueue").onclick = event => {
   const full = document.getElementById("player-full");
   showFullQueue(!full.classList.contains("queue-open"));
 };
+// One sheet at a time uses one band of the column, and that band is measured here: the title
+// rises to the top edge, and the sheet starts under it and stops above the scrub bar. Both
+// the queue and the equalizer call this, so switching between them is the same geometry and
+// never a second set of numbers. Rectangles arrive as floats whose last bits wobble between
+// two identical layouts, so everything is snapped to the layout unit (1/64 px) first.
+function placeSheet(el){
+  const body = document.querySelector("#player-full .pf-body");
+  if (!el || !body) return;
+  const box = node => node.getBoundingClientRect();
+  const snap = value => Math.round(value * 64) / 64;
+  const text = document.querySelector("#player-full .pf-text");
+  // Where the header has to land: the top edge of the column. Applied directly so there is
+  // no variable-resolution step that can be read at the wrong moment.
+  const chevron = document.getElementById("pfclose");
+  const targetTop = snap(chevron ? box(chevron).bottom : box(body).top) + 6;
+  const travel = text ? Math.max(0, Math.round(snap(box(text).top) - targetTop)) : 40;
+  if (text) text.style.transform = "translateY(" + (-travel) + "px)";
+  const base = text ? snap(box(text).bottom) - snap(box(body).top) : 100;
+  el.style.setProperty("--pf-slot-top", Math.round(base - travel + 2) + "px");
+  // Stop above the scrub bar: a sheet must never reach into the transport.
+  const seek = document.getElementById("pfseek");
+  el.style.bottom = seek ? Math.round(snap(box(body).bottom) - snap(box(seek).top) + 8) + "px" : "0px";
+}
+
 // The queue is the same element, physically moved into the fullscreen column, so it can
 // never behave like an overlay: the page itself rearranges around it.
 function showFullQueue(open){
@@ -4284,6 +4539,8 @@ function showFullQueue(open){
   const top = document.getElementById("pf-top");
   const body = document.querySelector("#player-full .pf-body");
   if (!full || !panel || !slot || !top || !body) return;
+  // The queue owns the column when it opens; the equalizer is the other sheet.
+  if (open && typeof eqToggle === "function") eqToggle(false);
   const box = el => el.getBoundingClientRect();
   // Rectangles arrive as floats whose last bits wobble between two identical layouts. Every
   // value below is a sum of layout units, and `base + 2` lands exactly on a .5 tie, so
@@ -4315,18 +4572,7 @@ function showFullQueue(open){
     // ends up completely off-screen by the same move — no separate animation for it.
     // The header moves up just enough to reach the top edge; the record is translated off
     // the top separately, so neither depends on the other's size.
-    const text = document.querySelector("#player-full .pf-text");
-    // Where the header has to land: the top edge of the column. Applied directly so there is
-    // no variable-resolution step that can be read at the wrong moment.
-    const chevron = document.getElementById("pfclose");
-    const targetTop = snap(chevron ? box(chevron).bottom : box(body).top) + 6;
-    const travel = text ? Math.max(0, Math.round(snap(box(text).top) - targetTop)) : 40;
-    if (text) text.style.transform = "translateY(" + (-travel) + "px)";
-    const base = text ? snap(box(text).bottom) - snap(box(body).top) : 100;
-    slot.style.setProperty("--pf-slot-top", Math.round(base - travel + 2) + "px");
-    // Stop above the scrub bar: the queue must never reach into the transport.
-    const seek = document.getElementById("pfseek");
-    slot.style.bottom = seek ? Math.round(snap(box(body).bottom) - snap(box(seek).top) + 8) + "px" : "0px";
+    placeSheet(slot);
     // Establish the start values, then move both in the same frame.
     void getComputedStyle(slot).transform;
     requestAnimationFrame(() => {
@@ -4347,9 +4593,10 @@ function showFullQueue(open){
   }
   if (!full.classList.contains("queue-open")){ finish(); return; }
   full.classList.remove("queue-open");
-  // Clearing the header's inline transform is what animates it back down.
+  // Clearing the header's inline transform is what animates it back down. Unless the
+  // equalizer took the column in the same gesture — then the title stays where it is.
   const text = document.querySelector("#player-full .pf-text");
-  if (text) text.style.transform = "";
+  if (text && !full.classList.contains("eq-open")) text.style.transform = "";
   const done = event => {
     // The slot rides two transitions, and opacity finishes in 200 ms against the move's
     // 440 ms. Unmounting on the first one cut the sheet off two thirds of the way down and
@@ -4576,6 +4823,477 @@ $("#pfrepeat").onclick = cycleRepeat;
 $("#pfseek").addEventListener("input", e => { paintSeekFill(); seekTo(e.target.value); });
    // the queue opens inside fullscreen, it never closes it  // the queue opens inside fullscreen, it never closes it
 $("#pflyrics").onclick = () => { if ($("#pllyrics")) $("#pllyrics").click(); };
+
+// ---- equalizer -------------------------------------------------------------------
+// Six bands, per member, saved on the server. The audio graph itself lives in the
+// waveform closure (one MediaElementSource for the whole page, shared with the header
+// spectrum); this only speaks in gains and never routes audio twice.
+const EQ_LABELS = ["60 Hz", "170 Hz", "350 Hz", "1 kHz", "3.5 kHz", "10 kHz"];
+let eqState = {enabled: false, gains: [0, 0, 0, 0, 0, 0], loudness: false};
+
+function eqPanelBuilt(){
+  const host = document.getElementById("pf-eq-bands");
+  if (!host) return null;
+  if (!host.children.length){
+    host.innerHTML = EQ_LABELS.map((label, index) =>
+      `<label class="pf-eq-band"><span>${label}</span>
+        <input type="range" min="-12" max="12" step="1" value="0" data-eq-band="${index}"
+          aria-label="${label} gain">
+        <output data-eq-out="${index}">0</output></label>`).join("");
+    host.addEventListener("input", event => {
+      const input = event.target.closest("input[data-eq-band]");
+      if (!input) return;
+      const index = Number(input.dataset.eqBand);
+      eqState.gains[index] = Number(input.value);
+      // A band moved off zero is the member asking for the EQ: engaging it is the
+      // whole gesture, not a second hidden switch.
+      if (eqState.gains[index] !== 0) eqState.enabled = true;
+      eqPaint();
+    });
+    // Saved on release, not on every pixel of the drag.
+    host.addEventListener("change", () => { eqApply(true); eqSave(); });
+  }
+  return host;
+}
+
+function eqPaint(){
+  const host = document.getElementById("pf-eq-bands");
+  if (host){
+    host.querySelectorAll("input[data-eq-band]").forEach(input => {
+      const index = Number(input.dataset.eqBand);
+      const gain = Number(eqState.gains[index] || 0);
+      input.value = String(gain);
+      const out = host.querySelector(`[data-eq-out="${index}"]`);
+      if (out) out.textContent = (gain > 0 ? "+" : "") + gain;
+    });
+  }
+  const bypass = document.getElementById("pf-eq-bypass");
+  if (bypass){
+    bypass.classList.toggle("on", !eqState.enabled);
+    bypass.setAttribute("aria-pressed", String(!eqState.enabled));
+  }
+  const button = document.getElementById("pfeq");
+  if (button) button.classList.toggle("on", !!(eqState.enabled || eqState.loudness));
+  const loud = document.getElementById("pf-eq-loudness");
+  if (loud) loud.checked = !!eqState.loudness;
+}
+
+// `force` is the listener's own touch on the controls. Loading saved settings does not
+// pass it, so a curve saved on a desktop never captures the audio element on a phone at
+// boot: Safari freezes a routed context on lock, and background playback would stop.
+function eqApply(force){
+  if (typeof window.PlayerEQ === "undefined") return;
+  window.PlayerEQ.apply(eqState.gains, eqState.enabled, eqState.loudness, force === true);
+}
+
+async function eqSave(){
+  try {
+    const saved = await api("/api/listening/eq", {enabled: eqState.enabled, gains: eqState.gains,
+                                                   loudness: eqState.loudness});
+    if (saved && saved.eq) eqState = Object.assign({gains: [], loudness: false}, saved.eq);
+  } catch (error) { showToast(error.message); }
+  eqPaint();
+}
+
+// The equalizer is the queue's twin: the same band of the column, entered and left with the
+// same move, and only one of them at a time. It used to be a block at the bottom of the
+// column, which pushed the transport down and could sit open under the queue.
+let eqCloseTimer = 0;
+function eqToggle(open){
+  const panel = document.getElementById("pf-eq");
+  const button = document.getElementById("pfeq");
+  const full = document.getElementById("player-full");
+  if (!panel || !full) return;
+  const show = open === undefined ? panel.hidden : !!open;
+  clearTimeout(eqCloseTimer);
+  if (show){
+    // The queue leaves the way its own button makes it leave, then this takes the column in
+    // the same frame: both place the title identically, so nothing jumps between them.
+    if (full.classList.contains("queue-open")) showFullQueue(false);
+    panel.hidden = false;
+    placeSheet(panel);
+    void getComputedStyle(panel).transform;      // the start value the frame below moves from
+    requestAnimationFrame(() => full.classList.add("eq-open"));
+    eqPanelBuilt();
+    eqPaint();
+  } else {
+    full.classList.remove("eq-open");
+    const text = document.querySelector("#player-full .pf-text");
+    if (text && !full.classList.contains("queue-open")) text.style.transform = "";
+    // Out of the scroll area once the move is done, the same way the queue leaves it.
+    eqCloseTimer = setTimeout(() => {
+      panel.hidden = true;
+      panel.style.removeProperty("--pf-slot-top");
+      panel.style.bottom = "";
+    }, 460);
+  }
+  button?.setAttribute("aria-expanded", String(show));
+}
+// Called once the member's saved settings arrive (preferences.js owns that fetch).
+window.eqLoad = eq => {
+  if (!eq) return;
+  eqState = {enabled: !!eq.enabled, gains: (eq.gains || [0, 0, 0, 0, 0, 0]).map(Number),
+             loudness: !!eq.loudness};
+  eqApply();
+  eqPaint();
+};
+document.getElementById("pfeq").onclick = event => {
+  event.stopPropagation();
+  eqToggle();
+};
+document.getElementById("pf-eq-close").onclick = event => {
+  event.stopPropagation();
+  eqToggle(false);
+};
+document.getElementById("pf-eq-bypass").onclick = event => {
+  event.stopPropagation();
+  eqState.enabled = !eqState.enabled;
+  eqApply(true);
+  eqPaint();
+  eqSave();
+};
+document.getElementById("pf-eq-flat").onclick = event => {
+  event.stopPropagation();
+  // Flat resets the bands; the loudness curve is its own switch and keeps its state.
+  eqState = {enabled: false, gains: [0, 0, 0, 0, 0, 0], loudness: eqState.loudness};
+  eqApply(true);
+  eqPaint();
+  eqSave();
+};
+document.getElementById("pf-eq-loudness").onchange = event => {
+  event.stopPropagation();
+  eqState.loudness = !!event.target.checked;
+  eqApply(true);
+  eqPaint();
+  eqSave();
+};
+
+// ---- AutoDJ -----------------------------------------------------------------------
+// A DJ does three things to a queue: picks a next track that will mix, nudges its tempo
+// so the two sit together, and overlaps the end of one with the start of the next. This
+// does all three with plain arithmetic — tempo proximity, an equal-power fade and a
+// second audio element — and nothing else. It is deliberately not "same tempo only": the
+// score prefers a close tempo but keeps a random term, so a long set drifts instead of
+// looping one groove.
+const AUTODJ_AHEAD = 3;        // picks kept queued ahead of the playing song
+const AUTODJ_RECENT = 12;      // songs that will not be picked again this session
+const AUTODJ_TEMPO = 0.06;     // largest tempo nudge that still sounds natural
+
+let autoDj = false;
+let autoDjPool = [];
+let autoDjRecent = [];
+
+function autoDjBpm(track){
+  const value = Number(track && track.bpm);
+  return value > 20 ? value : 0;
+}
+
+// Fold a tempo into the octave of the reference: 90 BPM mixes with 180, 174 with 87.
+function autoDjFold(bpm, reference){
+  if (!(bpm > 0) || !(reference > 0)) return 0;
+  let value = bpm;
+  while (value < reference * 0.7071) value *= 2;
+  while (value > reference * 1.4142) value /= 2;
+  return value;
+}
+
+function autoDjScore(track, reference){
+  let score = Math.random() * 1.6;
+  const bpm = autoDjBpm(track);
+  if (bpm && reference){
+    const distance = Math.abs(Math.log2(autoDjFold(bpm, reference) / reference));
+    score -= Math.min(3, distance * 7);
+    // Close enough to blend without touching the pitch: the score that makes a mix.
+    if (distance <= AUTODJ_TEMPO) score += 0.7;
+  }
+  return score;
+}
+
+function autoDjPick(){
+  const pool = (autoDjPool.length > 1 ? autoDjPool : (libAll || [])).filter(t => t && t.playable);
+  if (pool.length < 2) return null;
+  const current = libQueue.find(t => t.id === playingId) || (libAll || []).find(t => t.id === playingId);
+  const reference = autoDjBpm(current);
+  const recent = new Set(autoDjRecent.slice(-AUTODJ_RECENT));
+  let options = pool.filter(t => t.id !== playingId && !recent.has(t.id));
+  if (!options.length) options = pool.filter(t => t.id !== playingId);
+  if (!options.length) return null;
+  let best = null, bestScore = -Infinity;
+  for (const track of options){
+    const score = autoDjScore(track, reference);
+    if (score > bestScore){ bestScore = score; best = track; }
+  }
+  return best;
+}
+
+// What the set is drawn from: the queue the listener built when it is a real set, so
+// AutoDJ stays inside a playlist; the whole library otherwise.
+function autoDjSeed(){
+  const pool = (libQueue.length >= 5 ? libQueue : (libAll || [])).filter(t => t && t.playable);
+  autoDjPool = pool.slice();
+}
+
+// Keep a few picks queued, so the queue panel, the prefetch and the crossfade all see the
+// same next track instead of each guessing separately.
+function autoDjEnsure(){
+  if (!autoDj) return;
+  if (!libQueue.length || libIndex < 0){
+    const now = (libAll || []).find(t => t.id === playingId) ||
+                libQueue.find(t => t.id === playingId);
+    if (!now) return;
+    libQueue = [now];
+    libIndex = 0;
+    if (typeof commitPlaybackQueue === "function") commitPlaybackQueue();
+  }
+  let added = 0;
+  while (libQueue.length - libIndex - 1 < AUTODJ_AHEAD && added < AUTODJ_AHEAD){
+    const pick = autoDjPick();
+    if (!pick) break;
+    libQueue.push(pick);
+    autoDjRecent.push(pick.id);
+    if (autoDjRecent.length > 40) autoDjRecent = autoDjRecent.slice(-40);
+    added++;
+  }
+  if (added){
+    if (typeof commitPlaybackQueue === "function") commitPlaybackQueue();
+    if (typeof paintPlaybackQueue === "function") paintPlaybackQueue();
+    saveNowState(true);
+  }
+}
+
+function paintAutoDj(){
+  const chip = document.getElementById("pf-autodj");
+  if (chip){
+    chip.classList.toggle("on", autoDj);
+    chip.setAttribute("aria-pressed", String(autoDj));
+  }
+  const tab = document.getElementById("autodj-tab");
+  if (tab) tab.classList.toggle("on", autoDj);
+}
+
+async function setAutoDj(on){
+  autoDj = !!on;
+  if (autoDj){
+    autoDjSeed();
+    autoDjEnsure();
+  } else {
+    // Off means the song plays at its own tempo again.
+    try { playerAudio.playbackRate = 1; } catch (_) {}
+  }
+  paintAutoDj();
+  try {
+    await api("/api/listening/playback", {autodj: autoDj});
+  } catch (error) { showToast(error.message); }
+}
+
+// The switch is stored per member, so turning it on at the desk turns it on for the phone.
+window.autoDjLoad = playback => {
+  autoDj = !!(playback && playback.autodj);
+  paintAutoDj();
+};
+
+document.getElementById("pf-autodj").onclick = event => {
+  event.stopPropagation();
+  setAutoDj(!autoDj);
+};
+
+// ---- tempo matching ----------------------------------------------------------------
+// One player, not two. An earlier version overlapped the tail of one song with the head of
+// the next in a second <audio> element, and that is a trap on a phone in a car: two media
+// elements in one page fight over the single platform session, so a Bluetooth head unit
+// dropped the connection, the title flipped between the song and the app's own name, and
+// the audio never came back until the app was restarted. AutoDJ therefore changes no
+// element: it picks the next song, queues it, and tempo-matches the same player across the
+// cut. The transition is an ordinary track change, which every head unit already handles.
+function autoDjRate(fromBpm, toBpm){
+  if (!(fromBpm > 0) || !(toBpm > 0)) return 1;
+  let ratio = toBpm / fromBpm;
+  while (ratio < 0.7071) ratio *= 2;
+  while (ratio > 1.4142) ratio /= 2;
+  if (Math.abs(ratio - 1) > AUTODJ_TEMPO) return 1;
+  return Math.round(ratio * 1000) / 1000;
+}
+
+// The nudge lives on the one element, so the position state the car reads stays honest.
+function autoDjMatch(fromBpm, toBpm){
+  const rate = autoDj ? autoDjRate(fromBpm, toBpm) : 1;
+  try {
+    playerAudio.preservesPitch = true;
+    playerAudio.playbackRate = rate;
+  } catch (_) {}
+  return rate;
+}
+
+// ---- cue points -------------------------------------------------------------------
+// Four hot cues per track per member, stored on the server so a cue found on the desktop
+// is there on the phone. Cues are a way to jump between parts of one song, not bookmarks:
+// tapping a set pad plays from that point, which is the whole gesture a DJ makes.
+const CUE_KEYS = ["A", "B", "C", "D"];
+const CUE_HOLD_MS = 550;
+let cueTrack = null;
+let cueSlots = [null, null, null, null];
+
+function cuePaint(){
+  const host = document.getElementById("pf-cues");
+  if (!host) return;
+  CUE_KEYS.forEach((key, slot) => {
+    const pad = host.querySelector(`[data-cue="${slot}"]`);
+    if (!pad) return;
+    const at = Number.isFinite(cueSlots[slot]) ? cueSlots[slot] : null;
+    pad.classList.toggle("set", at !== null);
+    const label = pad.querySelector(".pf-cue-time");
+    if (label) label.textContent = at !== null ? fmtClock(at) : "—";
+    pad.setAttribute("aria-label", at !== null
+      ? `Cue ${key} at ${fmtClock(at)}. Tap to jump, hold to clear.`
+      : `Cue ${key} empty. Tap to set at the playhead.`);
+    pad.title = at !== null ? `Cue ${key} · ${fmtClock(at)} — hold to clear`
+                            : `Set cue ${key} at the playhead`;
+  });
+}
+
+// Loaded whenever the fullscreen player lands on a new track; the guard keeps a track
+// change from stacking fetches behind a slower earlier one.
+async function loadCues(trackId){
+  cueTrack = trackId || null;
+  cueSlots = [null, null, null, null];
+  cuePaint();
+  if (!cueTrack) return;
+  try {
+    const response = await fetch(`/api/listening/cues?track=${cueTrack}`, {cache: "no-store"});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (cueTrack !== trackId) return;
+    for (const row of data.cues || []){
+      const slot = Number(row.slot);
+      if (slot >= 0 && slot < 4) cueSlots[slot] = Number(row.position);
+    }
+  } catch (_) { /* cues are an extra; a failed read must never block playback */ }
+  cuePaint();
+}
+
+function cueJump(position){
+  if (!Number.isFinite(position)) return;
+  try { playerAudio.currentTime = position; } catch (_) { return; }
+  // A cue pressed while paused is a request to hear that part, not to move a still playhead.
+  if (playerAudio.paused) transportPlay();
+}
+
+function cueStamp(slot){
+  if (!playingId) return;
+  if (!Number.isFinite(playerAudio.duration) || playerAudio.duration <= 0){
+    showToast("Nothing to cue yet");
+    return;
+  }
+  cueSlots[slot] = playerAudio.currentTime;
+  cuePaint();
+  cueWrite(slot, playerAudio.currentTime);
+}
+
+function cueClear(slot){
+  if (!Number.isFinite(cueSlots[slot])) return;
+  cueSlots[slot] = null;
+  cuePaint();
+  cueWrite(slot, null);
+}
+
+async function cueWrite(slot, position){
+  const track = playingId;
+  try {
+    const saved = await api("/api/listening/cues", {track, slot, position});
+    if (track !== cueTrack) return;
+    cueSlots = [null, null, null, null];
+    for (const row of saved.cues || []){
+      const at = Number(row.slot);
+      if (at >= 0 && at < 4) cueSlots[at] = Number(row.position);
+    }
+    cuePaint();
+  } catch (error) { showToast(error.message); }
+}
+
+(function cueWiring(){
+  const host = document.getElementById("pf-cues");
+  if (!host) return;
+  let hold = 0, fired = false, pressed = null;
+
+  const cancelHold = () => { if (hold) clearTimeout(hold); hold = 0; };
+  const trigger = slot => {
+    if (Number.isFinite(cueSlots[slot])) cueJump(cueSlots[slot]);
+    else cueStamp(slot);
+  };
+
+  host.addEventListener("pointerdown", event => {
+    const pad = event.target.closest(".pf-cue");
+    cancelHold();
+    fired = false;
+    // A right-click is the desktop clear, handled by contextmenu; it must not also arm the
+    // tap, or the release would re-stamp the pad the menu just cleared.
+    pressed = pad && event.button === 0 ? Number(pad.dataset.cue) : null;
+    if (pressed === null || !Number.isFinite(cueSlots[pressed])) return;
+    // Only a set pad can be cleared, so an empty pad waits for its tap instead of a hold.
+    hold = setTimeout(() => {
+      hold = 0;
+      fired = true;
+      if (navigator.vibrate) navigator.vibrate(10);
+      cueClear(pressed);
+    }, CUE_HOLD_MS);
+  });
+
+  host.addEventListener("pointerup", () => {
+    cancelHold();
+    const slot = pressed;
+    pressed = null;
+    if (slot === null) return;
+    if (fired) { fired = false; return; }
+    trigger(slot);
+  });
+
+  host.addEventListener("pointercancel", () => { cancelHold(); fired = false; pressed = null; });
+
+  // Desktop has no hold gesture worth teaching: right-click clears.
+  host.addEventListener("contextmenu", event => {
+    const pad = event.target.closest(".pf-cue");
+    if (!pad) return;
+    event.preventDefault();
+    cueClear(Number(pad.dataset.cue));
+  });
+
+  // Keyboard parity: Enter/Space is the tap, Delete/Backspace the clear.
+  host.addEventListener("keydown", event => {
+    const pad = event.target.closest(".pf-cue");
+    if (!pad) return;
+    const slot = Number(pad.dataset.cue);
+    if (event.key === "Delete" || event.key === "Backspace"){
+      event.preventDefault();
+      cueClear(slot);
+    } else if (event.key === "Enter" || event.key === " "){
+      event.preventDefault();
+      trigger(slot);
+    }
+  });
+})();
+
+// The pads are a toggle: off by default, because a listener who never cues should not have
+// four boxes on the record. The choice is per device and survives a reload; the button keeps
+// aria-pressed in step so the state is readable without sight of the pads.
+(function cueToggle(){
+  const button = document.getElementById("pfcues");
+  const host = document.getElementById("pf-cues");
+  if (!button || !host) return;
+  const KEY = "hl.cues.on";
+  let on = false;
+  try { on = localStorage.getItem(KEY) === "1"; } catch (_) {}
+  const paint = state => {
+    host.classList.toggle("on", state);
+    button.classList.toggle("on", state);
+    button.setAttribute("aria-pressed", String(state));
+  };
+  paint(on);
+  button.onclick = () => {
+    on = !on;
+    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) {}
+    paint(on);
+  };
+})();
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape" || !fullPlayerOpen()) return;
   // Escape peels one layer at a time: the queue sheet first, then fullscreen.
@@ -4604,6 +5322,11 @@ $("#liblist").addEventListener("click", event => {
   if (!hit || event.target.closest('button,a,details,input,textarea,select,label')) return;
   const row = hit.closest('.songrow');
   if (row.classList.contains('acard') || !row.dataset.id) return;
+  // A collapsed compact card is still a row, not a page: its cover opens the card, and the
+  // card's own handler below does that once this one steps aside. Only an open card's cover
+  // means the album it came from — the same door the table rows have.
+  if (libCardsCompact && libSongLayout === 'cards' && row.classList.contains('songcard')
+      && !row.classList.contains('open')) return;
   const id = Number(row.dataset.id);
   const track = (currentRows || []).find(t => t.id === id) || (libAll || []).find(t => t.id === id);
   if (!track) return;
@@ -4681,7 +5404,8 @@ function playerToggle(){
   else transportPause();
 }
 function playerPrev(){
-  if (playerAudio.currentTime > 3) playerAudio.currentTime = 0; else stepTrack(-1);
+  if (playerAudio.currentTime > 3) playerAudio.currentTime = 0;
+  else stepTrack(-1);
 }
 function playerNext(){ stepTrack(1); }
 function toggleShuffle(){
@@ -4743,8 +5467,9 @@ paintShelfMode();
 // copy is dropped first. The browser may still evict on its own, so the dialog reports what is
 // held rather than promising anything, and "Remove copies" is the honest escape hatch.
 const OFFLINE_CACHE = "hardlylistening-audio-v1";   // named in sw.js as well
+const OFFLINE_ART = "hardlylistening-artwork-v1";   // named in sw.js as well
 const OFFLINE_KEY = "hl.offlineBudget";             // bytes; 0 = keep nothing
-const OFFLINE_INDEX = "hl.offlineIndex";            // track id -> {bytes, at}
+const OFFLINE_INDEX = "hl.offlineIndex";            // track id -> {bytes, at, art}
 const OFFLINE_DEFAULT = 2 * 1024 ** 3;
 const offlineKey = id => `/api/track/${id}/audio`;
 function offlineBudget(){
@@ -4770,8 +5495,14 @@ function offlineStats(){
 async function cachePlayedAudio(id){
   if (!id || !offlineBudget() || !("caches" in self)) return;
   const index = offlineIndex();
-  // Already kept: touch it, so it is the last candidate for eviction, and stop.
-  if (index[id]){ index[id].at = Date.now(); saveOfflineIndex(index); return; }
+  // Already kept: touch it, so it is the last candidate for eviction, and stop. A copy kept
+  // before the cover was known gets its cover now, once.
+  if (index[id]){
+    index[id].at = Date.now();
+    saveOfflineIndex(index);
+    if (!index[id].art) await keepArtwork(id);
+    return;
+  }
   try {
     // A prefetched song is already in memory, so keep those bytes instead of asking the
     // server for the same file a second time. Only a song that streamed needs the fetch.
@@ -4786,37 +5517,90 @@ async function cachePlayedAudio(id){
     await cache.put(offlineKey(id), new Response(blob, {headers: {
       "Content-Type": response.headers.get("Content-Type") || "audio/mpeg",
       "Content-Length": String(blob.size), "Accept-Ranges": "bytes"}}));
-    index[id] = {bytes: blob.size, at: Date.now()};
+    index[id] = {bytes: blob.size, at: Date.now(), art: ""};
     saveOfflineIndex(index);
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-    await offlineEvict();
+    await keepArtwork(id);
+    const removed = await offlineEvict();
+    paintOfflineMarks();
+    // Eviction is not silent: a copy that went to make room is a fact the listener can see.
+    if (removed.length){
+      const freed = removed.reduce((sum, entry) => sum + entry.bytes, 0);
+      showToast(`Freed ${fmtBytes(freed)} — ${removed.length} older offline cop${removed.length === 1 ? "y" : "ies"} removed`);
+    }
   } catch (_) { /* no cache or no quota: streaming still works, so say nothing */ }
+}
+// The cover belongs to the song. A kept song whose art the row already asks for (our own
+// `/api/art/<digest>` route) is stored as-is; a row that only knows a provider URL is asked
+// once for the digest, and both keys are kept so a row drawn either way resolves offline.
+async function keepArtwork(id){
+  if (!("caches" in self) || !offlineBudget()) return;
+  const row = (libAll || []).find(t => Number(t.id) === Number(id)) || null;
+  if (row && !row.art_hash && typeof ensureArt === "function"){
+    try { await ensureArt(row); } catch (_) { /* the provider may be gone; no cover then */ }
+  }
+  const url = row && row.art_hash ? `/api/art/${row.art_hash}` : `/api/track/${id}/artwork`;
+  try {
+    const cache = await caches.open(OFFLINE_ART);
+    const store = async target => {
+      const response = await fetch(target, {credentials: "same-origin"});
+      const kind = response.headers.get("Content-Type") || "";
+      if (!response.ok || !kind.startsWith("image/")) return false;
+      const blob = await response.blob();
+      if (!blob.size) return false;
+      await cache.put(target, new Response(blob, {headers: {
+        "Content-Type": kind, "Content-Length": String(blob.size)}}));
+      return true;
+    };
+    if (!(await store(url))) return;
+    // A row with no digest asks the track route; keep that too, or half the tiles miss.
+    if (url !== `/api/track/${id}/artwork`) await store(`/api/track/${id}/artwork`);
+    const index = offlineIndex();
+    if (index[id]){ index[id].art = url; saveOfflineIndex(index); }
+  } catch (_) { /* a cover is not worth failing a kept song over */ }
 }
 async function offlineEvict(){
   const budget = offlineBudget();
   const index = offlineIndex();
-  const entries = Object.entries(index).map(([id, entry]) => ({id, bytes: Number(entry && entry.bytes) || 0, at: Number(entry && entry.at) || 0}));
+  const entries = Object.entries(index).map(([id, entry]) => ({id, bytes: Number(entry && entry.bytes) || 0, at: Number(entry && entry.at) || 0, art: entry && entry.art}));
   let total = entries.reduce((sum, entry) => sum + entry.bytes, 0);
-  if (total <= budget) return;
+  if (total <= budget) return [];
   const cache = await caches.open(OFFLINE_CACHE);
   entries.sort((a, b) => a.at - b.at);
+  const removed = [];
   for (const entry of entries){
     if (total <= budget) break;
     if (String(entry.id) === String(playingId)) continue;  // never drop what is playing
     await cache.delete(offlineKey(entry.id));
     delete index[entry.id];
     total -= entry.bytes;
+    removed.push(entry);
   }
   saveOfflineIndex(index);
+  // A cover whose song is gone is dead weight. A digest shared by a song still kept stays.
+  if (removed.length){
+    const art = await caches.open(OFFLINE_ART);
+    const stillUsed = new Set(Object.values(index).map(entry => entry && entry.art).filter(Boolean));
+    for (const entry of removed){
+      await art.delete(`/api/track/${entry.id}/artwork`);
+      if (entry.art && !stillUsed.has(entry.art)) await art.delete(entry.art);
+    }
+    paintOfflineMarks();
+  }
+  return removed;
 }
 // The browser can clear site storage without telling anyone; the index is only a claim, so
 // check it against the cache before showing a figure.
 async function offlineReconcile(){
   if (!("caches" in self)) return offlineStats();
   const cache = await caches.open(OFFLINE_CACHE);
+  const art = await caches.open(OFFLINE_ART);
   const index = offlineIndex();
   for (const id of Object.keys(index)){
-    if (!(await cache.match(offlineKey(id)))) delete index[id];
+    if (!(await cache.match(offlineKey(id)))){ delete index[id]; continue; }
+    // The browser can clear one cache and not the other: a cover the index claims but the
+    // art cache no longer holds is dropped from the claim, so the next play keeps it again.
+    if (index[id].art && !(await art.match(index[id].art))) index[id].art = "";
   }
   saveOfflineIndex(index);
   return offlineStats();
@@ -4825,8 +5609,11 @@ async function clearOfflineAudio(){
   try {
     const cache = await caches.open(OFFLINE_CACHE);
     for (const id of Object.keys(offlineIndex())) await cache.delete(offlineKey(id));
+    const art = await caches.open(OFFLINE_ART);
+    for (const key of await art.keys()) await art.delete(key);
     saveOfflineIndex({});
   } catch (_) {}
+  paintOfflineMarks();
   paintOfflineDialog();
   showToast("Offline copies removed");
 }
@@ -4852,11 +5639,28 @@ async function setOfflineBudget(value){
   localStorage.setItem(OFFLINE_KEY, String(bytes));
   if (bytes){
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-    if (Object.keys(offlineIndex()).length) await offlineEvict();
+    if (Object.keys(offlineIndex()).length){
+      const removed = await offlineEvict();
+      if (removed.length){
+        const freed = removed.reduce((sum, entry) => sum + entry.bytes, 0);
+        showToast(`Freed ${fmtBytes(freed)} — ${removed.length} older offline cop${removed.length === 1 ? "y" : "ies"} removed`);
+      }
+    }
   } else {
     await clearOfflineAudio();     // "Off" means no copies, not "keep them but stop adding"
   }
+  paintOfflineMarks();
   paintOfflineDialog();
+}
+// A kept song says so on its row: the badge is markup, so a screen reader gets the word too.
+// Called after every library paint and whenever a copy is added or evicted.
+function paintOfflineMarks(){
+  const index = offlineIndex();
+  for (const node of document.querySelectorAll("#liblist [data-id]")){
+    const id = String(node.dataset.id);
+    const badge = node.querySelector(".kept-badge");
+    if (badge) badge.hidden = !index[id];
+  }
 }
 // Keep a song only once it is actually playing: the copy must never compete with the first
 // seconds of the stream. One timer, so a skip cancels the song it was going to keep.
@@ -4919,7 +5723,7 @@ $("#plseek").addEventListener("input", e => {
 });
 // The bar and the fullscreen view each carry a fader on desktop. Both are painted from the
 // audio element, never from each other, so they cannot drift apart.
-const volumeFaders = [...document.querySelectorAll("#plvol,#pfvol")];
+const volumeFaders = [...document.querySelectorAll("#plvol,#pfvol,#plvolv")];
 function paintVolume(){
   const pct = Math.round((playerAudio.muted ? 0 : playerAudio.volume) * 100);
   for (const fader of volumeFaders){
@@ -4946,6 +5750,41 @@ $("#plmute").onclick = () => {
   $("#plmute").setAttribute("aria-pressed", String(muted));
   paintVolume();
 };
+// The compact bar's volume: the speaker beside mute opens a vertical fader that rises out of
+// the bar. The panel is placed from the button's box because the bar clips its own overflow and
+// the panel has to sit outside it; a click anywhere else, Escape, or a resize closes it.
+function closeVolumeMenu(){
+  const menu = $("#plvolmenu"), button = $("#plvolmore");
+  if (menu) menu.classList.remove("open");
+  if (button) { button.classList.remove("on"); button.setAttribute("aria-expanded", "false"); }
+}
+function placeVolumeMenu(){
+  const menu = $("#plvolmenu"), button = $("#plvolmore");
+  if (!menu || !button) return;
+  const b = button.getBoundingClientRect(), size = menu.getBoundingClientRect(), pad = 8;
+  const left = Math.min(Math.max(b.left + b.width / 2 - size.width / 2, pad),
+    Math.max(pad, innerWidth - pad - size.width));
+  menu.style.left = Math.round(left) + "px";
+  menu.style.bottom = Math.round(innerHeight - b.top + 10) + "px";
+}
+$("#plvolmore").onclick = event => {
+  event.stopPropagation();
+  const menu = $("#plvolmenu"), button = $("#plvolmore");
+  const open = !menu.classList.contains("open");
+  if (open) placeVolumeMenu();
+  menu.classList.toggle("open", open);
+  button.classList.toggle("on", open);
+  button.setAttribute("aria-expanded", String(open));
+};
+document.addEventListener("click", event => {
+  const menu = $("#plvolmenu");
+  if (menu && menu.classList.contains("open") && !menu.contains(event.target)) closeVolumeMenu();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeVolumeMenu();
+});
+window.addEventListener("resize", closeVolumeMenu);
+
 // The top bar's volume is a toggle: the speaker (left of shuffle) opens a fader into the
 // space to its left and stays open across sessions, because a level you chose to see
 // should not close itself between visits. The level itself is `hl.volume`, painted from
@@ -4973,11 +5812,12 @@ window.addEventListener("pagehide", () => {
 
 // ------------------------------------------------------------------ init
 $("#plshuffle").innerHTML = SVG.shuffle(16);
-$("#plvolbtn").innerHTML = SVG.volume(16);
+$("#plvolbtn").innerHTML = SVG.volumeUp(16);
 $("#plprev").innerHTML = SVG.prev(20);
 $("#plplay").innerHTML = SVG.play(14);
 $("#plnext").innerHTML = SVG.next(20);
 $("#plmute").innerHTML = SVG.volume(16);
+$("#plvolmore").innerHTML = SVG.volumeUp(16);
 $("#pfshuffle").innerHTML = SVG.shuffle(16);
 $("#pfprev").innerHTML = SVG.prev(20);
 $("#pfnext").innerHTML = SVG.next(20);
@@ -5098,6 +5938,154 @@ function refreshExportLink(){
 $("#expfmt").addEventListener("change", refreshExportLink);
 $("#expscope").addEventListener("change", refreshExportLink);
 
+// ---- Sending the set somewhere else (HL-228) ---------------------------------
+// `#dlg-export` is where both hand-offs leave from, because both answer the same question
+// first: which scope. The download is a playlist file the DJ app reads on this PC; the drive
+// copy writes the audio, so it plans before it writes and reports progress from the job the
+// server queued rather than from anything this tab believes.
+let usbTimer = 0;
+
+function usbLine(tag, text, tone){
+  const el = document.createElement(tag);
+  el.textContent = text;
+  if (tone) el.className = tone;
+  $("#usbplan").append(el);
+  return el;
+}
+
+function usbScope(){
+  const value = $("#expscope").value;
+  return value ? Number(value) : null;
+}
+
+function usbClear(){
+  $("#usbplan").replaceChildren();
+  $("#usbplan").hidden = true;
+  $("#usbgo").hidden = true;
+  $("#usbgo").disabled = false;
+}
+
+function usbPaintPlan(plan){
+  const box = $("#usbplan");
+  box.replaceChildren();
+  box.hidden = false;
+  $("#usbgo").disabled = false;
+  if (plan.blocked){
+    usbLine("p", plan.blocked, "bad");
+    $("#usbgo").hidden = true;
+    return;
+  }
+  const tracks = `${plan.tracks} track${plan.tracks === 1 ? "" : "s"}`;
+  usbLine("p", plan.fits
+    ? `${tracks}, ${fmtBytes(plan.bytes)} — fits, ${fmtBytes(plan.free)} free.`
+    : `${tracks}, ${fmtBytes(plan.bytes)} — only ${fmtBytes(plan.free)} free, so it does not fit.`,
+    plan.fits ? "good" : "bad");
+  if (plan.convert.length)
+    usbLine("p", `${plan.convert.length} will be converted to MP3 first; those sizes are estimates.`);
+  if (plan.missing.length)
+    usbLine("p", `${plan.missing.length} file${plan.missing.length === 1 ? " is" : "s are"} missing on this machine, so ${plan.missing.length === 1 ? "it stays" : "they stay"} behind.`);
+  if (plan.overflow.length)
+    usbLine("p", `${plan.overflow.length} would not fit and ${plan.overflow.length === 1 ? "is" : "are"} left behind: `
+      + plan.overflow.slice(0, 6).map(one => one.name).join(", ")
+      + (plan.overflow.length > 6 ? `, and ${plan.overflow.length - 6} more` : "") + ".", "bad");
+  if (plan.cues || plan.bpm)
+    usbLine("p", `The XML carries ${plan.cues} hot cue${plan.cues === 1 ? "" : "s"} and ${plan.bpm} track${plan.bpm === 1 ? "" : "s"} with a tempo.`, "dim");
+  usbLine("p", `Files go into ${plan.folder}`, "dim");
+  $("#usbgo").hidden = !(plan.fits && plan.tracks);
+}
+
+function usbPaintJob(job){
+  const box = $("#usbplan");
+  const total = job.tracks || 0;
+  box.replaceChildren();
+  box.hidden = false;
+  if (job.status === "failed"){
+    usbLine("p", job.error || "The copy stopped.", "bad");
+  } else if (job.status === "finished"){
+    usbLine("p", `Copied ${job.copied} of ${total} track${total === 1 ? "" : "s"} to ${job.destination}.`, "good");
+    usbLine("p", `Open HardlyListening.rekordbox.xml or HardlyListening.m3u8 from the drive's root.`, "dim");
+  } else if (job.status === "queued"){
+    usbLine("p", `Waiting to start: ${total} track${total === 1 ? "" : "s"} to ${job.destination}.`, "dim");
+  } else {
+    usbLine("p", `Copying ${job.copied} of ${total}…`, "dim");
+  }
+  const running = job.status === "queued" || job.status === "copying";
+  $("#usbgo").hidden = running;
+  $("#usbgo").disabled = running;
+}
+
+async function usbPoll(id){
+  clearTimeout(usbTimer);
+  if (!$("#dlg-export").open) return;
+  let data = null;
+  try { data = await (await fetch("/api/library/usb")).json(); } catch { }
+  const job = (data?.jobs || []).find(one => one.id === id);
+  if (!job) return;
+  usbPaintJob(job);
+  if (job.status === "queued" || job.status === "copying") usbTimer = setTimeout(() => usbPoll(id), 800);
+}
+
+async function usbResume(){
+  // A copy started before this dialog was closed is still a row on the server: show it
+  // instead of pretending the drive is untouched.
+  let data = null;
+  try { data = await (await fetch("/api/library/usb")).json(); } catch { }
+  const job = (data?.jobs || [])[0];
+  if (job && (job.status === "queued" || job.status === "copying")){
+    usbPaintJob(job);
+    usbPoll(job.id);
+  }
+}
+
+function openDjExport(){
+  const select = $("#expscope");
+  const chosen = select.value;
+  select.innerHTML = '<option value="">Whole library</option>' +
+    scopedPlaylists().map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join("");
+  select.value = [...select.options].some(option => option.value === chosen) ? chosen : "";
+  refreshExportLink();
+  usbClear();
+  $("#dlg-export").showModal();
+  usbResume();
+}
+$("#djexportbtn").onclick = openDjExport;
+$("#dlg-export").addEventListener("close", () => clearTimeout(usbTimer));
+// A plan describes one scope of one drive: changing either makes it a plan for something
+// else, so it goes rather than sitting there describing work that will not happen.
+$("#expscope").addEventListener("change", usbClear);
+$("#usbpath").addEventListener("input", usbClear);
+
+$("#usbcheck").onclick = async () => {
+  const box = $("#usbplan");
+  box.replaceChildren();
+  box.hidden = false;
+  usbLine("p", "Reading the drive…", "dim");
+  try {
+    usbPaintPlan(await api("/api/library/usb/plan",
+      {destination: $("#usbpath").value.trim(), playlist: usbScope()}));
+  } catch (error){
+    box.replaceChildren();
+    usbLine("p", error.message, "bad");
+    $("#usbgo").hidden = true;
+  }
+};
+
+$("#usbgo").onclick = async () => {
+  $("#usbgo").disabled = true;
+  try {
+    const job = await api("/api/library/usb/start",
+      {destination: $("#usbpath").value.trim(), playlist: usbScope()});
+    usbPaintJob(job);
+    usbPoll(job.id);
+  } catch (error){
+    $("#usbplan").replaceChildren();
+    $("#usbplan").hidden = false;
+    usbLine("p", error.message, "bad");
+    $("#usbgo").hidden = true;
+    $("#usbgo").disabled = false;
+  }
+};
+
 $("#imppath").onclick = () => openPathDialog("import");
 $("#movebtn").onclick = () => openPathDialog("move");
 
@@ -5111,7 +6099,9 @@ $("#path-go").onclick = async e => {
       ? await api("/api/library/move", {to: value})
       : await api("/api/import", {paths: value});
     $("#path-result").textContent = pathMode === "move"
-      ? `moved ${res.moved} files to ${res.root}`
+      ? `moved ${res.moved} files to ${res.root}` +
+        (res.unserviceable && res.unserviceable.length
+          ? `; replacement ${res.unserviceable.join(", ")} keeps a previous file outside the library` : "")
       : `imported ${res.imported}, skipped ${res.skipped} duplicates` +
         (res.failed ? `, ${res.failed} failed` : "");
     await loadLibrary();
@@ -5201,25 +6191,44 @@ async function loadFeed(){
 }
 
 function renderSubscriptions(){
-  $("#followlist").innerHTML = subscriptions.length ? subscriptions.map(f => `<div class="followrow">
-      <div class="who">
-        <div class="name">${escapeHtml(f.artist_name || "Unknown")}</div>
-        <div class="feedmeta">${f.provider} · checked ${ago(f.last_checked)}
-          · every ${Math.round((f.interval || 0) / 3600)}h
-          ${f.new_items ? `· <span class="pill new">${f.new_items} new</span>` : ""}
-          ${f.enabled ? "" : `· <span class="pill ignored">paused</span>`}</div>
+  // One card per follow: the artist, what the subscription is doing, and its three
+  // controls. The row is a grid (identity, meta, actions) rather than a strip of inline
+  // buttons, so a long name and its meta text wrap instead of squeezing the buttons off
+  // the edge. `data-admin-only` sits on the buttons, not on their container: that
+  // attribute reverts `display`, which turned this row into a block of inline buttons.
+  const providerName = p => p === "apple" ? "Apple Music" : p === "soundcloud" ? "SoundCloud" : (p || "Source");
+  $("#followlist").innerHTML = subscriptions.length ? subscriptions.map(f => {
+    const name = f.artist_name || "Unknown";
+    const art = (typeof artistArt !== "undefined" && artistArt[artistKey(name)]) || "";
+    const letter = name.slice(0, 1).toUpperCase();
+    const every = Math.max(1, Math.round((f.interval || 0) / 3600));
+    return `<div class="subrow" data-sub="${f.id}">
+      <span class="subart">${letter}${art
+        ? `<img src="${escapeHtml(art)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>
+      <div class="subid">
+        <div class="subname">${escapeHtml(name)}</div>
+        <div class="submeta">
+          <span class="subprov">${escapeHtml(providerName(f.provider))}</span>
+          <span class="subfact">checked ${ago(f.last_checked)}</span>
+          <span class="subfact">every ${every}h</span>
+          ${f.new_items ? `<span class="pill new">${f.new_items} new</span>` : ""}
+          ${f.enabled ? "" : `<span class="pill ignored">paused</span>`}
+        </div>
       </div>
-      <div class="acts" data-admin-only>
-        <button class="syncbtn" data-check="${f.id}" title="Look for releases newer than the last check"
+      <div class="subacts">
+        <button class="syncbtn" data-check="${f.id}" data-admin-only
+          title="Look for releases newer than the last check"
           aria-label="Look for new releases">${SVG.sync(15)}</button>
-        <button data-toggle="${f.id}">${f.enabled ? "Pause" : "Resume"}</button>
-        <button data-remove="${f.id}">Unsubscribe</button>
+        <button class="subbtn" data-toggle="${f.id}" data-admin-only>${
+          f.enabled ? "Pause" : "Resume"}</button>
+        <button class="subbtn quiet" data-remove="${f.id}" data-admin-only>Unsubscribe</button>
       </div>
-    </div>`).join("")
-    : `<div class="empty">Not subscribed to anyone yet. Paste a SoundCloud artist page above.</div>`;
+    </div>`;
+  }).join("")
+    : `<div class="empty">Not subscribed to anyone yet. Paste an artist page above.</div>`;
   $("#followlist").querySelectorAll("[data-check]").forEach(b => b.onclick = async () => {
-    const row = b.closest(".followrow");
-    const name = ((row && row.querySelector(".name")) || {}).textContent || "That artist";
+    const row = b.closest(".subrow");
+    const name = ((row && row.querySelector(".subname")) || {}).textContent || "That artist";
     b.disabled = true; b.classList.add("busy");
     try {
       const r = await api(`/api/subscriptions/${b.dataset.check}/check`, {});
@@ -5343,9 +6352,17 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => {
     $("#view-feed").hidden = view !== "feed";
     $("#view-library").hidden = view !== "library";
     if (view === "library") { setLibraryScope(tab.dataset.scope || 'shared'); loadLibrary(); }
-    if (view === "feed") loadActivity();
+    if (view === "feed") openFeedTab();
   };
 });
+
+// The wordmark is Home: the Library tab, and out of whatever page was open. Same handler as the
+// tab, so the nav state, the remembered scope and the reload landing all stay in one place.
+$("#brandhome").onclick = () => {
+  if (typeof closeDetail === "function") closeDetail();
+  const home = document.querySelector('.tab[data-view="library"][data-scope="mine"]');
+  if (home) home.click();
+};
 
 // Refresh lands on the page you left, not on the queue. The tabs above are wired by now,
 // so replaying the click restores the section, the tab state and the library scope.
@@ -5416,6 +6433,10 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
   };
   const readNav = () => ({
     s: section(),
+    // A member profile is a page in the Feed section, not a fourth section, so it rides in
+    // the entry as the id it was opened for. Restoring it reopens that profile; leaving it
+    // (a tab, a Back) simply omits the id.
+    m: (typeof memberNavState === 'function' ? memberNavState() : null),
     sc: libraryScope === 'mine' ? 'mine' : 'shared',
     v: libView,
     f: activeFolderId || null,
@@ -5487,7 +6508,17 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
       detail = null;
       forgetFeedArtistReturn();
     }
-    last = {s: s.s, sc: s.sc, v: s.v, f: s.f, d: s.d, y: s.y};
+    // The profile page: restored by id when the entry carries one, dismissed otherwise. The
+    // silent path skips the history push and the scroll reset, because this IS the history
+    // move being restored.
+    if (s.s === 'feed' && s.m){
+      if (typeof openMember === 'function'
+          && (typeof memberNavState !== 'function' || String(memberNavState()) !== String(s.m)))
+        openMember(s.m, {nav: false});
+    } else if (typeof memberClosePage === 'function'){
+      memberClosePage();
+    }
+    last = {s: s.s, m: s.m || null, sc: s.sc, v: s.v, f: s.f, d: s.d, y: s.y};
     rememberLocal(last);
     if (typeof s.y === 'number'){
       // After the view is rebuilt, and again once layout has settled, so the list is tall
@@ -5522,6 +6553,9 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
   document.querySelectorAll('.tab[data-view]').forEach(tab => tab.addEventListener('click', () => {
     // Leaving the Repo by tab means "In Repo" is over; the next Repo Back is its own.
     if (typeof forgetFeedArtistReturn === 'function') forgetFeedArtistReturn();
+    // A tab is a way out of a member profile: the page lives in the Feed section, so the
+    // tab that takes you elsewhere has to put the Feed's own list back.
+    if (typeof memberClosePage === 'function') memberClosePage();
   }));
   document.querySelectorAll('.tab[data-view]').forEach(tab => tab.addEventListener('click', push));
   window.addEventListener('popstate', (event) => {
@@ -5532,6 +6566,9 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
   });
   window.navBack = () => { if (idx() > 0) history.back(); };
   window.navForward = () => { if (idx() < maxIdx) history.forward(); };
+  // The profile page is opened from a module that does not own the history: it asks for an
+  // entry here, and `readNav` supplies the id it is open for.
+  window.memberNavPush = () => push(lastY);
 
   // A horizontal swipe anywhere does what the two buttons do — right goes back, left goes
   // forward — but only when there is somewhere to go, and never over a surface that owns
@@ -6100,6 +7137,19 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     const max = Number(seek && seek.max ? seek.max : 1000);
     return max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   }
+  // The compact rectangle is the scrub surface, so the drawing has to answer a finger that
+  // is still down: the audio element only reports the seek once it lands, and a drag fires
+  // many of them, so `scrubAt` (0..1) is set from the control the moment it moves and kept
+  // for a beat after release, letting the lit edge and the playhead settle back together.
+  let scrubAt = -1, scrubTimer = 0, scrubHeld = false;
+  function markScrub(){
+    scrubAt = progress();
+    clearTimeout(scrubTimer);
+    // Only a released control counts down: a finger still resting mid-drag keeps its
+    // playhead, while a keyboard seek (which fires `input` and nothing else) fades it.
+    if (!scrubHeld) scrubTimer = setTimeout(() => { scrubAt = -1; paint(); }, 260);
+    paint();
+  }
   function energyAt(p){
     const src = envelopeOfCurrent();
     if (!src) return 0;
@@ -6115,43 +7165,131 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
   }
 
   // ---- the header's live spectrum ------------------------------------------------
-  // This is the one place the <audio> element is routed through a Web Audio graph, and it
-  // is deliberately confined to a mouse-driven desktop. A phone in landscape is wider than
-  // 900 px, and routing its audio through a context is exactly what kills playback when the
-  // screen locks — Safari freezes the context, so the sound stops. Width alone is not
-  // enough: the graph also needs no touch points and a hovering pointer, which is the only
-  // combination whose background playback does not depend on the page being awake.
-  let specCtx = null, specAnalyser = null, specSource = null, specData = null;
+  // There is exactly one Web Audio graph for the element, because
+  // `createMediaElementSource` may be called on an element only once: the spectrum and
+  // the equalizer have to share it. Six biquad bands sit between the source and the
+  // analyser; at 0 dB each is a passthrough, so a member who never touches the EQ hears
+  // exactly what the bare element produced.
+  let specCtx = null, specSource = null, specAnalyser = null, specData = null;
+  let eqFilters = null, graphBroken = false;
+  let loudnessNodes = null;
   let specRanges = null, specLevels = null;
+  const EQ_FREQS = [60, 170, 350, 1000, 3500, 10000];
+  const EQ_KINDS = ['lowshelf', 'peaking', 'peaking', 'peaking', 'peaking', 'highshelf'];
   const wideHeader = window.matchMedia ? matchMedia('(min-width:900px)') : null;
+  // Same reading the header spectrum uses: a touch screen is where a routed element can
+  // outlive the screen lock badly.
+  const touchDevice = () => (navigator.maxTouchPoints || 0) > 0;
   const finePointer = window.matchMedia ? matchMedia('(hover:hover) and (pointer:fine)') : null;
   function headerOnScreen(){
     return !!(wideHeader && wideHeader.matches && finePointer && finePointer.matches &&
       !(navigator.maxTouchPoints > 0));
   }
-  function spectrum(){
-    if (specAnalyser) return specAnalyser;
-    if (!headerOnScreen()) return null;
+  function graph(){
+    if (specSource) return specSource;
+    if (graphBroken) return null;
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return null;
+    if (!Ctx) { graphBroken = true; return null; }
+    let source = null;
     try {
       if (!specCtx) specCtx = new Ctx();
+      const filters = EQ_FREQS.map((hz, i) => {
+        const f = specCtx.createBiquadFilter();
+        f.type = EQ_KINDS[i];
+        f.frequency.value = hz;
+        f.Q.value = i === 0 || i === EQ_FREQS.length - 1 ? 0.71 : 1.0;
+        f.gain.value = 0;
+        return f;
+      });
       const an = specCtx.createAnalyser();
+      // The loudness stage sits after the bands, so it has the last word on the curve:
+      // a low shelf lifts the bass a small speaker cannot make, a high shelf takes the
+      // harsh edge off cheap tweeters, a little makeup gain buys back the level, and a
+      // fast limiter catches the peaks that lift would otherwise clip.
+      const bass = specCtx.createBiquadFilter();
+      bass.type = 'lowshelf'; bass.frequency.value = 120; bass.gain.value = 0;
+      const air = specCtx.createBiquadFilter();
+      air.type = 'highshelf'; air.frequency.value = 9000; air.gain.value = 0;
+      const makeup = specCtx.createGain();
+      makeup.gain.value = 1;
+      const limiter = specCtx.createDynamicsCompressor();
+      limiter.threshold.value = 0; limiter.knee.value = 0; limiter.ratio.value = 1;
+      limiter.attack.value = 0.003; limiter.release.value = 0.25;
       an.fftSize = 2048;
       an.smoothingTimeConstant = 0.5;
       an.minDecibels = -88;
       an.maxDecibels = -22;
-      // The analyser reaches the speakers first: if taking the element over fails, the
-      // route is already whole and the sound is untouched.
+      // The element is taken over last: everything it will be wired into already exists,
+      // so a failure cannot leave the page holding the element's only output.
+      source = specCtx.createMediaElementSource(audio);
+      let node = source;
+      for (const f of filters) { node.connect(f); node = f; }
+      node.connect(bass); bass.connect(air); air.connect(makeup);
+      makeup.connect(limiter); limiter.connect(an);
       an.connect(specCtx.destination);
-      specSource = specCtx.createMediaElementSource(audio);
-      specSource.connect(an);
+      specSource = source;
+      eqFilters = filters;
+      loudnessNodes = { bass, air, makeup, limiter };
       specAnalyser = an;
       specData = new Uint8Array(an.frequencyBinCount);
       if (specCtx.state === 'suspended') specCtx.resume().catch(() => {});
-    } catch (_) { specAnalyser = null; return null; }
+    } catch (_) {
+      // Keep the sound: a captured element with no route is silence.
+      try { if (source) source.connect(specCtx.destination); } catch (_) {}
+      graphBroken = true;
+      return null;
+    }
+    return source;
+  }
+  function spectrum(){
+    if (!headerOnScreen()) return null;
+    if (!graph()) return null;
     return specAnalyser;
   }
+  // The panel outside this closure speaks only in gains; it never touches Web Audio.
+  // `apply` creates the graph on demand, and refuses to when the EQ is flat, loudness is
+  // off and no graph exists yet — a member who leaves both alone keeps the element's own
+  // playback path.
+  window.PlayerEQ = {
+    freqs: EQ_FREQS.slice(),
+    engaged: () => !!(eqFilters && eqFilters.some(f => Math.abs(f.gain.value) > 0.01)),
+    apply(gains, enabled, loudness, force){
+      const list = Array.isArray(gains) ? gains : [];
+      const db = EQ_FREQS.map((_, i) => {
+        const value = Number(list[i]);
+        return Number.isFinite(value) ? Math.max(-12, Math.min(12, value)) : 0;
+      });
+      const flat = !enabled || db.every(v => Math.abs(v) < 0.01);
+      if (flat && !loudness && !specSource) return false;
+      // A saved curve arriving at boot is not worth a background-playback regression on a
+      // touch device, where the platform may freeze a routed context when the screen locks.
+      // The controls still show the saved state; the graph is built when one is touched.
+      if (!specSource && !force && touchDevice()) return false;
+      if (!graph()) return false;
+      for (let i = 0; i < eqFilters.length; i++){
+        if (Math.abs(eqFilters[i].gain.value - db[i]) < 0.01) continue;
+        eqFilters[i].gain.setTargetAtTime(db[i], specCtx.currentTime, 0.02);
+      }
+      if (loudnessNodes){
+        // +6 dB of bass and −2.5 dB of air is the shape a consumer "bass" button uses;
+        // the makeup gain is what makes it louder, and the limiter is what stops that
+        // from turning into distortion on a track that is already mastered hot.
+        const ramp = (param, value) => {
+          if (Math.abs(param.value - value) < 0.001) return;
+          param.setTargetAtTime(value, specCtx.currentTime, 0.05);
+        };
+        ramp(loudnessNodes.bass.gain, loudness ? 6 : 0);
+        ramp(loudnessNodes.air.gain, loudness ? -2.5 : 0);
+        ramp(loudnessNodes.makeup.gain, loudness ? 1.5 : 1);
+        ramp(loudnessNodes.limiter.threshold, loudness ? -3 : 0);
+        ramp(loudnessNodes.limiter.ratio, loudness ? 20 : 1);
+      }
+      keepGraphAwake();
+      return true;
+    },
+    ready: () => !!specCtx,
+    wake: () => keepGraphAwake()
+  };
   // Once the element is routed through the graph, the graph has to be awake. Desktop
   // browsers can suspend an idle context; resume it whenever the page is visible or a
   // track starts, so the route can never outlive its own output.
@@ -6315,9 +7453,12 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     }
 
     // The compact scrub's wave: played bars lit in the accent, the rest a dim grey ramp.
-    // The bars stand on the bar's bottom edge and rise through the native slider, which
-    // keeps its own track and thumb, so the drawing never has to double as the control.
+    // The slider is gone, so the drawing is the feedback: the lit edge is the position, and
+    // while a finger or pointer is down the rest of the wave lifts and a playhead marks the
+    // point being sought.
     if (s.mode === 'seek'){
+    const scrubbing = scrubAt >= 0;
+    const head = scrubbing ? scrubAt : p;
     // Bars keep the phone's pitch instead of fattening on a wide bar: the count is the
     // configured 96 across the compact wave's 182 px on a phone, and proportionally more as
     // the canvas widens (890 px at the bar's widest gives 469), so a desktop wave stays as
@@ -6337,17 +7478,23 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     const step = w / n;
     const bw = Math.min(step * 0.62, Math.max(1, step - MIN_GAP));
     // The bars stand on the bar's bottom edge (the canvas is flush with it) and grow up
-    // through the scrub's line, which sits 27 px up, so a full bar crosses the slider. The
-    // 27 is the CSS geometry: `#plseek` bottom 19 + half of its 16 px height.
-    const TRACK_Y = h - 27;
+    // through the rectangle, so a full bar reads across the whole scrub surface. The
+    // fallback line rests on that same base: the clocks sit on it, so anything floating
+    // mid-rectangle reads as a stray rule.
+    const TRACK_Y = h - 3;
     let lit = false;
     for (let i = 0; i < n; i++) if ((amp[i] || 0) > 0.02) { lit = true; break; }
     if (!lit){
-      // No envelope yet: a flat progress line on the scrub's own axis, behind the native
-      // track, so the position is still read from the slider rather than a stray bar.
-      const y = TRACK_Y - 2;
-      g.fillStyle = '#2a2d35'; g.fillRect(0, y, w, 4);
-      g.fillStyle = accent;    g.fillRect(0, y, Math.max(3, w * p), 4);
+      // No envelope yet (a track still decoding): a flat progress line on the base, so
+      // the position is still readable with nothing to draw.
+      g.fillStyle = '#2a2d35'; g.fillRect(0, TRACK_Y, w, 3);
+      g.fillStyle = accent;    g.fillRect(0, TRACK_Y, Math.max(3, w * head), 3);
+      if (scrubbing){
+        // Same playhead as the shaped wave, scaled to the flat line it sits on.
+        const x = Math.round(Math.max(1, Math.min(w - 1, head * w)));
+        g.fillStyle = '#eef1f6';
+        g.fillRect(x - 1, TRACK_Y - 18, 2, 21);
+      }
       g.globalAlpha = 1;
       return;
     }
@@ -6355,16 +7502,26 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
     // edge: the wave is a backdrop for the scrub, not a chart that fills the bar.
     const WAVE_SCALE = 0.575;
     const barH = (i) => 1 + (amp[i] || 0) * (h - 2) * WAVE_SCALE;
-    g.globalAlpha = 0.55; g.fillStyle = '#4a4e58';   // dim bars behind the playhead
+    g.globalAlpha = scrubbing ? 0.82 : 0.55;         // dim bars behind the playhead
+    g.fillStyle = '#4a4e58';
     for (let i = 0; i < n; i++){
       const bh = barH(i);
       g.fillRect(i * step + (step - bw) / 2, h - bh, bw, bh);
     }
     g.globalAlpha = 1; g.fillStyle = accent;         // played: the same bars, lit
     for (let i = 0; i < n; i++){
-      if ((i + 0.5) / n > p) break;
+      if ((i + 0.5) / n > head) break;
       const bh = barH(i);
       g.fillRect(i * step + (step - bw) / 2, h - bh, bw, bh);
+    }
+    if (scrubbing){
+      // The playhead: a 2 px light line over the wave's own band, standing on the same base
+      // as the bars. Light rather than accent, because the bars either side of it are
+      // already accent and a same-colour line would vanish into the lit edge.
+      const x = Math.round(Math.max(1, Math.min(w - 1, head * w)));
+      const band = (h - 2) * WAVE_SCALE;
+      g.fillStyle = '#eef1f6';
+      g.fillRect(x - 1, h - band - 2, 2, band + 2);
     }
     return;
   }
@@ -6428,7 +7585,12 @@ if (location.search) loadLibrarySnapshot().then(applyDeepLink).catch(() => {});
   audio.addEventListener('seeked', paint);
   audio.addEventListener('emptied', () => { clearTimeout(envTimer); paint(); });
   const seekBar = document.getElementById('plseek');
-  if (seekBar) seekBar.addEventListener('input', paint);
+  if (seekBar){
+    seekBar.addEventListener('input', markScrub);
+    seekBar.addEventListener('pointerdown', () => { scrubHeld = true; markScrub(); });
+    for (const end of ['pointerup', 'pointercancel', 'lostpointercapture'])
+      seekBar.addEventListener(end, () => { scrubHeld = false; markScrub(); });
+  }
   if (window.ResizeObserver){
     const ro = new ResizeObserver(() => paint());
     for (const s of surfaces) ro.observe(s.canvas);

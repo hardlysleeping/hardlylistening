@@ -2,7 +2,7 @@
 // the popup is open, read at the hand's speed, reversed for a backward turn, silent when
 // the record is held still, and released with the popup.
 const http = require("http"), fs = require("fs"), path = require("path");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const WEB = require("path").join(__dirname, "..", "web");
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
 

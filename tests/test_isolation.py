@@ -127,7 +127,7 @@ class Isolation(unittest.TestCase):
     def test_a_discovery_route_fails_alone_and_the_server_stays_up(self):
         """Discovery is bound at import time, so "down" means it raises when asked.
 
-        `repo/service.py` binds `discovery` on import, so an import block added later would
+        `repo/service.py` binds its own modules on import, so an import block added later would
         prove nothing here — the call is where a provider outage actually shows up.
         """
         from repo import service as repo_service

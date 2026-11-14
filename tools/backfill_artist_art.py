@@ -5,8 +5,9 @@ skipped, so nothing is fetched twice.
 """
 import sys
 import time
+from pathlib import Path
 
-sys.path.insert(0, "/var~/apps/hardlylistening")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from db import Store              # noqa: E402
 from library import artist_art    # noqa: E402
 

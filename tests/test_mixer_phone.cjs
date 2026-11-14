@@ -8,7 +8,7 @@
 // `ended` and looks exactly like "the song stopped by itself". Both halves are tested
 // here: the wire shape, and the page's arithmetic with a deliberately skewed `at`.
 const fs = require("fs"), path = require("path"), http = require("http");
-const { chromium } = require("playwright");
+const { chromium } = require("./_pw.cjs");
 const ROOT = process.env.MIXER_ROOT || path.join(__dirname, "..", "web");
 const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript",
                 ".png": "image/png", ".svg": "image/svg+xml" };

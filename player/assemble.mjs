@@ -59,6 +59,7 @@ const WEB_ALLOW = [
   'styles/components/library-controls.css',
   'styles/components/library-row.css',
   'styles/components/lyrics.css',
+  'styles/components/member.css',
   'styles/components/playback-queue.css',
   'styles/components/player.css',
   'styles/components/preferences.css',
@@ -94,6 +95,8 @@ const EXCLUDED = [
    'the mixer is a host surface the player does not carry'],
   ['swipe.html',
    'the swipe page is a host surface the player does not carry'],
+  ['theme.css',
+   'the palette is answered per request from the browser session the page is served in; a player shell has no such session, and the stock three are already tokens.css defaults'],
 ];
 
 /* The one document that is assembled from the app's markup. Only it is rewritten, and only to

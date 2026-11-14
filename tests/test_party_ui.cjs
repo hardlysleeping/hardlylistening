@@ -57,6 +57,22 @@ const tick=()=>new Promise(r=>setImmediate(r));
  await w.testPartyRefresh();
  assert.equal($('skip').disabled,true,'nothing playing means nothing to skip');
  assert.equal($('nextup').textContent,'Next up: nothing queued');
+ // Deck bar: who holds the room's one speaker, and a member's play/pause and gain.
+ roomState={...roomState,deck:{playing:true,gain:0.5,host_active:true,controlled_by:'Host'}};
+ await w.testPartyRefresh();
+ assert($('deckstate').textContent.includes("Host's device")&&$('deckstate').textContent.includes('playing'),$('deckstate').textContent);
+ assert.equal($('decktoggle').textContent,'Pause');
+ assert.equal($('deckgain').value,'50');
+ $('decktoggle').dispatchEvent(new w.Event('click'));await tick();await tick();
+ const deckStop=requests.find(([url,opts])=>url.endsWith('/jukebox')&&opts.method==='POST');
+ assert.deepEqual(JSON.parse(deckStop[1].body),{action:'stop'});
+ $('deckgain').value='30';$('deckgain').dispatchEvent(new w.Event('change'));await tick();await tick();
+ const deckGain=requests.filter(([url,opts])=>url.endsWith('/jukebox')&&opts.method==='POST').pop();
+ assert.deepEqual(JSON.parse(deckGain[1].body),{action:'setGain',gain:0.3});
+ // A room state from before HL-204 carries no deck field and still paints.
+ roomState={...roomState,deck:undefined};
+ await w.testPartyRefresh();
+ assert($('deckstate').textContent.includes('Deck idle'),$('deckstate').textContent);
  dom.window.close();
  const guest=new JSDOM(html,{url:'https://music.example/party#invite=SECRET',runScripts:'outside-only'}),g=guest.window;
  g.HTMLMediaElement.prototype.pause=function(){};g.fetch=()=>{throw Error('No fetch before fragment wipe and user join');};g.eval(code);

@@ -1,0 +1,13 @@
+{
+  "subsonic-response": {
+    "error": {
+      "code": 70,
+      "message": "Artist not found"
+    },
+    "openSubsonic": true,
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "failed",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

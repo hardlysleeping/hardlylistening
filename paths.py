@@ -12,7 +12,9 @@ modules that create it once a data directory is declared.
         artist art          /var/lib/hardlylistening/cache/artist-art
         metadata cache      /var/lib/hardlylistening/cache/metadata
         federation cache    /var/lib/hardlylistening/cache/federation
+        storage cache       /var/lib/hardlylistening/cache/storage      (bounded, remote mode)
         podcast downloads   /var/lib/hardlylistening/podcasts           (per member, capped)
+        extensions          /var/lib/hardlylistening/extensions         (one dir per id)
         identity            /var/lib/hardlylistening/identity          (0700)
         state               /var/lib/hardlylistening/state
         tmp                 /var/lib/hardlylistening/tmp
@@ -41,6 +43,10 @@ ARTIST_ART_DIR = (DATA_DIR / "cache" / "artist-art") if DECLARED else (APP_DIR /
 METADATA_CACHE_DIR = CACHE_DIR / "metadata"
 FEDERATION_CACHE_DIR = CACHE_DIR / "federation"
 
+#: Copies of bucket objects kept so a track can be played without fetching it again (HL-223).
+#: This is a cache, not the library: eviction deletes from here and never from the media root.
+STORAGE_CACHE_DIR = CACHE_DIR / "storage"
+
 #: Podcast episodes a member downloaded (HL-209). Not a cache: it survives a cache clear and
 #: belongs in a backup, which is exactly why it sits beside the database rather than in
 #: `cache/`. One directory per member; the 5 GB budget is enforced per member by podcasts.py.
@@ -57,6 +63,15 @@ TMP_DIR = DATA_DIR / "tmp"
 #: (FED-001; `docs/federation.md` §3). The directory is in the backup boundary and has to survive
 #: an application replacement. Private: 0700, and `node-secret` is 0600.
 IDENTITY_DIR = DATA_DIR / "identity"
+
+#: Installed extension code (HL-218). One directory per extension id, holding its
+#: `manifest.json` and its entry file; the loader reads from here and never writes to it.
+#: Installation is an administrator copying a directory in, not an upload: this is trusted
+#: code that runs as the server's user, so it never arrives over HTTP. In a checkout the
+#: path is `<app>/extensions`, which nothing creates at boot — `ensure()` only makes the
+#: declared layout, exactly as it does for every other directory here.
+EXTENSIONS_DIR = DATA_DIR / "extensions"
+
 
 #: The database file: an explicit path wins, otherwise it sits in the data directory.
 DB_PATH = Path(os.environ.get("HARDLYLISTENING_DB") or (DATA_DIR / "hardlylistening.db"))
@@ -75,5 +90,5 @@ def ensure() -> None:
     # identity is created separately rather than in the loop below.
     IDENTITY_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     for directory in (CACHE_DIR, ARTIST_ART_DIR, METADATA_CACHE_DIR, FEDERATION_CACHE_DIR,
-                      PODCAST_DIR, STATE_DIR, TMP_DIR):
+                      STORAGE_CACHE_DIR, PODCAST_DIR, STATE_DIR, TMP_DIR, EXTENSIONS_DIR):
         directory.mkdir(parents=True, exist_ok=True)

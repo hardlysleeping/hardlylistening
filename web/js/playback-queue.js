@@ -43,7 +43,7 @@ function paintHistory(){
       ${String(track.id) === String(playingId) ? '<span class="pq-live" aria-hidden="true"></span>' : ""}
     </div>`).join("");
 }
-$("#history-items").addEventListener("click", event => {
+$("#history-items")?.addEventListener("click", event => {
   const row = event.target.closest("[data-history-id]");
   if (row) playFromLibrary(Number(row.dataset.historyId));
 });
@@ -194,7 +194,9 @@ function askClearPlaybackQueue(){
     `Remove ${waiting} song${waiting === 1 ? "" : "s"} from the queue? The song playing now keeps playing.`;
   document.getElementById("queue-confirm").showModal();
 }
-document.getElementById("queue-confirm").addEventListener("close", event => {
+// The dialog is part of the page, but wiring it at top level means a page that only carries
+// the queue markup would throw here and lose every handler below it.
+document.getElementById("queue-confirm")?.addEventListener("close", event => {
   if (event.target.returnValue === "go") clearPlaybackQueue();
 });
 function clearPlaybackQueue(){libQueue=[];commitPlaybackQueue();document.querySelector('#playback-status').textContent='Queue cleared. Current audio is unchanged.';}
@@ -225,7 +227,10 @@ function paintPlaybackQueue(){
   }
   const markup = upNext.map(t => {
     const state = queueState(t.id);
-    return `<div class="pq-row ${state.cls}" data-id="${t.id}" tabindex="0" role="button" aria-label="Play ${esc(t.title)}, drag or hold to reorder"><button class="pq-handle" type="button" aria-label="Drag to reorder ${esc(t.title)}" title="Drag to reorder">⠿</button><span class="pq-name">${esc(t.title || 'Untitled')}<small>${esc(t.artist_name || '')}</small></span><span class="pq-tag">${state.tag}</span><button class="pq-more" type="button" data-action="more" aria-label="More options for ${esc(t.title)}" title="More options">⋯</button><button class="pq-x" type="button" data-action="remove" aria-label="Remove ${esc(t.title)}">×</button></div>`;
+    // No × in the row. It sat one thumb-width from the row's own tap target, so clearing a
+    // song by accident was easier than playing it. The row slides left to reveal Remove
+    // instead, and the ⋯ menu keeps the same action for anyone without a pointer.
+    return `<div class="pq-row ${state.cls}" data-id="${t.id}" tabindex="0" role="button" aria-label="Play ${esc(t.title)}, drag or hold to reorder, swipe left to remove"><div class="pq-body"><button class="pq-handle" type="button" aria-label="Drag to reorder ${esc(t.title)}" title="Drag to reorder">⠿</button><span class="pq-name">${esc(t.title || 'Untitled')}<small>${esc(t.artist_name || '')}</small></span><span class="pq-tag">${state.tag}</span><button class="pq-more" type="button" data-action="more" aria-label="More options for ${esc(t.title)}" title="More options">⋯</button></div><button class="pq-remove" type="button" data-action="remove" tabindex="-1" aria-label="Remove ${esc(t.title)} from the queue">Remove</button></div>`;
   }).join('') || '<p class="hint pq-empty">Nothing up next — the queue is empty.</p>';
   // Database IDs are numeric and all external metadata above passes through esc().
   if (host.dataset.rendered !== markup) {host.innerHTML=markup;host.dataset.rendered=markup;}
@@ -258,9 +263,14 @@ function bindOrderDrag(host, commit){
       navigator.vibrate?.(8);
     }, 280);
     // No pointer capture until this is really a drag: capturing on the way down
-    // swallowed the click, so tapping a queue row never played it.
+    // swallowed the click, so tapping a queue row never played it. The gesture is also
+    // tracked on the window: a drop below the last row lands outside the list, and a
+    // pointerup the list never sees leaves the row stuck lifted.
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', cancelDrag);
   });
-  host.addEventListener('pointermove', e => {
+  function move(e){
     if (!drag || drag.pointer !== e.pointerId) return;
     if (!armed){
       if (Math.abs(e.clientY - drag.y) > 8 || Math.abs(e.clientX - drag.x) > 8){
@@ -271,7 +281,10 @@ function bindOrderDrag(host, commit){
     e.preventDefault();
     // A mouse arms the drag on pointerdown, so movement — not arming — is what
     // makes it a drag. Otherwise every plain click was swallowed as a reorder.
-    if (!drag.moved && (Math.abs(e.clientY - drag.y) > 3 || Math.abs(e.clientX - drag.x) > 3)){
+    // Movement has to be vertical to count: a sideways drag is the row's swipe-to-remove,
+    // and claiming the first few pixels meant the swipe could never begin.
+    const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+    if (!drag.moved && dy > 3 && dy >= dx){
       drag.moved = true;
       if (!drag.row.classList.contains('pq-lift')){ drag.row.classList.add('pq-lift'); host.dataset.dragging = '1'; }
       try { drag.row.setPointerCapture?.(drag.pointer); } catch (_) {}
@@ -291,9 +304,13 @@ function bindOrderDrag(host, commit){
     const box = host.getBoundingClientRect();
     if (e.clientY < box.top + 32) host.scrollTop -= 14;
     else if (e.clientY > box.bottom - 32) host.scrollTop += 14;
-  });
+  }
+  const cancelDrag = e => end(e, true);
   const end = (e, cancel) => {
     release();
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', cancelDrag);
     if (!drag || e.pointerId !== drag.pointer) return;
     const moved = !!drag.moved;
     const ids = [...host.children].map(n => +n.dataset.id).filter(Boolean);
@@ -313,8 +330,6 @@ function bindOrderDrag(host, commit){
   host.addEventListener('touchmove', e => {
     if (host.dataset.dragging === '1' && e.cancelable) e.preventDefault();
   }, { passive: false });
-  host.addEventListener('pointerup', e => end(e, false));
-  host.addEventListener('pointercancel', e => end(e, true));
   // A long press belongs to the drag, not to the browser's copy/share menu.
   host.addEventListener('contextmenu', e => {
     if (e.target.closest('.pq-row')) e.preventDefault();
@@ -333,9 +348,79 @@ bindOrderDrag(queueHost, (ids, save) => {
   if (save) commitPlaybackQueue();
   paintPlaybackQueue();
 });
+// A queue row removes its song by sliding left, the way a list on a phone does. The × that
+// used to sit in every row was one thumb-width from the row's own tap target, so clearing a
+// song by accident was easier than playing it. The ⋯ menu keeps the same action for anyone
+// without a pointer, and the Remove panel is not in the tab order until it is showing.
+(function queueSwipe(){
+  const host = document.querySelector('#playback-items');
+  if (!host) return;
+  const REVEAL = 92;
+  let press = null;
+  const shiftOf = row => Math.abs(parseFloat(row.style.getPropertyValue('--pq-shift')) || 0);
+  const close = row => { row.classList.remove('pq-swiped', 'pq-live'); row.style.removeProperty('--pq-shift'); };
+  const setShift = (row, px) => row.style.setProperty('--pq-shift', Math.round(px) + 'px');
+  // The gesture is tracked on the window, not on the row: a swipe that runs past the row's
+  // edge (which is the normal way to swipe) would otherwise deliver its pointerup somewhere
+  // else entirely, leaving the row stuck half-open. Pointer capture does not cover it here.
+  const move = e => {
+    if (!press || e.pointerId !== press.id) return;
+    if (host.dataset.dragging === '1') return;         // the reorder drag owns a lifted row
+    const dx = e.clientX - press.x, dy = e.clientY - press.y;
+    if (!press.live){
+      if (Math.abs(dx) < 12 || Math.abs(dx) <= Math.abs(dy)) return;   // a scroll, or a tap
+      press.live = true;
+      press.row.classList.add('pq-live');
+    }
+    setShift(press.row, Math.max(-REVEAL, Math.min(0, press.base + dx)));
+  };
+  const release = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', settle);
+    window.removeEventListener('pointercancel', settle);
+  };
+  function settle(){
+    if (!press) return;
+    const {row, live} = press;
+    press = null;
+    release();
+    if (!live) return;
+    row.classList.remove('pq-live');
+    // Past halfway it stays open; short of that it springs back.
+    row.classList.toggle('pq-swiped', shiftOf(row) > REVEAL / 2);
+    row.style.removeProperty('--pq-shift');            // the class carries the resting position
+    host.dataset.justSwiped = '1';
+  }
+  host.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    delete host.dataset.justSwiped;                    // this gesture's click is its own
+    if (e.target.closest('button,input')) return;      // the grip, ⋯ and Remove own their presses
+    const row = e.target.closest('.pq-row');
+    if (!row) return;
+    for (const other of host.querySelectorAll('.pq-row.pq-swiped')) if (other !== row) close(other);
+    press = {row, id: e.pointerId, x: e.clientX, y: e.clientY, base: shiftOf(row), live: false};
+    window.addEventListener('pointermove', move, { passive: true });
+    window.addEventListener('pointerup', settle);
+    window.addEventListener('pointercancel', settle);
+  });
+  // A press on a row that is already slid open puts it back instead of playing the song, and
+  // a press anywhere outside the queue closes it too. Remove itself is never pre-empted.
+  document.addEventListener('pointerdown', e => {
+    const open = e.target.closest?.('.pq-row.pq-swiped');
+    if (open){
+      if (!e.target.closest('.pq-remove')){
+        close(open);
+        host.dataset.justSwiped = '1';
+      }
+      return;
+    }
+    if (!host.contains(e.target)) for (const row of host.querySelectorAll('.pq-row.pq-swiped')) close(row);
+  }, true);
+})();
 queueHost.addEventListener('click', event => {
   if (event.target.closest('.pq-handle')) { event.preventDefault(); return; }
   if (queueHost.dataset.justDragged){ delete queueHost.dataset.justDragged; event.preventDefault(); return; }
+  if (queueHost.dataset.justSwiped){ delete queueHost.dataset.justSwiped; event.preventDefault(); return; }
   const row = event.target.closest('.pq-row'); if (!row) return;
   const id = +row.dataset.id;
   if (event.target.closest('[data-action="more"]')){
