@@ -92,6 +92,28 @@ class WorkerTest(Base):
                                       (self.ids[0],)).fetchone()
         self.assertEqual((row[0], row[1]), (0, ""), "a failed read leaves no fake tempo")
 
+    def test_starting_with_nothing_to_do_answers_instead_of_deadlocking(self):
+        """`start()` builds its answer out of `status()`, so the two share one lock.
+
+        With a plain Lock the call never returns and the request thread holds it forever,
+        which takes `/api/tempo/status` down with it. The work happens in a thread so a
+        regression fails here after a few seconds instead of hanging the suite.
+        """
+        for track_id in self.ids:
+            tempo.set_manual(self.store, track_id, 128)
+        with mock.patch.object(tempo, "detect", return_value={"bpm": 128.0, "confidence": 1, "phase": 0}):
+            tempo.start(self.store, self.ids)
+            self.assertTrue(self.wait_idle())
+        answer = {}
+        caller = threading.Thread(target=lambda: answer.update(tempo.start(self.store, [])), daemon=True)
+        caller.start()
+        caller.join(5)
+        self.assertFalse(caller.is_alive(), "start() returned with nothing left to analyse")
+        self.assertFalse(answer["started"])
+        self.assertEqual(answer["reason"], "nothing to analyse")
+        # The lock came back: the status route still answers.
+        self.assertIn("running", tempo.status())
+
     def test_missing_file_is_skipped(self):
         self.files[0].unlink()
         with mock.patch.object(tempo, "detect", return_value={"bpm": 120.0, "confidence": 1, "phase": 0}) as detector:

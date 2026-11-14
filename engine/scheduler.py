@@ -14,6 +14,10 @@ from discovery import subscriptions
 
 TICK = 120          # seconds between passes; a follow's own interval decides the rest
 
+#: Podcast retention is a disk sweep, not a discovery check: half an hour is often enough for
+#: a weekly show, and it keeps the pass cheap (one SELECT per member that has a policy).
+PRUNE_EVERY = 900
+
 
 class Scheduler(threading.Thread):
     def __init__(self, store):
@@ -25,7 +29,15 @@ class Scheduler(threading.Thread):
         self._stop.set()
 
     def run(self) -> None:
+        last_prune = time.monotonic()
         while not self._stop.wait(TICK):
+            if time.monotonic() - last_prune >= PRUNE_EVERY:
+                last_prune = time.monotonic()
+                try:
+                    from podcasts import prune_all
+                    prune_all(self.store)
+                except Exception as exc:                       # noqa: BLE001
+                    self.store.log(f"podcast retention failed: {exc}", "error")
             try:
                 due = self.store.watch_due()
             except Exception as exc:                       # noqa: BLE001

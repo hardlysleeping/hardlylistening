@@ -291,7 +291,9 @@ class OurServerHoldsTheSameContract(unittest.TestCase):
         self.assertIsInstance(answer['lyricsList']['structuredLyrics'], list)
 
     def test_cell_12_an_unimplemented_endpoint_is_error_30_not_a_fake_empty_answer(self):
-        for endpoint in ('getSonicSimilarTracks', 'findSonicPath', 'getVideos'):
+        # The sonic pair left this cell with HL-205, which implemented both; only the video
+        # endpoints remain unimplemented on purpose.
+        for endpoint in ('getVideos', 'getVideoInfo', 'getCaptions'):
             envelope = self.response(endpoint, id=str(self.ids[0]))
             self.assertEqual(envelope['status'], 'failed', endpoint)
             self.assertEqual(envelope['error']['code'], 30, endpoint)

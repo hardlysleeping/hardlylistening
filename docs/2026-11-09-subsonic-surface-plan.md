@@ -1,8 +1,10 @@
 # Plan — Subsonic surface: completeness, bookmarks, shares, jukebox, sonic, radio, podcasts, chat
 
-Status (2026-11-13): Phase 0, 1, 2, 3, 6 and 7 shipped; Phase 5 shipped as the Subsonic CRUD only
-(see that section for what is not built). Phase 4 is half done: tempo ships and Auto DJ reads it;
-the fingerprint/similarity half is HL-205 and is the only part that needs numpy.
+Status (2026-11-14): Phase 0, 1, 2, 3, 6 and 7 shipped; Phase 5 shipped as the Subsonic CRUD only
+(see that section for what is not built). Phase 4 shipped its server half as **HL-205**: tempo plus
+the fingerprint/similarity endpoints, `/api/sonic/*` and the worker (`docs/sonic.md`). numpy is that
+half's dependency by decision — imported directly, no pure-Python fallback. The in-app "Sounds like
+this" / "Sonic path" UI from the Phase 4 bullet list was **not** built.
 Decisions are locked; do not re-open them while building.
 
 ## Locked decisions
@@ -147,6 +149,12 @@ adds the sonic half — the only part that wants numpy.
 - API: `/api/sonic/similar/<id>`, `/api/sonic/path?from=&to=`, `/api/sonic/status`.
 - UI: "Sounds like this" under a track, "Sonic path" in the row menu, BPM where it already appears.
 
+**As built (HL-205, 2026-11-14):** the table is `track_features(track_id, vector BLOB, dims, version,
+analysed)` and the vector is 60 dims (48 log-mel + 12 chroma); the worker ships with `/api/sonic/analyse`
+and `force` as the re-analyse escape hatch. **Not built:** automatic enqueue for new downloads (analyse is
+asked for, not triggered by a download), and the whole UI line — no "Sounds like this", no "Sonic path",
+no BPM change in the row menu. BPM display already existed. `docs/sonic.md` is the contract.
+
 ## Phase 5 — Internet radio (member-scoped)
 
 Shipped: `radio.py`, the Subsonic CRUD only. Not built: the More-menu page, the `getMusicDirectory`
@@ -173,9 +181,12 @@ records what exists, then what the original plan asked for and did not ship.
 - "Podcasts" in the More menu: subscribe by URL, newest-first episodes, explicit per-episode download,
   progress, play through the deck.
 - Storage: **5 GB per member** (`HARDLYLISTENING_PODCAST_CAP_MB`), counted over the files this server holds
-  for that member and checked before and during the copy. **No automatic pruning**: at the cap the download is
-  refused with the numbers, and the member deletes a downloaded episode to make room. Deleting an episode
-  unlinks its file, so the space really comes back; `getPodcasts.storage` reports the budget and the files.
+  for that member and checked before and during the copy. At the cap the download is refused with the
+  numbers, and the member deletes a downloaded episode to make room. Deleting an episode unlinks its file, so
+  the space really comes back; `getPodcasts.storage` reports the budget and the files.
+  **Retention (HL-234)** is opt-in per channel: keep the newest N downloads and/or anything younger than N
+  days, purge the rest, and report each removal in `getPodcasts.storage.pruned` (`docs/podcast-retention.md`).
+  A channel with no policy keeps everything, so the cap-only behaviour above is still the default.
 - Subsonic: `getPodcasts`, `getNewestPodcasts`, `getPodcastEpisode`, `downloadPodcastEpisode`,
   `streamPodcastEpisode` (Range, only for a held copy), `refreshPodcasts`, `createPodcastChannel`,
   `deletePodcastChannel`, `deletePodcastEpisode`.

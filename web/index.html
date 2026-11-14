@@ -385,7 +385,7 @@
     </div>
     <div id="repopane-subscribed" hidden>
       <div class="followbox">
-        <input id="followurl" placeholder="Paste an artist page — soundcloud.com/name or music.apple.com/…/artist/…" autocomplete="off">
+        <input id="followurl" placeholder="Paste an artist page — soundcloud.com/name, music.apple.com/…/artist/… — or an RSS/Atom feed" autocomplete="off">
         <button class="primary" id="followbtn">Subscribe</button>
       </div>
       <div class="hint" id="followhint" style="margin:-4px 0 12px">Subscribing lists an artist's latest
@@ -6260,7 +6260,7 @@ async function loadSubscriptions(){
 
 $("#followbtn").onclick = async () => {
   const url = $("#followurl").value.trim();
-  if (!url) { $("#followhint").textContent = "Paste a SoundCloud or Apple Music artist link first."; return; }
+  if (!url) { $("#followhint").textContent = "Paste a SoundCloud or Apple Music artist link, or an RSS/Atom feed URL, first."; return; }
   const btn = $("#followbtn");
   const hint = $("#followhint");
   btn.disabled = true; btn.textContent = "Checking…";
@@ -6279,7 +6279,7 @@ $("#followbtn").onclick = async () => {
   } catch (e) {
     const message = e.message || "Could not add artist feed.";
     hint.textContent = /invalid|unsupported|url|artist|provider/i.test(message)
-      ? `That doesn't look like a supported SoundCloud or Apple Music artist link. ${message}`
+      ? `That doesn't look like a supported artist link or RSS/Atom feed. ${message}`
       : message;
   } finally {
     btn.disabled = false; btn.textContent = "Subscribe";

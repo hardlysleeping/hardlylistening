@@ -108,9 +108,12 @@ class Provider:
 def registry() -> list[Provider]:
     # Imported here so a provider module can import this one without a cycle.
     from providers.apple_music import AppleMusicProvider
+    from providers.feed import FeedProvider
     from providers.generic import GenericProvider
     from providers.soundcloud import SoundcloudProvider
-    return [SoundcloudProvider(), AppleMusicProvider(), GenericProvider()]
+    # Order is the claim order: a named service first, a feed next (a URL that says it is a feed
+    # is one), and the yt-dlp fallback last because it claims every http(s) URL.
+    return [SoundcloudProvider(), AppleMusicProvider(), FeedProvider(), GenericProvider()]
 
 
 def needs_metadata_approval(name: str) -> bool:

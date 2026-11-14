@@ -47,9 +47,13 @@ EXTENSIONS = [{'name': 'formPost', 'versions': [1]},
 
 NOT_IMPLEMENTED = {
     'hls',
-    'getSonicSimilarTracks', 'findSonicPath', 'getVideos', 'getVideoInfo', 'getCaptions',
+    'getVideos', 'getVideoInfo', 'getCaptions',
     'changePassword', 'createUser', 'updateUser', 'deleteUser', 'tokenInfo',
 }
+
+#: How many songs a similarity answer carries when the client does not say.
+SIMILAR_DEFAULT = 20
+SIMILAR_MAX = 100
 
 
 def schema(store):
@@ -804,8 +808,13 @@ def handle(endpoint, params, multi, ctx):
 
     # ---- podcasts (Phase 4) -----------------------------------------------
     if endpoint == 'createPodcastChannel':
+        # `keepNewest`/`keepDays` are this server's own extension (HL-234): non-standard
+        # parameters a Subsonic client ignores unless it knows them, and the only place a
+        # channel's retention can be chosen. Omitted, the server default applies.
         podcasts.create_channel(store, uid, params.get('url') or identity,
-                                seed=params.get('title') or '')
+                                seed=params.get('title') or '',
+                                keep_newest=params.get('keepNewest'),
+                                keep_days=params.get('keepDays'))
         return {}
     if endpoint == 'getPodcasts':
         return podcasts.get_podcasts(store, uid, params)
@@ -826,6 +835,50 @@ def handle(endpoint, params, multi, ctx):
         # Bounded by the member's 5 GB budget; a full budget is a refusal with the numbers,
         # never a silent delete of someone else's file (HL-209).
         return {'podcastEpisode': podcasts.download_episode(store, uid, identity)}
+
+    # ---- sonic: neighbours and a path (Phase 4, HL-205) -------------------
+    # The vectors and the walk belong to `library.sonic`; this layer only answers in songs
+    # the member can actually see, which is the same filter every other read goes through.
+    # `library.sonic` is the one numpy importer, so it is imported here rather than at the
+    # top of the function: the rest of this surface stays stdlib-only.
+    if endpoint in ('getSimilarSongs', 'getSimilarSongs2', 'getSonicSimilarTracks',
+                    'findSonicPath'):
+        from library import sonic
+        sonic.schema(store)
+    if endpoint in ('getSimilarSongs', 'getSimilarSongs2', 'getSonicSimilarTracks'):
+        wanted = params.get('id', '')
+        track = next((dict(t) for t in tracks if str(t.get('id')) == wanted), None)
+        if track is None:
+            raise Denied(404, 'Not found')
+        try:
+            limit = int(params.get('count') or SIMILAR_DEFAULT)
+        except (TypeError, ValueError):
+            raise Denied(400, 'count must be an integer')
+        limit = max(1, min(limit, SIMILAR_MAX))
+        rows = sonic.similar(store, track['id'], limit=limit)
+        visible = {int(row['id']) for row in rows}
+        by_id = {int(item['id']): item for item in songs}
+        chosen = [by_id[track_id] for track_id in
+                  [row['id'] for row in rows] if track_id in visible and track_id in by_id]
+        key = {'getSimilarSongs': 'similarSongs', 'getSimilarSongs2': 'similarSongs2',
+               'getSonicSimilarTracks': 'sonicSimilarTracks'}[endpoint]
+        return {key: {'song': chosen}}
+
+    if endpoint == 'findSonicPath':
+        starts, ends = params.get('startId', ''), params.get('endId', '')
+        first = next((dict(t) for t in tracks if str(t.get('id')) == starts), None)
+        last = next((dict(t) for t in tracks if str(t.get('id')) == ends), None)
+        if first is None or last is None:
+            raise Denied(404, 'Not found')
+        try:
+            walk = sonic.path(store, first['id'], last['id'],
+                              hops=max(1, min(int(params.get('hops') or 8), 50)))
+        except ValueError:
+            # A track with no fingerprint is not a path of zero songs.
+            raise Denied(404, 'One of those songs has not been analysed yet')
+        by_id = {int(item['id']): item for item in songs}
+        return {'sonicPath': {'song': [by_id[track_id] for track_id in walk
+                                       if track_id in by_id]}}
 
     # ---- info, lyrics, plumbing ------------------------------------------
     if endpoint in ('getArtistInfo', 'getArtistInfo2', 'getAlbumInfo', 'getAlbumInfo2'):

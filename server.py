@@ -18,7 +18,7 @@ import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlparse
 
 import config
 import db
@@ -56,7 +56,7 @@ LOCK = threading.Lock()
 ACQUIRE_ROUTES = re.compile(
     r'^/api/(add|library/grab|failed/retry|feed/refresh-all|track/queue'
     r'|track/\d+/(retry|source|unpick)|playlist/\d+/(requeue|verify)|feed/\d+/queue'
-    r'|library/verify)$')
+    r'|library/verify|sonic/analyse)$')
 
 ROUTES = [
     ("POST", r"^/api/add$", "add"),
@@ -87,6 +87,7 @@ ROUTES = [
     ("POST", r"^/api/library/verify$", "library_verify"),
     ("POST", r"^/api/library/grab$", "library_grab"),
     ("POST", r"^/api/library/tempo$", "library_tempo"),
+    ("POST", r"^/api/sonic/analyse$", "sonic_analyse"),
     ("POST", r"^/api/library/titles$", "library_titles"),
     ("POST", r"^/api/track/(\d+)/bpm$", "track_bpm"),
     ("POST", r"^/api/activity/listen$", "activity_listen"),
@@ -1167,6 +1168,42 @@ class Handler(BaseHTTPRequestHandler):
             from library import tempo
             self.json(tempo.status())
             return
+        if path == "/api/sonic/status":
+            from library import sonic
+            # Additive and free when the table is there; a database that has never analysed
+            # anything has no table yet, and a status read must still answer.
+            sonic.schema(store)
+            state = sonic.status()
+            state["analysed"] = sonic.count(store)
+            self.json(state)
+            return
+        if path.startswith("/api/sonic/similar/"):
+            from library import sonic
+            sonic.schema(store)
+            raw = path.rsplit("/", 1)[-1]
+            if not raw.isdigit():
+                self.json({"error": "Not a track id"}, 400)
+                return
+            rows = sonic.similar(store, int(raw), limit=20)
+            self.json({"track_id": int(raw), "similar": self._sonic_songs(rows)})
+            return
+        if path == "/api/sonic/path":
+            from library import sonic
+            sonic.schema(store)
+            query = dict(parse_qsl(urlparse(self.path).query))
+            ends = [query.get("from", ""), query.get("to", "")]
+            if not all(value.isdigit() for value in ends):
+                self.json({"error": "from and to are required track ids"}, 400)
+                return
+            try:
+                walk = sonic.path(store, int(ends[0]), int(ends[1]),
+                                  hops=max(1, min(int(query.get("hops") or 8), 50)))
+            except ValueError as error:
+                # "not analysed yet" is a 409: the request is fine, the catalogue is not ready.
+                self.json({"error": str(error)}, 409)
+                return
+            self.json({"path": self._sonic_songs([{"id": track_id} for track_id in walk])})
+            return
         if path == "/api/deleted":
             # Tombstones, for the Settings page. Admin-only, like deleting itself.
             if SECURITY.required and not (self.member and self.member['role'] == 'admin'):
@@ -1744,6 +1781,36 @@ class Handler(BaseHTTPRequestHandler):
             self.json(metadata_repair.repair_async(store))
             return
         self.json(metadata_repair.preview(store))
+
+    def _sonic_songs(self, rows) -> list:
+        """Track ids decorated with what a row needs, in the order given."""
+        store, _ = boot()
+        wanted = [int(row["id"]) for row in rows]
+        if not wanted:
+            return []
+        marks = ",".join("?" * len(wanted))
+        with store.lock:
+            found = {row["id"]: dict(row) for row in store.conn.execute(
+                f"SELECT id,title,artist_name,album,duration,file FROM tracks "
+                f"WHERE id IN ({marks})", wanted)}
+        return [{"id": track_id, "title": found[track_id]["title"],
+                 "artist": found[track_id]["artist_name"] or "",
+                 "album": found[track_id]["album"] or "",
+                 "duration": int(found[track_id]["duration"] or 0),
+                 "score": row.get("score")}
+                for row, track_id in ((row, int(row["id"])) for row in rows)
+                if track_id in found]
+
+    def do_sonic_analyse(self) -> None:
+        """Fingerprint ids, or everything not analysed yet. Never inside the request."""
+        payload = self.body()
+        store, _ = boot()
+        from library import sonic
+        sonic.schema(store)
+        ids = payload.get("ids") if isinstance(payload, dict) else None
+        limit = int((payload or {}).get("limit") or 500) if isinstance(payload, dict) else 500
+        force = bool((payload or {}).get("force")) if isinstance(payload, dict) else False
+        self.json(sonic.start(store, ids, max(1, min(500, limit)), force=force))
 
     def do_library_tempo(self) -> None:
         """Detect tempo for ids, or for everything not yet analysed."""

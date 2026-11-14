@@ -225,8 +225,9 @@ class BookmarksAndShares(unittest.TestCase):
         self.assertNotEqual(stored, made['token'])
         self.assertEqual(len(stored), 64)
         self.assertNotIn(made['token'], stored)
-        for endpoint in ('jukeboxControl', 'addChatMessage',
-                         'getSonicSimilarTracks', 'hls'):
+        # `getSonicSimilarTracks` left this list with HL-205 (`tests/test_sonic.py` covers it),
+        # `addChatMessage` with HL-210.
+        for endpoint in ('jukeboxControl', 'hls'):
             response = self.response(endpoint)
             self.assertEqual(response['status'], 'failed', endpoint)
             self.assertEqual(response['error']['code'], 30, endpoint)

@@ -50,9 +50,12 @@ paths are relative to the archive, so the unzipped folder works anywhere. The sa
 catalogue is also served over the Subsonic / OpenSubsonic API, scoped to one device's
 member, so a phone player can stream it. The transcoding extension is answered honestly:
 a client whose direct-play profile accepts the stored file gets those exact bytes with
-HTTP Range seeking, and a client that would need a re-encode is told so. The parts
-Subsonic has and this app does not (chat, jukebox, re-encoding, sonic analysis, podcast
-downloads, user administration) answer Subsonic error 30 rather than pretending.
+HTTP Range seeking, and a client that would need a re-encode is told so. Sonic similarity
+and a sonic path are served from a fingerprint of each track (`docs/sonic.md`), and podcast
+episodes can be downloaded and kept under a per-member budget with an opt-in retention
+policy (`docs/podcast-retention.md`). The parts Subsonic has and this app does not (video,
+HLS, chat rooms distinct from the party room, jukebox, re-encoding, user administration)
+answer Subsonic error 30 rather than pretending.
 
 ## The player
 

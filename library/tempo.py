@@ -20,7 +20,10 @@ from library.analysis import detect
 MAX_BATCH = 500
 RATE_PER_SECOND = 3.0           # politeness ceiling; detection is CPU-local
 
-_lock = threading.Lock()
+#: Reentrant on purpose: `start()` builds its answer out of `status()` while it holds this
+#: lock, and a plain Lock makes that call block forever — taking every later status read
+#: (and the request thread holding it) down with it.
+_lock = threading.RLock()
 _queue: list[int] = []
 _thread: threading.Thread | None = None
 _state = {"running": False, "total": 0, "done": 0, "skipped": 0, "failed": 0,
@@ -102,16 +105,16 @@ def start(store, ids: list[int] | None = None, limit: int = MAX_BATCH) -> dict:
     chosen = [int(i) for i in (ids or []) if str(i).isdigit()][:MAX_BATCH] or candidates(store, limit)
     with _lock:
         if _state["running"]:
-            return {"started": False, "reason": "already running", **status()}
+            return {**status(), "started": False, "reason": "already running"}
         if not chosen:
-            return {"started": False, "reason": "nothing to analyse", **status()}
+            return {**status(), "started": False, "reason": "nothing to analyse"}
         _queue[:] = chosen
         _state.update({"running": True, "total": len(chosen), "done": 0, "skipped": 0,
                        "failed": 0, "current": "", "started": time.time(),
                        "finished": 0.0, "error": ""})
         _thread = threading.Thread(target=_run, args=(store,), name="tempo", daemon=True)
         _thread.start()
-    return {"started": True, "count": len(chosen), **status()}
+    return {**status(), "started": True, "count": len(chosen)}
 
 
 def set_manual(store, track_id: int, bpm: float | None, action: str = "") -> dict:

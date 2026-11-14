@@ -7,11 +7,18 @@ logged, redirects are re-validated, and (unless HARDLYLISTENING_ALLOW_LOCAL_FEED
 set for tests) non-public hosts are refused so a feed cannot be used to probe the LAN.
 
 `downloadPodcastEpisode` stores the episode on this server, under a **5 GB per-member
-cap** (HL-209). Nothing is ever pruned automatically: when a member's budget is full the
-download is refused with the numbers, and the member deletes a downloaded episode to make
-room. A silent delete of someone's file to make space for another file is not a policy this
-server gets to invent. The cap counts only files held here, per member, and `deletePodcastEpisode`
+cap** (HL-209). The cap counts only files held here, per member, and `deletePodcastEpisode`
 unlinks the file so deleting is what actually frees the space.
+
+Retention (HL-234) is the other half, and it is **opt-in per channel**: a channel keeps the
+newest N downloads and/or anything younger than N days, and a purge drops what neither rule
+keeps. A channel with no policy keeps everything, so nothing is deleted on an upgrade and the
+cap-only refusal above is still what happens by default. A silent delete of someone's file to
+make space for another file is not a policy this server gets to invent — it is a policy the
+owner of the channel asks for. Every removal is one row in `listening_podcast_prunes`, with
+the bytes and the rule that took it, and `getPodcasts.storage.pruned` reports that same list
+back. The sweep runs in the app's periodic worker (and before a download needs room), always
+under the member lock a manual delete also takes, so two claims on one file are impossible.
 """
 from __future__ import annotations
 
@@ -24,7 +31,7 @@ import threading
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -46,6 +53,28 @@ MAX_DURATION = 10 ** 7
 CAP_BYTES = int(os.getenv('HARDLYLISTENING_PODCAST_CAP_MB', '5120')) * 1024 * 1024
 DOWNLOAD_CHUNK = 256 * 1024
 DOWNLOAD_TIMEOUT = 30
+
+
+def _env_policy(name):
+    """A retention default from the environment, or 0 when it is absent or nonsense.
+
+    Read at import so one typo cannot make a sweep behave differently halfway through a run.
+    """
+    try:
+        return max(0, int(os.getenv(name, '0') or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+#: What a **new** channel starts with (HL-234). 0 means "keep everything", which is also what
+#: every channel created before the policy existed keeps — retention never applies backwards.
+DEFAULT_KEEP_NEWEST = _env_policy('HARDLYLISTENING_PODCAST_KEEP_NEWEST')
+DEFAULT_KEEP_DAYS = _env_policy('HARDLYLISTENING_PODCAST_KEEP_DAYS')
+
+#: Bounds a member cannot type past: a thousand downloads and ten years are far beyond any
+#: honest channel, and both keep a bad number from reading as "delete everything".
+MAX_KEEP_NEWEST = 1000
+MAX_KEEP_DAYS = 3650
 
 AUDIO_TYPES = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'audio/mp4',
                'aac': 'audio/aac', 'ogg': 'audio/ogg', 'oga': 'audio/ogg',
@@ -88,6 +117,18 @@ def schema(store):
           downloaded REAL NOT NULL DEFAULT 0,
           created REAL NOT NULL,
           UNIQUE(channel_id, guid));
+        CREATE TABLE IF NOT EXISTS listening_podcast_prunes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts REAL NOT NULL,
+          member_id TEXT NOT NULL,
+          channel_id INTEGER NOT NULL,
+          episode_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          bytes INTEGER NOT NULL DEFAULT 0,
+          reason TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS listening_podcast_prunes_member
+          ON listening_podcast_prunes(member_id, id);
         CREATE INDEX IF NOT EXISTS listening_podcast_member
           ON listening_podcast_channels(member_id, id);
         CREATE INDEX IF NOT EXISTS listening_podcast_episode_channel
@@ -103,6 +144,15 @@ def schema(store):
             if name not in present:
                 store.conn.execute(
                     f'ALTER TABLE listening_podcast_episodes ADD COLUMN {name} {ddl}')
+        # Retention is added as 0 = keep everything for existing channels, whatever the
+        # environment says: a policy must not start deleting files someone already has.
+        channels = {row[1] for row in store.conn.execute(
+            'PRAGMA table_info(listening_podcast_channels)')}
+        for name in ('keep_newest', 'keep_days'):
+            if name not in channels:
+                store.conn.execute(
+                    f'ALTER TABLE listening_podcast_channels ADD COLUMN {name} '
+                    'INTEGER NOT NULL DEFAULT 0')
         store.conn.commit()
 
 
@@ -353,15 +403,63 @@ def _channel_id(identity):
         raise Denied(400, 'Invalid podcast channel id')
 
 
-def create_channel(store, uid, raw_url, seed=''):
+def retention_of(row):
+    """A channel's policy as the API reports it, and as `_policy` reads it."""
+    return {'keepNewest': int(row.get('keep_newest') or 0),
+            'keepDays': int(row.get('keep_days') or 0)}
+
+
+def _policy_value(raw, limit, name, default=0):
+    """A retention number from a request or the environment: a count, never a guess."""
+    if raw is None or raw == '':
+        return int(default)
+    if isinstance(raw, bool):
+        raise Denied(400, '%s must be a whole number' % name)
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        raise Denied(400, '%s must be a whole number' % name)
+    if value < 0 or value > limit:
+        raise Denied(400, '%s must be between 0 and %d' % (name, limit))
+    return value
+
+
+def set_retention(store, uid, identity, keep_newest=None, keep_days=None):
+    """Change one channel's retention. Absent arguments are left alone, never reset."""
+    channel_id = _channel_id(identity)
+    with store.lock:
+        row = store.conn.execute(
+            'SELECT * FROM listening_podcast_channels WHERE id=? AND member_id=?',
+            (channel_id, uid)).fetchone()
+    if row is None:
+        raise Denied(404, 'Not found')
+    current = retention_of(dict(row))
+    newest = (current['keepNewest'] if keep_newest is None
+              else _policy_value(keep_newest, MAX_KEEP_NEWEST, 'keepNewest'))
+    days = (current['keepDays'] if keep_days is None
+            else _policy_value(keep_days, MAX_KEEP_DAYS, 'keepDays'))
+    with store.lock:
+        store.conn.execute(
+            'UPDATE listening_podcast_channels SET keep_newest=?, keep_days=? '
+            'WHERE id=? AND member_id=?', (newest, days, channel_id, uid))
+        store.conn.commit()
+    return {'keepNewest': newest, 'keepDays': days}
+
+
+def create_channel(store, uid, raw_url, seed='', keep_newest=None, keep_days=None):
     url = clean_url(raw_url if isinstance(raw_url, str) else '')
     host = urlsplit(url).hostname or 'Podcast feed'
     title = _clip(seed, MAX_TITLE) or host
+    # A channel created now starts with the server's policy; a channel created before the
+    # policy existed keeps 0, so nothing is deleted on an upgrade.
+    newest = _policy_value(keep_newest, MAX_KEEP_NEWEST, 'keepNewest', DEFAULT_KEEP_NEWEST)
+    days = _policy_value(keep_days, MAX_KEEP_DAYS, 'keepDays', DEFAULT_KEEP_DAYS)
     with store.lock:
         store.conn.execute(
             'INSERT OR IGNORE INTO listening_podcast_channels'
-            '(member_id,url,title,description,artwork,created,last_checked,error_message) '
-            'VALUES(?,?,?,\'\',\'\',?,0,\'\')', (uid, url, title, time.time()))
+            '(member_id,url,title,description,artwork,created,last_checked,error_message,'
+            'keep_newest,keep_days) VALUES(?,?,?,\'\',\'\',?,0,\'\',?,?)',
+            (uid, url, title, time.time(), newest, days))
         store.conn.commit()
 
 
@@ -462,12 +560,131 @@ def _suffix(url):
 
 
 def _remove_file(row):
+    """Unlink the file this row names. Returns whether there was one to take.
+
+    A `False` is not an error: it means somebody else (a manual delete, an earlier sweep)
+    already had it, and an audit row claiming otherwise would be a lie.
+    """
     held = row.get('file') or ''
-    if held:
+    if not held:
+        return False
+    path = Path(held)
+    try:
+        if not path.is_file():
+            return False
+        path.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def _downloaded(store, channel_id):
+    """The episodes this channel actually holds, newest published first."""
+    with store.lock:
+        return [dict(row) for row in store.conn.execute(
+            "SELECT * FROM listening_podcast_episodes WHERE channel_id=? AND file<>'' "
+            "AND bytes>0 ORDER BY publish_date DESC, id DESC", (channel_id,))]
+
+
+def _plan(records, keep_newest, keep_days, now, incoming=None):
+    """What a policy drops, and why.
+
+    Two independent rules, both meaning *keep*: the newest N downloads, and anything
+    downloaded inside the window. The window is the harder of the two — an episode older
+    than it goes even when the count would keep it — because a count alone never stops a
+    folder from growing with a weekly show.
+
+    `incoming` is the episode being downloaded right now. It counts as kept when the newest
+    N is worked out, so a full budget frees exactly the room the new file needs.
+    """
+    ranked = sorted((records + ([incoming] if incoming else [])),
+                    key=lambda row: (row.get('publish_date') or 0, row.get('id') or 0),
+                    reverse=True)
+    newest = {row['id'] for row in ranked[:keep_newest]} if keep_newest > 0 else None
+    cutoff = now - keep_days * 86400 if keep_days > 0 else None
+    dropped = []
+    for row in records:
+        if cutoff is not None and (row.get('downloaded') or 0) < cutoff:
+            dropped.append({'row': row, 'reason': 'age'})
+        elif newest is not None and row['id'] not in newest:
+            dropped.append({'row': row, 'reason': 'newest'})
+    return dropped
+
+
+def _prune_member_locked(store, uid, incoming=None):
+    """Apply every channel's policy for one member. The member lock must already be held."""
+    now = time.time()
+    removed, freed, policy = [], 0, False
+    for channel in _channel_rows(store, uid):
+        keep_newest = int(channel.get('keep_newest') or 0)
+        keep_days = int(channel.get('keep_days') or 0)
+        if keep_newest <= 0 and keep_days <= 0:
+            continue
+        policy = True
+        records = _downloaded(store, channel['id'])
+        if not records:
+            continue
+        fresh = incoming if incoming and incoming['channel_id'] == channel['id'] else None
+        for drop in _plan(records, keep_newest, keep_days, now, fresh):
+            row = drop['row']
+            if not _remove_file(row):
+                continue                    # somebody else already claimed it
+            with store.lock:
+                store.conn.execute(
+                    "UPDATE listening_podcast_episodes SET file='', bytes=0, downloaded=0 "
+                    "WHERE id=? AND file=?", (row['id'], row['file']))
+                store.conn.execute(
+                    'INSERT INTO listening_podcast_prunes'
+                    '(ts,member_id,channel_id,episode_id,title,bytes,reason) '
+                    'VALUES(?,?,?,?,?,?,?)',
+                    (now, uid, channel['id'], row['id'], row['title'],
+                     int(row['bytes'] or 0), drop['reason']))
+                store.conn.commit()
+            removed.append({'id': str(row['id']), 'title': row['title'],
+                            'channel': channel['title'], 'bytes': int(row['bytes'] or 0),
+                            'reason': drop['reason']})
+            freed += int(row['bytes'] or 0)
+    return {'removed': removed, 'bytes': freed, 'policy': policy}
+
+
+def prune_member(store, uid):
+    """Run the policy for one member now. A no-op for a member with no policy set."""
+    with _member_lock(uid):
+        return _prune_member_locked(store, uid)
+
+
+def prune_all(store):
+    """The periodic pass: every member who actually has a policy."""
+    with store.lock:
+        members = [row[0] for row in store.conn.execute(
+            'SELECT DISTINCT member_id FROM listening_podcast_channels '
+            'WHERE keep_newest>0 OR keep_days>0')]
+    report = {'members': 0, 'removed': [], 'bytes': 0}
+    for uid in members:
         try:
-            Path(held).unlink(missing_ok=True)
-        except OSError:
-            pass
+            result = prune_member(store, uid)
+        except Exception as exc:                            # noqa: BLE001
+            store.log('podcast retention failed for one member: %s' % exc, 'error')
+            continue
+        report['members'] += 1
+        report['removed'].extend(result['removed'])
+        report['bytes'] += result['bytes']
+    return report
+
+
+def prune_log(store, uid, limit=50):
+    """What the policy has taken from this member, newest first. Never another member's."""
+    try:
+        count = max(1, min(int(limit), 500))
+    except (TypeError, ValueError):
+        count = 50
+    with store.lock:
+        return [{'id': str(row['episode_id']), 'title': row['title'],
+                 'bytes': int(row['bytes'] or 0), 'reason': row['reason'] or '',
+                 'removedAt': iso(row['ts'])}
+                for row in store.conn.execute(
+                    'SELECT * FROM listening_podcast_prunes WHERE member_id=? '
+                    'ORDER BY id DESC LIMIT ?', (uid, count))]
 
 
 def used_bytes(store, uid):
@@ -495,9 +712,15 @@ def usage(store, uid):
                           'downloaded': iso(r['downloaded'])} for r in rows]}
 
 
-def _full_message(used):
-    return ('Podcast storage is full: %s of %s used. '
-            'Delete a downloaded episode to make room.' % (human_bytes(used), human_bytes(CAP_BYTES)))
+def _full_message(used, policy=False, freed=0):
+    message = ('Podcast storage is full: %s of %s used. '
+               'Delete a downloaded episode to make room.'
+               % (human_bytes(used), human_bytes(CAP_BYTES)))
+    if policy:
+        # Say what the policy did, or the refusal reads as "nothing was even tried".
+        message += (' The retention policy freed %s, which was not enough for this episode.'
+                    % human_bytes(freed))
+    return message
 
 
 def _episode(store, uid, identity):
@@ -560,10 +783,14 @@ def download_episode(store, uid, identity):
         held = episode.get('file') or ''
         if held and Path(held).is_file():
             return episode_payload(episode)      # already kept: the same answer, no refetch
+        # The policy runs before the budget is read, counting this episode as kept, so a
+        # member with a policy gets room made rather than a refusal. Without a policy this
+        # is one SELECT per channel and changes nothing.
+        pruned = _prune_member_locked(store, uid, incoming=episode)
         used = used_bytes(store, uid)
         headroom = CAP_BYTES - used
         if headroom <= 0:
-            raise Denied(507, _full_message(used))
+            raise Denied(507, _full_message(used, pruned['policy'], pruned['bytes']))
         # The feed's `length` is not trusted here: a wrong one would refuse a file that
         # fits. `_save` stops at the headroom, which is the only number that must be right.
         target = _member_dir(uid) / ('%s.%s' % (episode['id'], _suffix(episode['stream_url'])))
@@ -606,13 +833,19 @@ def get_podcasts(store, uid, params):
         entry = {'id': str(row['id']), 'url': row['url'], 'title': row['title'],
                  'description': row['description'] or '',
                  'status': 'error' if row['error_message'] else 'completed',
-                 'errorMessage': row['error_message'] or ''}
+                 'errorMessage': row['error_message'] or '',
+                 # Additive: what this channel keeps, so a client can show the policy.
+                 'retention': retention_of(row)}
         if include:
             entry['episode'] = _episodes_for(store, row['id'])
         channels.append(entry)
     # The cap is per member, so the budget belongs on the member's own listing. Additive:
     # a client that does not know the key ignores it; one that does can show the bar.
-    return {'podcasts': {'channel': channels, 'storage': usage(store, uid)}}
+    budget = usage(store, uid)
+    # What the policy removed, newest first — the report the card asks for. Additive, and it
+    # is the same list the audit table holds, never a recomputation.
+    budget['pruned'] = prune_log(store, uid)
+    return {'podcasts': {'channel': channels, 'storage': budget}}
 
 
 def newest(store, uid, params):
@@ -663,8 +896,10 @@ def delete_episode(store, uid, identity):
     except (TypeError, ValueError):
         raise Denied(400, 'Invalid episode id')
     # Deleting the episode is the member's act; its file must go with it, or the bytes
-    # would count against the cap forever with nothing left to point at them.
-    with store.lock:
+    # would count against the cap forever with nothing left to point at them. The member
+    # lock is the same one a download and a policy sweep take, so a manual delete and the
+    # policy can never both claim the same file.
+    with _member_lock(uid), store.lock:
         row = store.conn.execute(
             'SELECT e.* FROM listening_podcast_episodes e JOIN listening_podcast_channels c '
             'ON c.id=e.channel_id WHERE e.id=? AND c.member_id=?',
