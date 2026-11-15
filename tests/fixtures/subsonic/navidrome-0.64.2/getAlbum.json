@@ -1,0 +1,963 @@
+{
+  "subsonic-response": {
+    "album": {
+      "artist": "2 Mello",
+      "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+      "artists": [
+        {
+          "id": "33X3V2Xn7Cip7WqqfXNkL8",
+          "name": "2 Mello"
+        }
+      ],
+      "coverArt": "al-6qVa68sKTKahAuJabPcGQu_825fc09771059a72",
+      "created": "2025-03-26T22:26:37.095348032Z",
+      "discTitles": [],
+      "displayArtist": "2 Mello",
+      "duration": 2536,
+      "explicitStatus": "",
+      "genre": "Hip-Hop",
+      "genres": [
+        {
+          "name": "Hip-Hop"
+        }
+      ],
+      "id": "6qVa68sKTKahAuJabPcGQu",
+      "isCompilation": false,
+      "moods": [],
+      "musicBrainzId": "",
+      "name": "Chrono Jigga",
+      "originalReleaseDate": {},
+      "playCount": 5922,
+      "played": "2026-11-14T06:25:59.969Z",
+      "recordLabels": [
+        {
+          "name": "Scrub Club Records"
+        }
+      ],
+      "releaseDate": {},
+      "releaseTypes": [],
+      "song": [
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "33X3V2Xn7Cip7WqqfXNkL8",
+                "name": "2 Mello"
+              },
+              "role": "composer"
+            },
+            {
+              "artist": {
+                "id": "11lVqK1vMXJDo3KOMKz6F2",
+                "name": "ngineer"
+              },
+              "role": "engineer"
+            }
+          ],
+          "coverArt": "mf-0xeB5VXHxD6BpHc3YHxgNR_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.11464012Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello",
+          "duration": 20,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "0xeB5VXHxD6BpHc3YHxgNR",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-01 - Intro.mp3",
+          "playCount": 1874,
+          "played": "2026-11-14T06:25:59.969Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 1492672,
+          "sortName": "intro",
+          "suffix": "mp3",
+          "title": "Intro",
+          "track": 1,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-3URnPCyUUVOuYlsQHEiiZy_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.106406049Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 166,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "3URnPCyUUVOuYlsQHEiiZy",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-02 - Public Chrono Announcement (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 836,
+          "played": "2026-11-13T16:02:07.617Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 7355636,
+          "sortName": "public chrono announcement (jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "Public Chrono Announcement (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 2,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-7EjOBYIF4RTUv2gNXhSJqI_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.131419032Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 269,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "7EjOBYIF4RTUv2gNXhSJqI",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-03 - An Encore in Time (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 690,
+          "played": "2026-11-12T05:50:55.724Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 11472516,
+          "sortName": "an encore in time (jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "An Encore in Time (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 3,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2Pieb5fC0RMfpmqlMCI12K_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.129388031Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 219,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "2Pieb5fC0RMfpmqlMCI12K",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-04 - Ignorant Scene (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 334,
+          "played": "2026-11-12T07:10:25.663Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 9473620,
+          "sortName": "ignorant scene (jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "Ignorant Scene (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 4,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-73f6PvRZW79KLN0RGYkvhL_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.108646539Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 350,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "73f6PvRZW79KLN0RGYkvhL",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-05 - What More Can I Sing (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 458,
+          "played": "2026-11-11T12:16:29.946577765Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 14728424,
+          "sortName": "what more can i sing (jay-z vs. chrono trigger mashup)",
+          "starred": "2026-11-08T12:28:48.494370196Z",
+          "suffix": "mp3",
+          "title": "What More Can I Sing (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 5,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "averageRating": 4,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2EhDNOH8QBXkJFNHXRGPqd_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.127255458Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 216,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "2EhDNOH8QBXkJFNHXRGPqd",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-06 - Masamune Problems (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 268,
+          "played": "2026-11-10T14:15:19.423Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 9362867,
+          "sortName": "masamune problems (jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "Masamune Problems (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 6,
+          "type": "music",
+          "userRating": 4,
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "averageRating": 4,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-20F14R2M25q4K22ttSYAeR_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.120818476Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 245,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "20F14R2M25q4K22ttSYAeR",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-07 - Say Hello to the Black Omen (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 226,
+          "played": "2026-11-11T09:53:44Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 10497646,
+          "sortName": "say hello to the black omen (jay-z vs. chrono trigger mashup)",
+          "starred": "2026-11-08T08:45:21.554616852Z",
+          "suffix": "mp3",
+          "title": "Say Hello to the Black Omen (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 7,
+          "type": "music",
+          "userRating": 4,
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2rUayUvbKyLyrjADcHYmkt_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.110677164Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 200,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "2rUayUvbKyLyrjADcHYmkt",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-08 - Dirt in the Palace (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 264,
+          "played": "2026-11-14T03:52:59.411875365Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 8700404,
+          "sortName": "dirt in the palace (jay-z vs. chrono trigger mashup)",
+          "starred": "2026-11-13T03:30:55.72507576Z",
+          "suffix": "mp3",
+          "title": "Dirt in the Palace (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 8,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-0rIRhyphUl2bcgvpcI9wZR_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.118731574Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 247,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "0rIRhyphUl2bcgvpcI9wZR",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-09 - Wind Cry (Orchestra - Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 262,
+          "played": "2026-11-10T14:13:05.957Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 10599037,
+          "sortName": "wind cry (orchestra - jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "Wind Cry (Orchestra - Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 9,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-5H8v5ZgvlIOqokuv4Xd1lT_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.125205579Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 307,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "5H8v5ZgvlIOqokuv4Xd1lT",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-10 - Marle, Lucca, Schala (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 282,
+          "played": "2026-11-07T22:41:16.197086875Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 12987625,
+          "sortName": "marle, lucca, schala (jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "Marle, Lucca, Schala (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 10,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2phjIhdqeoAJxvpfnoV8Ek_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.116738072Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 225,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "2phjIhdqeoAJxvpfnoV8Ek",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-11 - Gato's In Love (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 190,
+          "played": "2026-11-11T09:39:18Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 9700364,
+          "sortName": "gato's in love (jay-z vs. chrono trigger mashup)",
+          "starred": "2026-11-05T04:29:44.946078449Z",
+          "suffix": "mp3",
+          "title": "Gato's In Love (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 11,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "33X3V2Xn7Cip7WqqfXNkL8",
+                "name": "2 Mello"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-5zvr4mUrgailOt6aafbW7H_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.112675846Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello",
+          "duration": 67,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "5zvr4mUrgailOt6aafbW7H",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-12 - Outro.mp3",
+          "playCount": 238,
+          "played": "2026-11-13T06:27:37.604848429Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 3388010,
+          "sortName": "outro",
+          "suffix": "mp3",
+          "title": "Outro",
+          "track": 12,
+          "type": "music",
+          "works": [],
+          "year": 2013
+        }
+      ],
+      "songCount": 12,
+      "sortName": "chrono jigga",
+      "starred": "2026-11-13T10:49:34.109524015Z",
+      "userRating": 0,
+      "version": "",
+      "year": 2013
+    },
+    "openSubsonic": true,
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

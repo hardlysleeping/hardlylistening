@@ -1,0 +1,90 @@
+{
+  "subsonic-response": {
+    "openSubsonic": true,
+    "serverVersion": "0.64.2 (10114574)",
+    "song": {
+      "album": "Chrono Jigga",
+      "albumArtists": [
+        {
+          "id": "33X3V2Xn7Cip7WqqfXNkL8",
+          "name": "2 Mello"
+        }
+      ],
+      "albumId": "6qVa68sKTKahAuJabPcGQu",
+      "artist": "2 Mello",
+      "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+      "artists": [
+        {
+          "id": "33X3V2Xn7Cip7WqqfXNkL8",
+          "name": "2 Mello"
+        }
+      ],
+      "bitDepth": 0,
+      "bitRate": 320,
+      "bpm": 0,
+      "channelCount": 2,
+      "comment": "http://scrubclubrecords.com",
+      "contentType": "audio/mpeg",
+      "contributors": [
+        {
+          "artist": {
+            "id": "11lVqK1vMXJDo3KOMKz6F2",
+            "name": "ngineer"
+          },
+          "role": "engineer"
+        },
+        {
+          "artist": {
+            "id": "33X3V2Xn7Cip7WqqfXNkL8",
+            "name": "2 Mello"
+          },
+          "role": "composer"
+        }
+      ],
+      "coverArt": "mf-0xeB5VXHxD6BpHc3YHxgNR_825fc09771059a72",
+      "created": "2025-03-26T22:26:37.11464012Z",
+      "discNumber": 1,
+      "displayAlbumArtist": "2 Mello",
+      "displayArtist": "2 Mello",
+      "displayComposer": "2 Mello",
+      "duration": 20,
+      "explicitStatus": "",
+      "genre": "Hip-Hop",
+      "genres": [
+        {
+          "name": "Hip-Hop"
+        }
+      ],
+      "groupings": [],
+      "id": "0xeB5VXHxD6BpHc3YHxgNR",
+      "isDir": false,
+      "isrc": [],
+      "mediaType": "song",
+      "moods": [],
+      "movements": [],
+      "musicBrainzId": "",
+      "parent": "6qVa68sKTKahAuJabPcGQu",
+      "path": "2 Mello/Chrono Jigga/01-01 - Intro.mp3",
+      "playCount": 1874,
+      "played": "2026-11-14T06:25:59.969Z",
+      "replayGain": {
+        "albumGain": 0,
+        "albumPeak": 1,
+        "trackGain": 0,
+        "trackPeak": 1
+      },
+      "samplingRate": 44100,
+      "size": 1492672,
+      "sortName": "intro",
+      "suffix": "mp3",
+      "title": "Intro",
+      "track": 1,
+      "type": "music",
+      "works": [],
+      "year": 2013
+    },
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

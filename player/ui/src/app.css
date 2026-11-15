@@ -1,0 +1,11 @@
+/* The player's stylesheet entry point.
+ *
+ * It is the host app's own entry point, imported rather than copied: the player is meant to look
+ * exactly like the app it came from, and a second copy of `player.css` is how the two drift.
+ * Sharing `web/styles/` is a build-time dependency on the stylesheet, not on
+ * `web/index.html` — deleting the host page leaves this build untouched.
+ *
+ * The one rule that follows from this: a visual change belongs in `web/styles/`, never here.
+ */
+
+@import "../../../web/styles/app.css";

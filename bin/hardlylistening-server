@@ -1,0 +1,10 @@
+#!/bin/sh
+# The packaged entry point. Deliberately small: it locates the application, then hands over to
+# cli.py, which owns `run`, `check` and `version`. No daemonising, no PID file, no log file —
+# systemd, Docker or the desktop shell supervises this process, and nesting a supervisor inside
+# a supervisor is how a service ends up unkillable.
+#
+# HARDLYLISTENING_PYTHON overrides the interpreter for installs that are not on PATH.
+set -eu
+APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "${HARDLYLISTENING_PYTHON:-python3}" "$APP_DIR/cli.py" "$@"

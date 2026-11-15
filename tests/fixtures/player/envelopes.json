@@ -1,0 +1,721 @@
+{
+  "albums": [
+    {
+      "artist": "Ana Vale",
+      "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+      "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "duration": 401,
+      "id": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "name": "After Hours",
+      "songCount": 2
+    },
+    {
+      "artist": "Bo Ito",
+      "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+      "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+      "duration": 341,
+      "id": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+      "name": "Field Notes",
+      "songCount": 1
+    }
+  ],
+  "artists": [
+    {
+      "albumCount": 1,
+      "coverArt": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+      "id": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+      "name": "Ana Vale"
+    },
+    {
+      "albumCount": 1,
+      "coverArt": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+      "id": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+      "name": "Bo Ito"
+    }
+  ],
+  "envelopes": {
+    "createPlaylist": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getAlbum:al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479": {
+      "subsonic-response": {
+        "album": {
+          "artist": "Bo Ito",
+          "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+          "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+          "duration": 341,
+          "id": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+          "name": "Field Notes",
+          "song": [
+            {
+              "album": "Field Notes",
+              "albumArtist": "Bo Ito",
+              "albumId": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "artist": "Bo Ito",
+              "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "bpm": 0,
+              "contentType": "audio/flac",
+              "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "created": "2025-10-15T03:46:40.000Z",
+              "discNumber": 0,
+              "duration": 341,
+              "genre": "",
+              "id": "21",
+              "isDir": false,
+              "parent": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "size": 24000000,
+              "starred": "2025-10-15T03:46:40.000Z",
+              "suffix": "flac",
+              "title": "Field Notes",
+              "track": 1,
+              "type": "music"
+            }
+          ],
+          "songCount": 1
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getAlbum:al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f": {
+      "subsonic-response": {
+        "album": {
+          "artist": "Ana Vale",
+          "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+          "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+          "duration": 401,
+          "id": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+          "name": "After Hours",
+          "song": [
+            {
+              "album": "After Hours",
+              "albumArtist": "Ana Vale",
+              "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "bpm": 0,
+              "contentType": "audio/mpeg",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "created": "2025-10-09T08:53:20.000Z",
+              "discNumber": 0,
+              "duration": 214,
+              "genre": "",
+              "id": "11",
+              "isDir": false,
+              "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "size": 8600000,
+              "suffix": "mp3",
+              "title": "Night Drive",
+              "track": 1,
+              "type": "music"
+            },
+            {
+              "album": "After Hours",
+              "albumArtist": "Ana Vale",
+              "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "bpm": 0,
+              "contentType": "audio/mpeg",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "created": "2025-10-09T08:54:20.000Z",
+              "discNumber": 0,
+              "duration": 187,
+              "genre": "",
+              "id": "12",
+              "isDir": false,
+              "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "size": 7500000,
+              "suffix": "mp3",
+              "title": "Tail Lights",
+              "track": 2,
+              "type": "music"
+            }
+          ],
+          "songCount": 2
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getAlbumList2": {
+      "subsonic-response": {
+        "albumList2": {
+          "album": [
+            {
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "duration": 401,
+              "id": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "name": "After Hours",
+              "songCount": 2
+            },
+            {
+              "artist": "Bo Ito",
+              "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "duration": 341,
+              "id": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "name": "Field Notes",
+              "songCount": 1
+            }
+          ]
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getAlbumList2:code30": {
+      "subsonic-response": {
+        "error": {
+          "code": 30,
+          "message": "This server does not implement getAlbumList2"
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "failed",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getAlbumList2:code40": {
+      "subsonic-response": {
+        "error": {
+          "code": 40,
+          "message": "Invalid device credentials"
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "failed",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getAlbumList2:empty": {
+      "subsonic-response": {
+        "albumList2": {
+          "album": []
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getArtist:ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09": {
+      "subsonic-response": {
+        "artist": {
+          "album": [
+            {
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "duration": 401,
+              "id": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "name": "After Hours",
+              "songCount": 2
+            }
+          ],
+          "albumCount": 1,
+          "coverArt": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+          "id": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+          "name": "Ana Vale"
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getArtist:ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2": {
+      "subsonic-response": {
+        "artist": {
+          "album": [
+            {
+              "artist": "Bo Ito",
+              "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "duration": 341,
+              "id": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "name": "Field Notes",
+              "songCount": 1
+            }
+          ],
+          "albumCount": 1,
+          "coverArt": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+          "id": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+          "name": "Bo Ito"
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getArtists": {
+      "subsonic-response": {
+        "artists": {
+          "ignoredArticles": "",
+          "index": [
+            {
+              "artist": [
+                {
+                  "albumCount": 1,
+                  "coverArt": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+                  "id": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+                  "name": "Ana Vale"
+                },
+                {
+                  "albumCount": 1,
+                  "coverArt": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+                  "id": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+                  "name": "Bo Ito"
+                }
+              ],
+              "name": "Saved"
+            }
+          ]
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getBookmarks": {
+      "subsonic-response": {
+        "bookmarks": {
+          "bookmark": [
+            {
+              "changed": "2025-10-09T08:58:20.000Z",
+              "comment": "",
+              "created": "2025-10-09T08:56:40.000Z",
+              "entry": {
+                "album": "After Hours",
+                "albumArtist": "Ana Vale",
+                "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+                "artist": "Ana Vale",
+                "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+                "bpm": 0,
+                "contentType": "audio/mpeg",
+                "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+                "created": "2025-10-09T08:53:20.000Z",
+                "discNumber": 0,
+                "duration": 214,
+                "genre": "",
+                "id": "11",
+                "isDir": false,
+                "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+                "size": 8600000,
+                "suffix": "mp3",
+                "title": "Night Drive",
+                "track": 1,
+                "type": "music"
+              },
+              "position": 60000,
+              "username": "bazzite"
+            }
+          ]
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getCoverArt": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getPlayQueue": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "playQueue": {
+          "changed": "2025-10-09T08:55:00.000Z",
+          "current": "11",
+          "entry": [
+            {
+              "album": "After Hours",
+              "albumArtist": "Ana Vale",
+              "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "bpm": 0,
+              "contentType": "audio/mpeg",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "created": "2025-10-09T08:53:20.000Z",
+              "discNumber": 0,
+              "duration": 214,
+              "genre": "",
+              "id": "11",
+              "isDir": false,
+              "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "size": 8600000,
+              "suffix": "mp3",
+              "title": "Night Drive",
+              "track": 1,
+              "type": "music"
+            }
+          ],
+          "position": 42000,
+          "username": "bazzite"
+        },
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getPlaylist:7": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "playlist": {
+          "duration": 555,
+          "entry": [
+            {
+              "album": "After Hours",
+              "albumArtist": "Ana Vale",
+              "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "bpm": 0,
+              "contentType": "audio/mpeg",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "created": "2025-10-09T08:53:20.000Z",
+              "discNumber": 0,
+              "duration": 214,
+              "genre": "",
+              "id": "11",
+              "isDir": false,
+              "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "size": 8600000,
+              "suffix": "mp3",
+              "title": "Night Drive",
+              "track": 1,
+              "type": "music"
+            },
+            {
+              "album": "Field Notes",
+              "albumArtist": "Bo Ito",
+              "albumId": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "artist": "Bo Ito",
+              "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "bpm": 0,
+              "contentType": "audio/flac",
+              "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "created": "2025-10-15T03:46:40.000Z",
+              "discNumber": 0,
+              "duration": 341,
+              "genre": "",
+              "id": "21",
+              "isDir": false,
+              "parent": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "size": 24000000,
+              "starred": "2025-10-15T03:46:40.000Z",
+              "suffix": "flac",
+              "title": "Field Notes",
+              "track": 1,
+              "type": "music"
+            }
+          ],
+          "id": "7",
+          "name": "Road trip",
+          "public": false,
+          "songCount": 2
+        },
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getPlaylists": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "playlists": {
+          "playlist": [
+            {
+              "duration": 555,
+              "id": "7",
+              "name": "Road trip",
+              "public": false,
+              "songCount": 2
+            }
+          ]
+        },
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "getStarred2": {
+      "subsonic-response": {
+        "getStarred2": {
+          "album": [
+            {
+              "artist": "Bo Ito",
+              "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "duration": 341,
+              "id": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "name": "Field Notes",
+              "songCount": 1
+            }
+          ],
+          "artist": [
+            {
+              "albumCount": 1,
+              "coverArt": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "id": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "name": "Bo Ito"
+            }
+          ],
+          "song": [
+            {
+              "album": "Field Notes",
+              "albumArtist": "Bo Ito",
+              "albumId": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "artist": "Bo Ito",
+              "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+              "bpm": 0,
+              "contentType": "audio/flac",
+              "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "created": "2025-10-15T03:46:40.000Z",
+              "discNumber": 0,
+              "duration": 341,
+              "genre": "",
+              "id": "21",
+              "isDir": false,
+              "parent": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+              "size": 24000000,
+              "starred": "2025-10-15T03:46:40.000Z",
+              "suffix": "flac",
+              "title": "Field Notes",
+              "track": 1,
+              "type": "music"
+            }
+          ]
+        },
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "ping": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "savePlayQueue": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "scrobble": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "search3": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "searchResult3": {
+          "album": [],
+          "artist": [],
+          "song": [
+            {
+              "album": "After Hours",
+              "albumArtist": "Ana Vale",
+              "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "artist": "Ana Vale",
+              "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+              "bpm": 0,
+              "contentType": "audio/mpeg",
+              "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "created": "2025-10-09T08:53:20.000Z",
+              "discNumber": 0,
+              "duration": 214,
+              "genre": "",
+              "id": "11",
+              "isDir": false,
+              "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+              "size": 8600000,
+              "suffix": "mp3",
+              "title": "Night Drive",
+              "track": 1,
+              "type": "music"
+            }
+          ]
+        },
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "star": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "unstar": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    },
+    "updatePlaylist": {
+      "subsonic-response": {
+        "openSubsonic": true,
+        "serverVersion": "scoped-1",
+        "status": "ok",
+        "type": "HardlyListening",
+        "version": "1.16.1"
+      }
+    }
+  },
+  "expectations": {
+    "albums": 2,
+    "artists": 2,
+    "playlist_id": 7,
+    "playlist_tracks": [
+      11,
+      21
+    ],
+    "starred": [
+      21
+    ],
+    "tracks": 3
+  },
+  "playlists": [
+    {
+      "duration": 555,
+      "id": "7",
+      "name": "Road trip",
+      "public": false,
+      "songCount": 2
+    }
+  ],
+  "server": {
+    "serverVersion": "scoped-1",
+    "type": "HardlyListening",
+    "version": "1.16.1"
+  },
+  "songs": [
+    {
+      "album": "After Hours",
+      "albumArtist": "Ana Vale",
+      "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "artist": "Ana Vale",
+      "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+      "bpm": 0,
+      "contentType": "audio/mpeg",
+      "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "created": "2025-10-09T08:53:20.000Z",
+      "discNumber": 0,
+      "duration": 214,
+      "genre": "",
+      "id": "11",
+      "isDir": false,
+      "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "size": 8600000,
+      "suffix": "mp3",
+      "title": "Night Drive",
+      "track": 1,
+      "type": "music"
+    },
+    {
+      "album": "After Hours",
+      "albumArtist": "Ana Vale",
+      "albumId": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "artist": "Ana Vale",
+      "artistId": "ar_e119a0c85eeb8ebd87e5397913e157f729c5fe9549afb1414b93c0917b90cd09",
+      "bpm": 0,
+      "contentType": "audio/mpeg",
+      "coverArt": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "created": "2025-10-09T08:54:20.000Z",
+      "discNumber": 0,
+      "duration": 187,
+      "genre": "",
+      "id": "12",
+      "isDir": false,
+      "parent": "al_c927046a69f0d7cedc8172c0669b1c3a5309b090b30d186be7dee9f65bfbca3f",
+      "size": 7500000,
+      "suffix": "mp3",
+      "title": "Tail Lights",
+      "track": 2,
+      "type": "music"
+    },
+    {
+      "album": "Field Notes",
+      "albumArtist": "Bo Ito",
+      "albumId": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+      "artist": "Bo Ito",
+      "artistId": "ar_f369d68f3943ba8f08fa868a9e210b84245ff724c8cd19ea1b7b853d103062f2",
+      "bpm": 0,
+      "contentType": "audio/flac",
+      "coverArt": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+      "created": "2025-10-15T03:46:40.000Z",
+      "discNumber": 0,
+      "duration": 341,
+      "genre": "",
+      "id": "21",
+      "isDir": false,
+      "parent": "al_c600e4844f963b52158a58d6bbce959cf1cf9cefca7e4904ed45efa7698c9479",
+      "size": 24000000,
+      "starred": "2025-10-15T03:46:40.000Z",
+      "suffix": "flac",
+      "title": "Field Notes",
+      "track": 1,
+      "type": "music"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# State and build output — never source. The live database holds somebody's library metadata, the
+# caches hold their art, and a target directory is a machine's scratch space.
+hardlylistening.db
+hardlylistening.db-*
+backups/
+.cache/
+artist-art/
+tmp/
+__pycache__/
+*.pyc
+node_modules/
+target/
+*.log

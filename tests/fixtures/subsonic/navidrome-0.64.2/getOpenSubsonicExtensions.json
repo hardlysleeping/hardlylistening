@@ -1,0 +1,54 @@
+{
+  "subsonic-response": {
+    "openSubsonic": true,
+    "openSubsonicExtensions": [
+      {
+        "name": "transcodeOffset",
+        "versions": [
+          1
+        ]
+      },
+      {
+        "name": "formPost",
+        "versions": [
+          1
+        ]
+      },
+      {
+        "name": "songLyrics",
+        "versions": [
+          1,
+          2
+        ]
+      },
+      {
+        "name": "indexBasedQueue",
+        "versions": [
+          1
+        ]
+      },
+      {
+        "name": "transcoding",
+        "versions": [
+          1
+        ]
+      },
+      {
+        "name": "playbackReport",
+        "versions": [
+          1
+        ]
+      },
+      {
+        "name": "topSongsByArtistId",
+        "versions": [
+          1
+        ]
+      }
+    ],
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

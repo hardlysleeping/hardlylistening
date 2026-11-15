@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Join · HardlyListening</title>
+<style>
+  :root{ --bg:#0b0b10; --panel:#15151c; --panel2:#1d1d26; --line:#2a2a35;
+    --text:#ececf1; --dim:#9595a4; --accent:#58d3a8; --err:#ff6b6b; }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:
+    radial-gradient(1200px 600px at 50% -10%, #17222b 0%, var(--bg) 60%);
+    color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px}
+  .card{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);
+    border-radius:18px;padding:24px}
+  .brand{font-size:20px;font-weight:700;letter-spacing:-.01em}
+  .brand span{color:var(--accent)}
+  h1{font-size:15px;font-weight:600;margin:18px 0 6px}
+  p{margin:0 0 14px;color:var(--dim);font-size:13px}
+  label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--dim);margin:12px 0 6px}
+  input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:11px 12px;font:inherit;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  button{width:100%;margin-top:16px;background:var(--accent);color:#08110d;border:0;
+    border-radius:10px;padding:11px 12px;font:inherit;font-weight:650;cursor:pointer}
+  button:disabled{opacity:.6;cursor:default}
+  .msg{margin-top:14px;font-size:13px;line-height:1.45}
+  .msg.err{color:var(--err)}
+  .fine{margin-top:18px;color:var(--dim);font-size:11.5px}
+  html,body{touch-action:manipulation}
+  @media (max-width:760px){html,body{touch-action:pan-x pan-y}}
+  input,select,textarea{font-size:16px}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">Hardly<span>Listening</span></div>
+  <h1 id="title">Checking your link…</h1>
+  <p id="lead">One moment.</p>
+  <form id="join" hidden>
+    <label for="name">Display name</label>
+    <input id="name" required maxlength="100" autocomplete="nickname">
+    <label for="icon">Profile icon</label>
+    <select id="icon">
+      <option value="music">♫ Music</option>
+      <option value="headphones">🎧 Headphones</option>
+      <option value="star">★ Star</option>
+      <option value="sun">☀ Sun</option>
+      <option value="moon">☾ Moon</option>
+    </select>
+    <label for="email">Email</label>
+    <input id="email" type="email" required autocomplete="email" spellcheck="false">
+    <label for="password">Password</label>
+    <input id="password" type="password" required minlength="10" autocomplete="new-password">
+    <p class="fine">At least 10 characters. Your personal login link keeps working as the way back in.</p>
+    <button type="submit" id="go">Create account</button>
+  </form>
+  <div id="msg" class="msg" role="status" aria-live="polite"></div>
+</main>
+<script>
+// The signup token lives in the fragment and never in a request URL. It is posted once, the server
+// answers with a short-lived HttpOnly cookie, and the fragment is dropped before anything else.
+const title = document.getElementById("title");
+const lead = document.getElementById("lead");
+const msg = document.getElementById("msg");
+const form = document.getElementById("join");
+const go = document.getElementById("go");
+
+function fail(text, hint){
+  title.textContent = "Can't sign up here";
+  lead.textContent = hint || "";
+  msg.className = "msg err";
+  msg.replaceChildren();                 // clearing only, never markup
+  msg.textContent = text;
+  const back = document.createElement("a");
+  back.href = "/login";
+  back.textContent = " Sign in instead";
+  msg.appendChild(back);
+}
+
+function ready(){
+  title.textContent = "Join HardlyListening";
+  lead.textContent = "Choose how you are known here, then an email and password to sign in with.";
+  form.hidden = false;
+  document.getElementById("name").focus();
+}
+
+const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+const token = params.get("invite");
+history.replaceState(null, "", location.pathname);   // drop the fragment at once
+
+if (token) {
+  fetch("/api/auth/signup/begin", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({token}),
+  }).then(async response => {
+    if (response.ok) { ready(); return; }
+    const data = await response.json().catch(() => ({}));
+    fail(data.error || "That signup link is no longer valid",
+         "Signup links are single use and expire after a week. Ask for a new one.");
+  }).catch(() => fail("Could not reach the server"));
+} else {
+  // A reload after the fragment is gone still has the flow cookie, so it keeps working.
+  fetch("/api/auth/signup", {headers: {"Accept": "application/json"}})
+    .then(r => r.ok ? r.json() : null)
+    .then(d => d && d.active ? ready() : fail("This page needs a signup link.",
+         "Signup is by invitation only. Open the link you were sent, or ask for one."))
+    .catch(() => fail("Could not reach the server"));
+}
+
+form.onsubmit = event => {
+  event.preventDefault();
+  go.disabled = true;
+  msg.className = "msg";
+  msg.textContent = "";
+  fetch("/api/auth/signup/password", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      display_name: document.getElementById("name").value,
+      profile_icon: document.getElementById("icon").value,
+      email: document.getElementById("email").value,
+      password: document.getElementById("password").value,
+    }),
+  }).then(async response => {
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) { location.replace("/"); return; }
+    go.disabled = false;
+    msg.className = "msg err";
+    msg.textContent = data.error || "Could not create the account";
+  }).catch(() => {
+    go.disabled = false;
+    msg.className = "msg err";
+    msg.textContent = "Could not reach the server";
+  });
+};
+</script>
+</body></html>

@@ -1,0 +1,183 @@
+/* A member's profile page.
+
+   Opened from a name in the Feed, this is a page in the Feed section rather than a dialog:
+   a profile is read top to bottom, and on a phone a dialog over a scrolling list was a box
+   inside a box that could not use the screen it had. Three bands: who they are, their
+   numbers, then one list at a time behind a section switch — so the page stays one screen
+   tall per answer instead of dumping five lists in a column. */
+
+.memberpage{max-width:820px;margin:0 auto;display:grid;gap:14px;padding:2px 0 12px}
+
+/* Back is a pill, not the dialog's ×: it says where it goes and it is a 38 px target. */
+.mpback{justify-self:start;display:inline-flex;align-items:center;gap:7px;min-height:38px;
+  padding:0 15px 0 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);
+  color:var(--text);font:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  transition:border-color .14s,color .14s,background .14s}
+
+.mpback span{font-size:17px;line-height:1;color:var(--dim)}
+
+@media (hover:hover){
+  .mpback:hover{border-color:var(--accent);color:var(--accent)}
+  .mpback:hover span{color:var(--accent)}
+}
+
+.mpback:active{transform:scale(.97)}
+
+.mphero{display:flex;align-items:center;gap:14px;min-width:0}
+
+.mpface{display:grid;place-items:center;width:64px;height:64px;flex:none;border-radius:50%;
+  border:1px solid var(--line);background:radial-gradient(circle at 32% 26%,#2f3140,#191a21 70%);
+  font-size:30px;line-height:1;color:var(--text)}
+
+.mpwho{display:grid;gap:3px;min-width:0}
+
+.mpname{margin:0;font-size:22px;line-height:1.15;letter-spacing:-.02em;overflow-wrap:anywhere}
+
+.mpmore{margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+
+.mpmore.admin{color:var(--accent2)}
+
+/* Four lifetime numbers. The period windows are the card below, so these are deliberately
+   the totals: "how much has this person played" is not a week. */
+.mptiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+
+.mptile{display:grid;gap:1px;padding:10px 6px;border:1px solid var(--line);border-radius:12px;
+  background:var(--panel);text-align:center;min-width:0}
+
+.mptile b{font-size:18px;line-height:1.15;font-weight:650;font-variant-numeric:tabular-nums;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.mptile small{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- listening numbers ------------------------------------------------------ */
+/* They own their own card so a long history below never reads as part of them. */
+
+.mpstats{display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#15161d}
+
+.mpstats.busy{opacity:.55;transition:opacity .12s ease}
+
+.sthead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+.sthead h4{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+
+.stperiods{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+
+.stp{border:0;border-radius:0;background:transparent;color:var(--dim);font-size:12px;font-weight:600;
+  padding:6px 11px;cursor:pointer;min-height:0}
+
+.stp + .stp{border-left:1px solid var(--line)}
+
+.stp:hover{color:var(--text)}
+
+.stp[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--text)}
+
+.stlead{margin:0;font-size:13px;color:var(--text)}
+
+.stlead b{font-weight:650}
+
+.sttiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+
+.sttile{display:grid;gap:1px;padding:8px 6px;border-radius:10px;background:#1d1e27;text-align:center;min-width:0}
+
+.sttile b{font-size:17px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.sttile small{font-size:10.5px;color:var(--dim);white-space:nowrap}
+
+.stbars{display:flex;align-items:flex-end;gap:2px;height:52px;padding:2px 0}
+
+.stbars i{flex:1 1 0;min-width:2px;border-radius:2px 2px 0 0;background:color-mix(in srgb,var(--accent) 55%,#2a2c36)}
+
+.stbars i:hover{background:var(--accent)}
+
+.mpstats h5{margin:4px 0 0;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:600}
+
+.strows{display:grid}
+
+.strow{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid #22232b;font-size:13px;min-width:0}
+
+.stsong{cursor:pointer;border-radius:6px}
+
+.stsong:hover,.stsong:focus-visible{background:#ffffff0b}
+
+.strank{flex:none;width:18px;font-size:11px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+
+.stname{display:grid;min-width:0;flex:1}
+
+.stname b{font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+
+.stname small{color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.strow em{flex:none;font-style:normal;color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+
+.stmore{align-self:start;justify-self:start;min-height:0;padding:5px 10px;font-size:12px;border-radius:8px}
+
+.stempty{margin:0;font-size:13px;color:var(--dim)}
+
+.stextras{margin:0;font-size:11.5px;color:var(--dim)}
+
+/* ---- one list at a time ----------------------------------------------------- */
+/* Five lists stacked were three screens of scroll on a phone. The switch is a row of pills
+   that scrolls sideways when it has to, and the count rides in the pill because "Votes 0"
+   and "Votes 40" are different answers to the same question. */
+
+.mpswitch{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;
+  padding:0 0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+
+.mpswitch::-webkit-scrollbar{display:none}
+
+.mptab{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 13px;
+  border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--dim);
+  font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:color .14s,border-color .14s,background .14s}
+
+.mpn{font-size:11px;font-variant-numeric:tabular-nums;opacity:.65}
+
+.mptab[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 20%,var(--panel));
+  border-color:color-mix(in srgb,var(--accent) 55%,var(--line));color:var(--text)}
+
+.mptab[aria-pressed="true"] .mpn{opacity:.85}
+
+.mplist{display:grid;margin-top:8px;border:1px solid var(--line);border-radius:14px;
+  background:var(--panel);overflow:hidden}
+
+/* A row is a play target (a song) or a destination (a playlist) or plain (a vote). Same
+   box for all three so the list reads as one list; only the hover says which is which. */
+.mprow{display:flex;align-items:center;gap:11px;width:100%;min-height:56px;padding:9px 12px;
+  border:0;border-top:1px solid #22232b;background:none;color:var(--text);font:inherit;
+  text-align:left;cursor:pointer}
+
+.mplist > .mprow:first-child{border-top:0}
+
+.mprow.mpstill{cursor:default}
+
+@media (hover:hover){
+  .mprow:hover:not(.mpstill){background:#ffffff07}
+}
+
+.mpart{width:40px;height:40px;flex:none;border-radius:9px;object-fit:cover;background:#242430}
+
+.mptext{display:grid;gap:2px;min-width:0;flex:1}
+
+.mptext b{font-weight:600;font-size:13.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.mptext small{font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.mpmeta{flex:none;color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:right}
+
+.mpvote{flex:none;width:18px;text-align:center;font-size:13px;color:var(--dim)}
+
+.mpempty{margin:0;padding:22px 14px;border:1px dashed var(--line);border-radius:14px;
+  color:var(--dim);font-size:13px;text-align:center}
+
+.mpfoot{margin:8px 2px 0;font-size:11.5px;color:var(--dim)}
+
+@media (max-width:520px){
+  .mpname{font-size:19px}
+  .mpface{width:56px;height:56px;font-size:26px}
+  .mptile b{font-size:16px}
+  .mpstats{padding:10px}
+  .sttiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .stp{padding:6px 9px;font-size:11.5px}
+  .mprow{min-height:54px;padding:8px 10px;gap:10px}
+  .mpart{width:38px;height:38px}
+}

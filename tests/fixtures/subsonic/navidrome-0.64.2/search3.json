@@ -1,0 +1,304 @@
+{
+  "subsonic-response": {
+    "openSubsonic": true,
+    "searchResult3": {
+      "album": [
+        {
+          "artist": "Konstentyn",
+          "artistId": "17aaSbOlAlhrMGvNYo5Ufa",
+          "artists": [
+            {
+              "id": "17aaSbOlAlhrMGvNYo5Ufa",
+              "name": "Konstentyn"
+            }
+          ],
+          "averageRating": 3,
+          "coverArt": "al-5hUTgQpLbrUXmkn8D6Jbwc_338eb00c43c8131d",
+          "created": "2025-03-26T22:26:41.02330302Z",
+          "discTitles": [],
+          "displayArtist": "Konstentyn",
+          "duration": 302,
+          "explicitStatus": "",
+          "genre": "smoothjazz",
+          "genres": [
+            {
+              "name": "smoothjazz"
+            }
+          ],
+          "id": "5hUTgQpLbrUXmkn8D6Jbwc",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "Can I Have Your Love Tonight",
+          "originalReleaseDate": {},
+          "playCount": 760,
+          "played": "2026-11-13T22:44:56.959965255Z",
+          "recordLabels": [
+            {
+              "name": "http://www.jamendo.com"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 1,
+          "sortName": "can i have your love tonight",
+          "userRating": 3,
+          "version": "",
+          "year": 2020
+        },
+        {
+          "artist": "Back On Earth",
+          "artistId": "04HrSORpypcLGNUdQp37gn",
+          "artists": [
+            {
+              "id": "04HrSORpypcLGNUdQp37gn",
+              "name": "Back On Earth"
+            }
+          ],
+          "averageRating": 4,
+          "coverArt": "al-4QZO6nBGty9odiq7pUok5n_5cc6ee797d494784",
+          "created": "2025-03-26T22:26:35.129501286Z",
+          "discTitles": [],
+          "displayArtist": "Back On Earth",
+          "duration": 372,
+          "explicitStatus": "",
+          "genres": [],
+          "id": "4QZO6nBGty9odiq7pUok5n",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "Love (All I Was Able To Say)",
+          "originalReleaseDate": {},
+          "playCount": 1269,
+          "played": "2026-11-13T18:29:55.617940643Z",
+          "recordLabels": [
+            {
+              "name": "http://www.jamendo.com"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 2,
+          "sortName": "love (all i was able to say)",
+          "starred": "2026-10-18T08:39:02.383600813Z",
+          "userRating": 4,
+          "version": "",
+          "year": 2010
+        }
+      ],
+      "song": [
+        {
+          "album": "Can I Have Your Love Tonight",
+          "albumArtists": [
+            {
+              "id": "17aaSbOlAlhrMGvNYo5Ufa",
+              "name": "Konstentyn"
+            }
+          ],
+          "albumId": "5hUTgQpLbrUXmkn8D6Jbwc",
+          "artist": "Konstentyn",
+          "artistId": "17aaSbOlAlhrMGvNYo5Ufa",
+          "artists": [
+            {
+              "id": "17aaSbOlAlhrMGvNYo5Ufa",
+              "name": "Konstentyn"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 173,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "17aaSbOlAlhrMGvNYo5Ufa",
+                "name": "Konstentyn"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2ASymUTMYY5377TW2J6oZW_338eb00c43c8131d",
+          "created": "2025-03-26T22:26:41.029394528Z",
+          "displayAlbumArtist": "Konstentyn",
+          "displayArtist": "Konstentyn",
+          "displayComposer": "Konstentyn",
+          "duration": 302,
+          "explicitStatus": "",
+          "genre": "smoothjazz",
+          "genres": [
+            {
+              "name": "smoothjazz"
+            }
+          ],
+          "groupings": [],
+          "id": "2ASymUTMYY5377TW2J6oZW",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "5hUTgQpLbrUXmkn8D6Jbwc",
+          "path": "Konstentyn/Can I Have Your Love Tonight/01 - Can I Have Your Love Tonight.mp3",
+          "playCount": 760,
+          "played": "2026-11-13T22:44:56.959965255Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 6556160,
+          "sortName": "can i have your love tonight",
+          "suffix": "mp3",
+          "title": "Can I Have Your Love Tonight",
+          "track": 1,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2020
+        },
+        {
+          "album": "Love (All I Was Able To Say)",
+          "albumArtists": [
+            {
+              "id": "04HrSORpypcLGNUdQp37gn",
+              "name": "Back On Earth"
+            }
+          ],
+          "albumId": "4QZO6nBGty9odiq7pUok5n",
+          "artist": "Back On Earth",
+          "artistId": "04HrSORpypcLGNUdQp37gn",
+          "artists": [
+            {
+              "id": "04HrSORpypcLGNUdQp37gn",
+              "name": "Back On Earth"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 188,
+          "bookmarkPosition": 61000,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "04HrSORpypcLGNUdQp37gn",
+                "name": "Back On Earth"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-12CyVV6UsF1YXW0YbJQiRe_5cc6ee797d494784",
+          "created": "2025-03-26T22:26:35.147393221Z",
+          "displayAlbumArtist": "Back On Earth",
+          "displayArtist": "Back On Earth",
+          "displayComposer": "Back On Earth",
+          "duration": 189,
+          "explicitStatus": "",
+          "genres": [],
+          "groupings": [],
+          "id": "12CyVV6UsF1YXW0YbJQiRe",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4QZO6nBGty9odiq7pUok5n",
+          "path": "Back On Earth/Love (All I Was Able To Say)/01 - Love.mp3",
+          "playCount": 793,
+          "played": "2026-11-13T18:29:55.617940643Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 4459520,
+          "sortName": "love",
+          "starred": "2026-11-11T16:12:20.352109002Z",
+          "suffix": "mp3",
+          "title": "Love",
+          "track": 1,
+          "type": "music",
+          "works": [],
+          "year": 2010
+        },
+        {
+          "album": "Point Pleasant",
+          "albumArtists": [
+            {
+              "id": "2Y3qQA6zJC3ObbBrF9ZBoV",
+              "name": "Brock Berrigan"
+            }
+          ],
+          "albumId": "62P26JyEMotWs11zrXpJ0F",
+          "artist": "Brock Berrigan",
+          "artistId": "2Y3qQA6zJC3ObbBrF9ZBoV",
+          "artists": [
+            {
+              "id": "2Y3qQA6zJC3ObbBrF9ZBoV",
+              "name": "Brock Berrigan"
+            }
+          ],
+          "averageRating": 1,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "Visit http://chillhop.bandcamp.com",
+          "contentType": "audio/mpeg",
+          "contributors": [],
+          "coverArt": "mf-57QIoYaSdx0yHS18n81Kbh_9720c556b5db021e",
+          "created": "2025-03-26T22:26:37.033222875Z",
+          "displayAlbumArtist": "Brock Berrigan",
+          "displayArtist": "Brock Berrigan",
+          "displayComposer": "",
+          "duration": 121,
+          "explicitStatus": "",
+          "genres": [],
+          "groupings": [],
+          "id": "57QIoYaSdx0yHS18n81Kbh",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "62P26JyEMotWs11zrXpJ0F",
+          "path": "Brock Berrigan/Point Pleasant/09 - So In Love.mp3",
+          "playCount": 213,
+          "played": "2026-11-07T19:10:11.715812503Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 4943755,
+          "sortName": "so in love",
+          "suffix": "mp3",
+          "title": "So In Love",
+          "track": 9,
+          "type": "music",
+          "userRating": 1,
+          "works": [],
+          "year": 2017
+        }
+      ]
+    },
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

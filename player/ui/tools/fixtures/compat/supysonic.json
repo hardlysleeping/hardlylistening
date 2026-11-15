@@ -1,0 +1,280 @@
+{
+  "server": {
+    "name": "supysonic",
+    "type": "",
+    "serverVersion": "",
+    "protocolVersion": "1.12.0",
+    "openSubsonic": false,
+    "announcedInPing": false,
+    "recordedAt": "2026-11-15T03:45:00.314Z",
+    "recordedFrom": "http://127.0.0.1:4757"
+  },
+  "responses": [
+    {
+      "endpoint": "ping",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getOpenSubsonicExtensions",
+      "params": {},
+      "status": 404,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"error\":{\"code\":0,\"message\":\"Unknown method\"},\"status\":\"failed\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "error": {
+            "code": 0,
+            "message": "Unknown method"
+          },
+          "status": "failed",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getAlbumList2",
+      "params": {
+        "type": "alphabeticalByName",
+        "offset": 0,
+        "size": 10
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"albumList2\":{\"album\":[{\"artist\":\"Compat Artist\",\"artistId\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"created\":\"2026-11-14T19:37:07\",\"duration\":7,\"genre\":\"Test\",\"id\":\"b6fd1430-878f-4081-8854-ebbb56f74333\",\"name\":\"Compat Album\",\"songCount\":2},{\"artist\":\"Other Artist\",\"artistId\":\"835365a4-e732-447d-bd13-f033b7b00e8b\",\"created\":\"2026-11-14T19:37:07\",\"duration\":2,\"id\":\"257241b1-a9e0-410e-8fb9-89dbf3a930b6\",\"name\":\"Other Album\",\"songCount\":1}]},\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "albumList2": {
+            "album": [
+              {
+                "artist": "Compat Artist",
+                "artistId": "fd195750-68ba-447b-8811-0ef6968de3d9",
+                "created": "2026-11-14T19:37:07",
+                "duration": 7,
+                "genre": "Test",
+                "id": "b6fd1430-878f-4081-8854-ebbb56f74333",
+                "name": "Compat Album",
+                "songCount": 2
+              },
+              {
+                "artist": "Other Artist",
+                "artistId": "835365a4-e732-447d-bd13-f033b7b00e8b",
+                "created": "2026-11-14T19:37:07",
+                "duration": 2,
+                "id": "257241b1-a9e0-410e-8fb9-89dbf3a930b6",
+                "name": "Other Album",
+                "songCount": 1
+              }
+            ]
+          },
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getArtists",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"artists\":{\"ignoredArticles\":\"El La Le Las Les Los The\",\"index\":[{\"artist\":[{\"albumCount\":1,\"id\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"name\":\"Compat Artist\"}],\"name\":\"C\"},{\"artist\":[{\"albumCount\":1,\"id\":\"835365a4-e732-447d-bd13-f033b7b00e8b\",\"name\":\"Other Artist\"}],\"name\":\"O\"}]},\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "artists": {
+            "ignoredArticles": "El La Le Las Les Los The",
+            "index": [
+              {
+                "artist": [
+                  {
+                    "albumCount": 1,
+                    "id": "fd195750-68ba-447b-8811-0ef6968de3d9",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "name": "C"
+              },
+              {
+                "artist": [
+                  {
+                    "albumCount": 1,
+                    "id": "835365a4-e732-447d-bd13-f033b7b00e8b",
+                    "name": "Other Artist"
+                  }
+                ],
+                "name": "O"
+              }
+            ]
+          },
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getPlaylists",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"playlists\":{},\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "playlists": {},
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getStarred2",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"starred2\":{},\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "starred2": {},
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "search3",
+      "params": {
+        "query": "Compat",
+        "songCount": 10,
+        "albumCount": 10,
+        "artistCount": 10
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"searchResult3\":{\"album\":[{\"artist\":\"Compat Artist\",\"artistId\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"created\":\"2026-11-14T19:37:07\",\"duration\":7,\"genre\":\"Test\",\"id\":\"b6fd1430-878f-4081-8854-ebbb56f74333\",\"name\":\"Compat Album\",\"songCount\":2}],\"artist\":[{\"albumCount\":1,\"id\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"name\":\"Compat Artist\"}]},\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "searchResult3": {
+            "album": [
+              {
+                "artist": "Compat Artist",
+                "artistId": "fd195750-68ba-447b-8811-0ef6968de3d9",
+                "created": "2026-11-14T19:37:07",
+                "duration": 7,
+                "genre": "Test",
+                "id": "b6fd1430-878f-4081-8854-ebbb56f74333",
+                "name": "Compat Album",
+                "songCount": 2
+              }
+            ],
+            "artist": [
+              {
+                "albumCount": 1,
+                "id": "fd195750-68ba-447b-8811-0ef6968de3d9",
+                "name": "Compat Artist"
+              }
+            ]
+          },
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getAlbum",
+      "params": {
+        "id": "b6fd1430-878f-4081-8854-ebbb56f74333"
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"album\":{\"artist\":\"Compat Artist\",\"artistId\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"created\":\"2026-11-14T19:37:07\",\"duration\":7,\"genre\":\"Test\",\"id\":\"b6fd1430-878f-4081-8854-ebbb56f74333\",\"name\":\"Compat Album\",\"song\":[{\"album\":\"Compat Album\",\"albumId\":\"b6fd1430-878f-4081-8854-ebbb56f74333\",\"artist\":\"Compat Artist\",\"artistId\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"bitRate\":63,\"contentType\":\"audio/mpeg\",\"created\":\"2026-11-14T19:37:07\",\"discNumber\":1,\"duration\":3,\"genre\":\"Test\",\"id\":\"33b28a57-9bd3-4021-ac40-f1c13364d6fd\",\"isDir\":false,\"isVideo\":false,\"parent\":\"1\",\"path\":\"01-first.mp3\",\"size\":24567,\"suffix\":\"mp3\",\"title\":\"First Song\",\"track\":1,\"type\":\"music\"},{\"album\":\"Compat Album\",\"albumId\":\"b6fd1430-878f-4081-8854-ebbb56f74333\",\"artist\":\"Compat Artist\",\"artistId\":\"fd195750-68ba-447b-8811-0ef6968de3d9\",\"bitRate\":63,\"contentType\":\"audio/mpeg\",\"created\":\"2026-11-14T19:37:07\",\"discNumber\":1,\"duration\":4,\"genre\":\"Test\",\"id\":\"0a00ddec-25f6-47e6-8442-4326fcfecd6b\",\"isDir\":false,\"isVideo\":false,\"parent\":\"1\",\"path\":\"02-second.mp3\",\"size\":32718,\"suffix\":\"mp3\",\"title\":\"Second Song\",\"track\":2,\"type\":\"music\"}],\"songCount\":2},\"status\":\"ok\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "album": {
+            "artist": "Compat Artist",
+            "artistId": "fd195750-68ba-447b-8811-0ef6968de3d9",
+            "created": "2026-11-14T19:37:07",
+            "duration": 7,
+            "genre": "Test",
+            "id": "b6fd1430-878f-4081-8854-ebbb56f74333",
+            "name": "Compat Album",
+            "song": [
+              {
+                "album": "Compat Album",
+                "albumId": "b6fd1430-878f-4081-8854-ebbb56f74333",
+                "artist": "Compat Artist",
+                "artistId": "fd195750-68ba-447b-8811-0ef6968de3d9",
+                "bitRate": 63,
+                "contentType": "audio/mpeg",
+                "created": "2026-11-14T19:37:07",
+                "discNumber": 1,
+                "duration": 3,
+                "genre": "Test",
+                "id": "33b28a57-9bd3-4021-ac40-f1c13364d6fd",
+                "isDir": false,
+                "isVideo": false,
+                "parent": "1",
+                "path": "01-first.mp3",
+                "size": 24567,
+                "suffix": "mp3",
+                "title": "First Song",
+                "track": 1,
+                "type": "music"
+              },
+              {
+                "album": "Compat Album",
+                "albumId": "b6fd1430-878f-4081-8854-ebbb56f74333",
+                "artist": "Compat Artist",
+                "artistId": "fd195750-68ba-447b-8811-0ef6968de3d9",
+                "bitRate": 63,
+                "contentType": "audio/mpeg",
+                "created": "2026-11-14T19:37:07",
+                "discNumber": 1,
+                "duration": 4,
+                "genre": "Test",
+                "id": "0a00ddec-25f6-47e6-8442-4326fcfecd6b",
+                "isDir": false,
+                "isVideo": false,
+                "parent": "1",
+                "path": "02-second.mp3",
+                "size": 32718,
+                "suffix": "mp3",
+                "title": "Second Song",
+                "track": 2,
+                "type": "music"
+              }
+            ],
+            "songCount": 2
+          },
+          "status": "ok",
+          "version": "1.12.0"
+        }
+      }
+    },
+    {
+      "endpoint": "getLyricsBySongId",
+      "params": {
+        "id": "33b28a57-9bd3-4021-ac40-f1c13364d6fd"
+      },
+      "status": 404,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"error\":{\"code\":0,\"message\":\"Unknown method\"},\"status\":\"failed\",\"version\":\"1.12.0\"}}\n",
+      "json": {
+        "subsonic-response": {
+          "error": {
+            "code": 0,
+            "message": "Unknown method"
+          },
+          "status": "failed",
+          "version": "1.12.0"
+        }
+      }
+    }
+  ],
+  "extensionsEndpointRefused": true
+}

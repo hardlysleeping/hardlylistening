@@ -1,0 +1,849 @@
+{
+  "subsonic-response": {
+    "openSubsonic": true,
+    "playlist": {
+      "changed": "2026-11-13T10:51:08.264945616Z",
+      "coverArt": "pl-5iPgRcNW6ZkBCNCaZD0scG_aa232043404ad209",
+      "created": "2026-11-12T00:21:47.316170433Z",
+      "duration": 2070,
+      "entry": [
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 185,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-6jvoWAv6e9z8xgLz7mo3vy_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.44507873Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 209,
+          "explicitStatus": "",
+          "genre": "newage",
+          "genres": [
+            {
+              "name": "newage"
+            }
+          ],
+          "groupings": [],
+          "id": "6jvoWAv6e9z8xgLz7mo3vy",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/01 - Stories from Emona I.mp3",
+          "playCount": 1870,
+          "played": "2026-11-14T08:38:36.205Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 4887978,
+          "sortName": "stories from emona i",
+          "starred": "2026-11-12T21:06:21.367941262Z",
+          "suffix": "mp3",
+          "title": "Stories from Emona I",
+          "track": 1,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 181,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-1MnCUdrm4oBNjMxS0L8RS6_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.460050316Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 201,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "1MnCUdrm4oBNjMxS0L8RS6",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/03 - Stories from Emona III.mp3",
+          "playCount": 668,
+          "played": "2026-11-14T03:45:35Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 4596357,
+          "sortName": "stories from emona iii",
+          "suffix": "mp3",
+          "title": "Stories from Emona III",
+          "track": 3,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 182,
+          "bpm": 135,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2lj9dlFjj5tqUkwDrgexXt_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.437034707Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 197,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "2lj9dlFjj5tqUkwDrgexXt",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/04 - Stories from Emona IV.mp3",
+          "playCount": 612,
+          "played": "2026-11-14T09:08:23Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 4536832,
+          "sortName": "stories from emona iv",
+          "suffix": "mp3",
+          "title": "Stories from Emona IV",
+          "track": 4,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 5,
+          "bitDepth": 0,
+          "bitRate": 181,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-6PWZajVHxjwmrfmX0kxjie_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.451188589Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 302,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "6PWZajVHxjwmrfmX0kxjie",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/05 - Stories from Emona V.mp3",
+          "playCount": 437,
+          "played": "2026-11-14T09:11:15Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 6863750,
+          "sortName": "stories from emona v",
+          "suffix": "mp3",
+          "title": "Stories from Emona V",
+          "track": 5,
+          "type": "music",
+          "userRating": 5,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 4,
+          "bitDepth": 0,
+          "bitRate": 181,
+          "bpm": 149,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-7dexTDe5L9sW9rway52iJE_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.447156585Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 318,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "7dexTDe5L9sW9rway52iJE",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/06 - Stories from Emona VI.mp3",
+          "playCount": 452,
+          "played": "2026-11-14T08:54:09Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 7224641,
+          "sortName": "stories from emona vi",
+          "starred": "2026-11-06T18:22:46.60010592Z",
+          "suffix": "mp3",
+          "title": "Stories from Emona VI",
+          "track": 6,
+          "type": "music",
+          "userRating": 4,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 1,
+          "bitDepth": 0,
+          "bitRate": 181,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-6QRScibrRhc4jBcSmO2xzu_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.44914041Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 198,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "6QRScibrRhc4jBcSmO2xzu",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/07 - Fantasía.mp3",
+          "playCount": 444,
+          "played": "2026-11-14T08:57:28Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 4529409,
+          "sortName": "fantasia",
+          "suffix": "mp3",
+          "title": "Fantasía",
+          "track": 7,
+          "type": "music",
+          "userRating": 1,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 1,
+          "bitDepth": 0,
+          "bitRate": 183,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-5y2Vlsq60JF4lKQA5fDugL_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.443076702Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 90,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "5y2Vlsq60JF4lKQA5fDugL",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/08 - Prelude in E major.mp3",
+          "playCount": 426,
+          "played": "2026-11-14T09:12:43Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 2116284,
+          "sortName": "prelude in e major",
+          "suffix": "mp3",
+          "title": "Prelude in E major",
+          "track": 8,
+          "type": "music",
+          "userRating": 1,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 1,
+          "bitDepth": 0,
+          "bitRate": 183,
+          "bpm": 79,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-6Yt3RCU0CAmROmVH5cq8cj_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.45797166Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 110,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "6Yt3RCU0CAmROmVH5cq8cj",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/09 - Prelude in C# minor.mp3",
+          "playCount": 431,
+          "played": "2026-11-14T09:14:30Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 2561257,
+          "sortName": "prelude in c# minor",
+          "suffix": "mp3",
+          "title": "Prelude in C# minor",
+          "track": 9,
+          "type": "music",
+          "userRating": 1,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "bitDepth": 0,
+          "bitRate": 182,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2wb0iBnMfUqKug1JpzGLLN_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.44102797Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 132,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "2wb0iBnMfUqKug1JpzGLLN",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/10 - Prelude in G major.mp3",
+          "playCount": 665,
+          "played": "2026-11-14T09:16:38Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 3040085,
+          "sortName": "prelude in g major",
+          "suffix": "mp3",
+          "title": "Prelude in G major",
+          "track": 10,
+          "type": "music",
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Between two worlds",
+          "albumArtists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "albumId": "4YmahYjTLJyCPvqjT7975H",
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 1,
+          "bitDepth": 0,
+          "bitRate": 181,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://www.jamendo.com cc_standard",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "5vrYCaubPfhYUEBmovhIIB",
+                "name": "Maya Filipič"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-0cKTsrFy83frgQHf9QzUBq_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.455196905Z",
+          "displayAlbumArtist": "Maya Filipič",
+          "displayArtist": "Maya Filipič",
+          "displayComposer": "Maya Filipič",
+          "duration": 92,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            }
+          ],
+          "groupings": [],
+          "id": "0cKTsrFy83frgQHf9QzUBq",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "4YmahYjTLJyCPvqjT7975H",
+          "path": "Maya Filipič/Between two worlds/11 - Prelude in Eb major.mp3",
+          "playCount": 442,
+          "played": "2026-11-14T09:18:11Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 2119748,
+          "sortName": "prelude in eb major",
+          "suffix": "mp3",
+          "title": "Prelude in Eb major",
+          "track": 11,
+          "type": "music",
+          "userRating": 1,
+          "works": [],
+          "year": 2008
+        },
+        {
+          "album": "Chrono Jigga",
+          "albumArtists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "albumId": "6qVa68sKTKahAuJabPcGQu",
+          "artist": "2 Mello",
+          "artistId": "33X3V2Xn7Cip7WqqfXNkL8",
+          "artists": [
+            {
+              "id": "33X3V2Xn7Cip7WqqfXNkL8",
+              "name": "2 Mello"
+            }
+          ],
+          "averageRating": 4,
+          "bitDepth": 0,
+          "bitRate": 320,
+          "bpm": 0,
+          "channelCount": 2,
+          "comment": "http://scrubclubrecords.com",
+          "contentType": "audio/mpeg",
+          "contributors": [
+            {
+              "artist": {
+                "id": "2a2bxQwcQgp5h2kRiGoWyd",
+                "name": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu"
+              },
+              "role": "composer"
+            }
+          ],
+          "coverArt": "mf-2EhDNOH8QBXkJFNHXRGPqd_825fc09771059a72",
+          "created": "2025-03-26T22:26:37.127255458Z",
+          "discNumber": 1,
+          "displayAlbumArtist": "2 Mello",
+          "displayArtist": "2 Mello",
+          "displayComposer": "2 Mello, Yasunori Mitsuda, and Nobuo Uematsu",
+          "duration": 216,
+          "explicitStatus": "",
+          "genre": "Hip-Hop",
+          "genres": [
+            {
+              "name": "Hip-Hop"
+            }
+          ],
+          "groupings": [],
+          "id": "2EhDNOH8QBXkJFNHXRGPqd",
+          "isDir": false,
+          "isrc": [],
+          "mediaType": "song",
+          "moods": [],
+          "movements": [],
+          "musicBrainzId": "",
+          "parent": "6qVa68sKTKahAuJabPcGQu",
+          "path": "2 Mello/Chrono Jigga/01-06 - Masamune Problems (Jay-Z vs. Chrono Trigger Mashup).mp3",
+          "playCount": 268,
+          "played": "2026-11-10T14:15:19.423Z",
+          "replayGain": {
+            "albumGain": 0,
+            "albumPeak": 1,
+            "trackGain": 0,
+            "trackPeak": 1
+          },
+          "samplingRate": 44100,
+          "size": 9362867,
+          "sortName": "masamune problems (jay-z vs. chrono trigger mashup)",
+          "suffix": "mp3",
+          "title": "Masamune Problems (Jay-Z vs. Chrono Trigger Mashup)",
+          "track": 6,
+          "type": "music",
+          "userRating": 4,
+          "works": [],
+          "year": 2013
+        }
+      ],
+      "id": "5iPgRcNW6ZkBCNCaZD0scG",
+      "name": "---ilu<3",
+      "owner": "demo",
+      "public": true,
+      "readonly": false,
+      "songCount": 11
+    },
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

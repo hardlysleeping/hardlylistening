@@ -1,0 +1,27 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const html=fs.readFileSync(require('path').join(__dirname,'../web/dj.html'),'utf8');
+const script=html.match(/<script>([\s\S]*?)<\/script>/)[1]; new vm.Script(script);
+const elements=new Map(); let now=0, plays=0, posts=[];
+const el=id=>{if(!elements.has(id)) elements.set(id,{value:'0',hidden:true,textContent:'',setAttribute(){},addEventListener(){},dispatchEvent(){},closest(){return null;}});return elements.get(id);};
+const audio=()=>({paused:true,ended:false,currentTime:0,duration:100,playbackRate:1,src:'fake',play(){plays++;this.paused=false;return Promise.resolve();},pause(){this.paused=true;}});
+const decks={A:{track:{id:1,bpm:120},audio:audio()},B:{track:null,audio:audio()}};
+const tracks=[{id:2,bpm:125},{id:3,bpm:121},{id:4,bpm:180},{id:5}];
+const context=vm.createContext({console,Math,Date,Event:class{},performance:{now:()=>now},globalThis:{},decks,SIDES:['A','B'],queues:{A:[2],B:[3,4]},roomLive:true,applyingRemote:false,roomPost:async p=>{posts.push(p);return true;},document:{addEventListener(){}},$:el,setInterval(){},bootAudio(){},ctx:{resume:async()=>{}},audioJoined:false,liveBpm:()=>120,trackById:id=>tracks.find(t=>t.id===id),loadTrack:(s,t)=>{decks[s].track=t;decks[s].audio.currentTime=0;},controlElement:el,publishPosition:s=>posts.push(s),publishQueue:s=>posts.push(s),saveQueues(){},renderQueues(){},lastDecks:{},localDeckClock:{},applyRemoteDeck(){},joinRoom(){}});
+vm.runInContext('const PITCH_LIMIT=8;'+script.slice(script.indexOf('function syncPercent('),script.indexOf('\nfunction syncDeck(')),context);
+vm.runInContext(script.slice(script.indexOf('// ---------------------------------------------------------------- Auto DJ'),script.indexOf('\njoinRoom();',script.indexOf('// ---------------------------------------------------------------- Auto DJ'))),context);
+const run=s=>vm.runInContext(s,context);
+(async()=>{
+ assert.equal(run('autoPick(120,[{track:{id:2,bpm:125}},{track:{id:3,bpm:121}}]).track.id'),3);
+ assert.equal(run('autoPick(120,[{track:{bpm:180}}])'),null);
+ assert.equal(run('autoPick(120,[{track:{bpm:180}},{track:{id:5}}]).track.id'),5);
+ assert.equal(run('autoPick(0,[{track:{id:2,bpm:180}},{track:{id:3,bpm:120}}]).track.id'),2);
+ await run('autoTick()'); assert.equal(plays,0,'disabled means no playback');
+ await el('#autodj').onclick(); await run('autoTick()');assert.equal(plays,0,'enable never starts paused board');
+ decks.A.audio.paused=false;decks.A.audio.currentTime=95;
+ await run('autoTick()'); assert.equal(decks.B.track.id,3);assert.equal(plays,1);assert.equal(run('queues.B.join()'),'4');
+ now=2500;await run('autoTick()');assert.equal(el('#crossfader').value,'50');
+ now=4000;run('autoUntil=10000');now=5000;await run('autoTick()');assert.equal(el('#crossfader').value,'100');assert(decks.A.audio.paused);assert.equal(decks.A.audio.currentTime,0);
+ run('autoStop()');assert.equal(run('autoOn'),false);
+ run('autoOn=true;autoUntil=5001');now=6000;await run('autoTick()');assert.equal(run('autoOn'),false);
+ console.log('PASS Auto DJ: selection, refusal, unknown fallback, gesture opt-in, idle board, transition, queue consume, retirement, disable, lease expiry (fake audio only)');
+})().catch(e=>{console.error(e);process.exitCode=1;});

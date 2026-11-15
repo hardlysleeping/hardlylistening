@@ -1,0 +1,37 @@
+:root{
+  --bg:#101014;
+  --panel:#191a21;
+  --panel2:#23252e;
+  --line:#343641;
+  --text:#ececf1;
+  --dim:#aaadbd;
+  --accent:#58d3a8;
+  --accent2:#7aa2ff;
+  --err:#ff6b6b;
+  --warn:#ffcf5c;
+  --ok:#58d3a8;
+  --radius:16px;
+  color-scheme:dark;
+  --hdr:63px
+}
+
+@media (max-width:760px),(display-mode:standalone) and (pointer:coarse){
+  /* One number owns the bottom bar: its height, the space the page reserves for
+     it, and every panel that has to clear it. A labelled tab can never change it. */
+  :root{--hdr:0px;--nav-h:48px;--safe-b:env(safe-area-inset-bottom,0px)}
+}
+
+:root{
+  --user-base:#101014;
+  --user-accent:#58d3a8;
+  --user-trim:#343641
+}
+
+:root:root{
+  --bg:var(--user-base,#101014);
+  --panel:color-mix(in srgb,var(--user-base,#101014) 90%,#ffffff 10%);
+  --panel2:color-mix(in srgb,var(--user-base,#101014) 82%,#ffffff 18%);
+  --line:var(--user-trim,#343641);
+  --accent:var(--user-accent,#58d3a8);
+  --accent2:var(--user-accent,#58d3a8)
+}

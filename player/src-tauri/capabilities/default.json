@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The one window the player opens, with the core defaults and nothing else: no filesystem, no shell, no HTTP plugin. Requests to a music server go through the player's own `subsonic_*` commands, which resolve the address and the credential natively and take no URL from the page.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

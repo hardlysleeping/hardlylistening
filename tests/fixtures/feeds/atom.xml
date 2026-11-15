@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Night Drive Recordings</title>
+  <id>tag:example.test,2026:feed</id>
+  <link rel="alternate" href="https://example.test/night-drive"/>
+  <updated>2026-11-01T10:00:00Z</updated>
+  <entry>
+    <id>tag:example.test,2026:release/3</id>
+    <title>Third Signal</title>
+    <published>2026-10-30T00:00:00Z</published>
+    <link rel="alternate" href="https://example.test/night-drive/third-signal"/>
+    <media:thumbnail url="https://example.test/art/third.jpg"/>
+    <summary type="html">&lt;b&gt;loud&lt;/b&gt; &lt;script&gt;alert(1)&lt;/script&gt;</summary>
+  </entry>
+  <entry>
+    <id>tag:example.test,2026:release/2</id>
+    <title>Second Light</title>
+    <published>2026-10-20T00:00:00Z</published>
+    <link rel="alternate" href="https://example.test/night-drive/second-light"/>
+  </entry>
+  <entry>
+    <id>tag:example.test,2026:release/1</id>
+    <title>First Light</title>
+    <published>2026-10-10T00:00:00Z</published>
+    <link rel="alternate" href="https://example.test/night-drive/first-light"/>
+  </entry>
+</feed>

@@ -1,0 +1,641 @@
+{
+  "server": {
+    "name": "navidrome",
+    "type": "navidrome",
+    "serverVersion": "0.64.2 (10114574)",
+    "protocolVersion": "1.16.1",
+    "openSubsonic": true,
+    "announcedInPing": false,
+    "recordedAt": "2026-11-15T03:44:59.435Z",
+    "recordedFrom": "http://127.0.0.1:4533"
+  },
+  "responses": [
+    {
+      "endpoint": "ping",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true
+        }
+      }
+    },
+    {
+      "endpoint": "getOpenSubsonicExtensions",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"openSubsonicExtensions\":[{\"name\":\"transcodeOffset\",\"versions\":[1]},{\"name\":\"formPost\",\"versions\":[1]},{\"name\":\"songLyrics\",\"versions\":[1,2]},{\"name\":\"indexBasedQueue\",\"versions\":[1]},{\"name\":\"transcoding\",\"versions\":[1]},{\"name\":\"playbackReport\",\"versions\":[1]},{\"name\":\"topSongsByArtistId\",\"versions\":[1]}]}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "openSubsonicExtensions": [
+            {
+              "name": "transcodeOffset",
+              "versions": [
+                1
+              ]
+            },
+            {
+              "name": "formPost",
+              "versions": [
+                1
+              ]
+            },
+            {
+              "name": "songLyrics",
+              "versions": [
+                1,
+                2
+              ]
+            },
+            {
+              "name": "indexBasedQueue",
+              "versions": [
+                1
+              ]
+            },
+            {
+              "name": "transcoding",
+              "versions": [
+                1
+              ]
+            },
+            {
+              "name": "playbackReport",
+              "versions": [
+                1
+              ]
+            },
+            {
+              "name": "topSongsByArtistId",
+              "versions": [
+                1
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "endpoint": "getAlbumList2",
+      "params": {
+        "type": "alphabeticalByName",
+        "offset": 0,
+        "size": 10
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"albumList2\":{\"album\":[{\"id\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"name\":\"Compat Album\",\"artist\":\"Compat Artist\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"songCount\":2,\"duration\":7,\"created\":\"2026-11-15T03:37:07.369308384Z\",\"genre\":\"Test\",\"userRating\":0,\"genres\":[{\"name\":\"Test\"}],\"musicBrainzId\":\"\",\"isCompilation\":false,\"sortName\":\"compat album\",\"discTitles\":[],\"originalReleaseDate\":{},\"releaseDate\":{},\"releaseTypes\":[],\"recordLabels\":[],\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"explicitStatus\":\"\",\"version\":\"\"},{\"id\":\"7vvbUcMhRUOwuUA0YkdO9G\",\"name\":\"Other Album\",\"artist\":\"Other Artist\",\"artistId\":\"4bMStV2DwI9cX9ZhZaDNVg\",\"songCount\":1,\"duration\":2,\"created\":\"2026-11-15T03:37:07.699295997Z\",\"userRating\":0,\"genres\":[],\"musicBrainzId\":\"\",\"isCompilation\":false,\"sortName\":\"other album\",\"discTitles\":[],\"originalReleaseDate\":{},\"releaseDate\":{},\"releaseTypes\":[],\"recordLabels\":[],\"moods\":[],\"artists\":[{\"id\":\"4bMStV2DwI9cX9ZhZaDNVg\",\"name\":\"Other Artist\"}],\"displayArtist\":\"Other Artist\",\"explicitStatus\":\"\",\"version\":\"\"}]}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "albumList2": {
+            "album": [
+              {
+                "id": "6zeoGKZZ9xRLDj38A1mfgi",
+                "name": "Compat Album",
+                "artist": "Compat Artist",
+                "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+                "songCount": 2,
+                "duration": 7,
+                "created": "2026-11-15T03:37:07.369308384Z",
+                "genre": "Test",
+                "userRating": 0,
+                "genres": [
+                  {
+                    "name": "Test"
+                  }
+                ],
+                "musicBrainzId": "",
+                "isCompilation": false,
+                "sortName": "compat album",
+                "discTitles": [],
+                "originalReleaseDate": {},
+                "releaseDate": {},
+                "releaseTypes": [],
+                "recordLabels": [],
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayArtist": "Compat Artist",
+                "explicitStatus": "",
+                "version": ""
+              },
+              {
+                "id": "7vvbUcMhRUOwuUA0YkdO9G",
+                "name": "Other Album",
+                "artist": "Other Artist",
+                "artistId": "4bMStV2DwI9cX9ZhZaDNVg",
+                "songCount": 1,
+                "duration": 2,
+                "created": "2026-11-15T03:37:07.699295997Z",
+                "userRating": 0,
+                "genres": [],
+                "musicBrainzId": "",
+                "isCompilation": false,
+                "sortName": "other album",
+                "discTitles": [],
+                "originalReleaseDate": {},
+                "releaseDate": {},
+                "releaseTypes": [],
+                "recordLabels": [],
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "4bMStV2DwI9cX9ZhZaDNVg",
+                    "name": "Other Artist"
+                  }
+                ],
+                "displayArtist": "Other Artist",
+                "explicitStatus": "",
+                "version": ""
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "endpoint": "getArtists",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"artists\":{\"index\":[{\"name\":\"C\",\"artist\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\",\"albumCount\":1,\"musicBrainzId\":\"\",\"sortName\":\"compat artist\",\"roles\":[\"maincredit\",\"albumartist\",\"artist\"]}]},{\"name\":\"O\",\"artist\":[{\"id\":\"4bMStV2DwI9cX9ZhZaDNVg\",\"name\":\"Other Artist\",\"albumCount\":1,\"musicBrainzId\":\"\",\"sortName\":\"other artist\",\"roles\":[\"albumartist\",\"artist\",\"maincredit\"]}]}],\"lastModified\":1794713866000,\"ignoredArticles\":\"The El La Los Las Le Les Os As O A\"}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "artists": {
+            "index": [
+              {
+                "name": "C",
+                "artist": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist",
+                    "albumCount": 1,
+                    "musicBrainzId": "",
+                    "sortName": "compat artist",
+                    "roles": [
+                      "maincredit",
+                      "albumartist",
+                      "artist"
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "O",
+                "artist": [
+                  {
+                    "id": "4bMStV2DwI9cX9ZhZaDNVg",
+                    "name": "Other Artist",
+                    "albumCount": 1,
+                    "musicBrainzId": "",
+                    "sortName": "other artist",
+                    "roles": [
+                      "albumartist",
+                      "artist",
+                      "maincredit"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "lastModified": 1794713866000,
+            "ignoredArticles": "The El La Los Las Le Les Os As O A"
+          }
+        }
+      }
+    },
+    {
+      "endpoint": "getPlaylists",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"playlists\":{}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "playlists": {}
+        }
+      }
+    },
+    {
+      "endpoint": "getStarred2",
+      "params": {},
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"starred2\":{}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "starred2": {}
+        }
+      }
+    },
+    {
+      "endpoint": "search3",
+      "params": {
+        "query": "Compat",
+        "songCount": 10,
+        "albumCount": 10,
+        "artistCount": 10
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"searchResult3\":{\"artist\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\",\"albumCount\":1,\"musicBrainzId\":\"\",\"sortName\":\"compat artist\",\"roles\":[\"artist\",\"maincredit\",\"albumartist\"]}],\"album\":[{\"id\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"name\":\"Compat Album\",\"artist\":\"Compat Artist\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"songCount\":2,\"duration\":7,\"created\":\"2026-11-15T03:37:07.369308384Z\",\"genre\":\"Test\",\"userRating\":0,\"genres\":[{\"name\":\"Test\"}],\"musicBrainzId\":\"\",\"isCompilation\":false,\"sortName\":\"compat album\",\"discTitles\":[],\"originalReleaseDate\":{},\"releaseDate\":{},\"releaseTypes\":[],\"recordLabels\":[],\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"explicitStatus\":\"\",\"version\":\"\"}],\"song\":[{\"id\":\"6LrcnIzAu7ZCXwSoLXh907\",\"parent\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"isDir\":false,\"title\":\"First Song\",\"album\":\"Compat Album\",\"artist\":\"Compat Artist\",\"track\":1,\"genre\":\"Test\",\"size\":24567,\"contentType\":\"audio/mpeg\",\"suffix\":\"mp3\",\"duration\":3,\"bitRate\":64,\"path\":\"Compat Artist/Compat Album/01 - First Song.mp3\",\"created\":\"2026-11-15T03:37:46.399589448Z\",\"albumId\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"type\":\"music\",\"bpm\":0,\"comment\":\"\",\"sortName\":\"first song\",\"mediaType\":\"song\",\"musicBrainzId\":\"\",\"isrc\":[],\"genres\":[{\"name\":\"Test\"}],\"replayGain\":{},\"channelCount\":1,\"samplingRate\":44100,\"bitDepth\":0,\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"albumArtists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayAlbumArtist\":\"Compat Artist\",\"contributors\":[],\"displayComposer\":\"\",\"explicitStatus\":\"\",\"groupings\":[],\"works\":[],\"movements\":[]},{\"id\":\"2co7LLNRFzjCAyCk10iPP1\",\"parent\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"isDir\":false,\"title\":\"Second Song\",\"album\":\"Compat Album\",\"artist\":\"Compat Artist\",\"track\":2,\"genre\":\"Test\",\"size\":32718,\"contentType\":\"audio/mpeg\",\"suffix\":\"mp3\",\"duration\":4,\"bitRate\":64,\"path\":\"Compat Artist/Compat Album/02 - Second Song.mp3\",\"created\":\"2026-11-15T03:37:46.400709016Z\",\"albumId\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"type\":\"music\",\"bpm\":0,\"comment\":\"\",\"sortName\":\"second song\",\"mediaType\":\"song\",\"musicBrainzId\":\"\",\"isrc\":[],\"genres\":[{\"name\":\"Test\"}],\"replayGain\":{},\"channelCount\":1,\"samplingRate\":44100,\"bitDepth\":0,\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"albumArtists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayAlbumArtist\":\"Compat Artist\",\"contributors\":[],\"displayComposer\":\"\",\"explicitStatus\":\"\",\"groupings\":[],\"works\":[],\"movements\":[]}]}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "searchResult3": {
+            "artist": [
+              {
+                "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                "name": "Compat Artist",
+                "albumCount": 1,
+                "musicBrainzId": "",
+                "sortName": "compat artist",
+                "roles": [
+                  "artist",
+                  "maincredit",
+                  "albumartist"
+                ]
+              }
+            ],
+            "album": [
+              {
+                "id": "6zeoGKZZ9xRLDj38A1mfgi",
+                "name": "Compat Album",
+                "artist": "Compat Artist",
+                "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+                "songCount": 2,
+                "duration": 7,
+                "created": "2026-11-15T03:37:07.369308384Z",
+                "genre": "Test",
+                "userRating": 0,
+                "genres": [
+                  {
+                    "name": "Test"
+                  }
+                ],
+                "musicBrainzId": "",
+                "isCompilation": false,
+                "sortName": "compat album",
+                "discTitles": [],
+                "originalReleaseDate": {},
+                "releaseDate": {},
+                "releaseTypes": [],
+                "recordLabels": [],
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayArtist": "Compat Artist",
+                "explicitStatus": "",
+                "version": ""
+              }
+            ],
+            "song": [
+              {
+                "id": "6LrcnIzAu7ZCXwSoLXh907",
+                "parent": "6zeoGKZZ9xRLDj38A1mfgi",
+                "isDir": false,
+                "title": "First Song",
+                "album": "Compat Album",
+                "artist": "Compat Artist",
+                "track": 1,
+                "genre": "Test",
+                "size": 24567,
+                "contentType": "audio/mpeg",
+                "suffix": "mp3",
+                "duration": 3,
+                "bitRate": 64,
+                "path": "Compat Artist/Compat Album/01 - First Song.mp3",
+                "created": "2026-11-15T03:37:46.399589448Z",
+                "albumId": "6zeoGKZZ9xRLDj38A1mfgi",
+                "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+                "type": "music",
+                "bpm": 0,
+                "comment": "",
+                "sortName": "first song",
+                "mediaType": "song",
+                "musicBrainzId": "",
+                "isrc": [],
+                "genres": [
+                  {
+                    "name": "Test"
+                  }
+                ],
+                "replayGain": {},
+                "channelCount": 1,
+                "samplingRate": 44100,
+                "bitDepth": 0,
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayArtist": "Compat Artist",
+                "albumArtists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayAlbumArtist": "Compat Artist",
+                "contributors": [],
+                "displayComposer": "",
+                "explicitStatus": "",
+                "groupings": [],
+                "works": [],
+                "movements": []
+              },
+              {
+                "id": "2co7LLNRFzjCAyCk10iPP1",
+                "parent": "6zeoGKZZ9xRLDj38A1mfgi",
+                "isDir": false,
+                "title": "Second Song",
+                "album": "Compat Album",
+                "artist": "Compat Artist",
+                "track": 2,
+                "genre": "Test",
+                "size": 32718,
+                "contentType": "audio/mpeg",
+                "suffix": "mp3",
+                "duration": 4,
+                "bitRate": 64,
+                "path": "Compat Artist/Compat Album/02 - Second Song.mp3",
+                "created": "2026-11-15T03:37:46.400709016Z",
+                "albumId": "6zeoGKZZ9xRLDj38A1mfgi",
+                "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+                "type": "music",
+                "bpm": 0,
+                "comment": "",
+                "sortName": "second song",
+                "mediaType": "song",
+                "musicBrainzId": "",
+                "isrc": [],
+                "genres": [
+                  {
+                    "name": "Test"
+                  }
+                ],
+                "replayGain": {},
+                "channelCount": 1,
+                "samplingRate": 44100,
+                "bitDepth": 0,
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayArtist": "Compat Artist",
+                "albumArtists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayAlbumArtist": "Compat Artist",
+                "contributors": [],
+                "displayComposer": "",
+                "explicitStatus": "",
+                "groupings": [],
+                "works": [],
+                "movements": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "endpoint": "getAlbum",
+      "params": {
+        "id": "6zeoGKZZ9xRLDj38A1mfgi"
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"album\":{\"id\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"name\":\"Compat Album\",\"artist\":\"Compat Artist\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"songCount\":2,\"duration\":7,\"created\":\"2026-11-15T03:37:07.369308384Z\",\"genre\":\"Test\",\"userRating\":0,\"genres\":[{\"name\":\"Test\"}],\"musicBrainzId\":\"\",\"isCompilation\":false,\"sortName\":\"compat album\",\"discTitles\":[],\"originalReleaseDate\":{},\"releaseDate\":{},\"releaseTypes\":[],\"recordLabels\":[],\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"explicitStatus\":\"\",\"version\":\"\",\"song\":[{\"id\":\"6LrcnIzAu7ZCXwSoLXh907\",\"parent\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"isDir\":false,\"title\":\"First Song\",\"album\":\"Compat Album\",\"artist\":\"Compat Artist\",\"track\":1,\"genre\":\"Test\",\"size\":24567,\"contentType\":\"audio/mpeg\",\"suffix\":\"mp3\",\"duration\":3,\"bitRate\":64,\"path\":\"Compat Artist/Compat Album/01 - First Song.mp3\",\"created\":\"2026-11-15T03:37:46.399589448Z\",\"albumId\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"type\":\"music\",\"bpm\":0,\"comment\":\"\",\"sortName\":\"first song\",\"mediaType\":\"song\",\"musicBrainzId\":\"\",\"isrc\":[],\"genres\":[{\"name\":\"Test\"}],\"replayGain\":{},\"channelCount\":1,\"samplingRate\":44100,\"bitDepth\":0,\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"albumArtists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayAlbumArtist\":\"Compat Artist\",\"contributors\":[],\"displayComposer\":\"\",\"explicitStatus\":\"\",\"groupings\":[],\"works\":[],\"movements\":[]},{\"id\":\"2co7LLNRFzjCAyCk10iPP1\",\"parent\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"isDir\":false,\"title\":\"Second Song\",\"album\":\"Compat Album\",\"artist\":\"Compat Artist\",\"track\":2,\"genre\":\"Test\",\"size\":32718,\"contentType\":\"audio/mpeg\",\"suffix\":\"mp3\",\"duration\":4,\"bitRate\":64,\"path\":\"Compat Artist/Compat Album/02 - Second Song.mp3\",\"created\":\"2026-11-15T03:37:46.400709016Z\",\"albumId\":\"6zeoGKZZ9xRLDj38A1mfgi\",\"artistId\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"type\":\"music\",\"bpm\":0,\"comment\":\"\",\"sortName\":\"second song\",\"mediaType\":\"song\",\"musicBrainzId\":\"\",\"isrc\":[],\"genres\":[{\"name\":\"Test\"}],\"replayGain\":{},\"channelCount\":1,\"samplingRate\":44100,\"bitDepth\":0,\"moods\":[],\"artists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayArtist\":\"Compat Artist\",\"albumArtists\":[{\"id\":\"7mmq1FpS1AFqLm0rt6BtWx\",\"name\":\"Compat Artist\"}],\"displayAlbumArtist\":\"Compat Artist\",\"contributors\":[],\"displayComposer\":\"\",\"explicitStatus\":\"\",\"groupings\":[],\"works\":[],\"movements\":[]}]}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "album": {
+            "id": "6zeoGKZZ9xRLDj38A1mfgi",
+            "name": "Compat Album",
+            "artist": "Compat Artist",
+            "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+            "songCount": 2,
+            "duration": 7,
+            "created": "2026-11-15T03:37:07.369308384Z",
+            "genre": "Test",
+            "userRating": 0,
+            "genres": [
+              {
+                "name": "Test"
+              }
+            ],
+            "musicBrainzId": "",
+            "isCompilation": false,
+            "sortName": "compat album",
+            "discTitles": [],
+            "originalReleaseDate": {},
+            "releaseDate": {},
+            "releaseTypes": [],
+            "recordLabels": [],
+            "moods": [],
+            "artists": [
+              {
+                "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                "name": "Compat Artist"
+              }
+            ],
+            "displayArtist": "Compat Artist",
+            "explicitStatus": "",
+            "version": "",
+            "song": [
+              {
+                "id": "6LrcnIzAu7ZCXwSoLXh907",
+                "parent": "6zeoGKZZ9xRLDj38A1mfgi",
+                "isDir": false,
+                "title": "First Song",
+                "album": "Compat Album",
+                "artist": "Compat Artist",
+                "track": 1,
+                "genre": "Test",
+                "size": 24567,
+                "contentType": "audio/mpeg",
+                "suffix": "mp3",
+                "duration": 3,
+                "bitRate": 64,
+                "path": "Compat Artist/Compat Album/01 - First Song.mp3",
+                "created": "2026-11-15T03:37:46.399589448Z",
+                "albumId": "6zeoGKZZ9xRLDj38A1mfgi",
+                "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+                "type": "music",
+                "bpm": 0,
+                "comment": "",
+                "sortName": "first song",
+                "mediaType": "song",
+                "musicBrainzId": "",
+                "isrc": [],
+                "genres": [
+                  {
+                    "name": "Test"
+                  }
+                ],
+                "replayGain": {},
+                "channelCount": 1,
+                "samplingRate": 44100,
+                "bitDepth": 0,
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayArtist": "Compat Artist",
+                "albumArtists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayAlbumArtist": "Compat Artist",
+                "contributors": [],
+                "displayComposer": "",
+                "explicitStatus": "",
+                "groupings": [],
+                "works": [],
+                "movements": []
+              },
+              {
+                "id": "2co7LLNRFzjCAyCk10iPP1",
+                "parent": "6zeoGKZZ9xRLDj38A1mfgi",
+                "isDir": false,
+                "title": "Second Song",
+                "album": "Compat Album",
+                "artist": "Compat Artist",
+                "track": 2,
+                "genre": "Test",
+                "size": 32718,
+                "contentType": "audio/mpeg",
+                "suffix": "mp3",
+                "duration": 4,
+                "bitRate": 64,
+                "path": "Compat Artist/Compat Album/02 - Second Song.mp3",
+                "created": "2026-11-15T03:37:46.400709016Z",
+                "albumId": "6zeoGKZZ9xRLDj38A1mfgi",
+                "artistId": "7mmq1FpS1AFqLm0rt6BtWx",
+                "type": "music",
+                "bpm": 0,
+                "comment": "",
+                "sortName": "second song",
+                "mediaType": "song",
+                "musicBrainzId": "",
+                "isrc": [],
+                "genres": [
+                  {
+                    "name": "Test"
+                  }
+                ],
+                "replayGain": {},
+                "channelCount": 1,
+                "samplingRate": 44100,
+                "bitDepth": 0,
+                "moods": [],
+                "artists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayArtist": "Compat Artist",
+                "albumArtists": [
+                  {
+                    "id": "7mmq1FpS1AFqLm0rt6BtWx",
+                    "name": "Compat Artist"
+                  }
+                ],
+                "displayAlbumArtist": "Compat Artist",
+                "contributors": [],
+                "displayComposer": "",
+                "explicitStatus": "",
+                "groupings": [],
+                "works": [],
+                "movements": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "endpoint": "getLyricsBySongId",
+      "params": {
+        "id": "6LrcnIzAu7ZCXwSoLXh907"
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "body": "{\"subsonic-response\":{\"status\":\"ok\",\"version\":\"1.16.1\",\"type\":\"navidrome\",\"serverVersion\":\"0.64.2 (10114574)\",\"openSubsonic\":true,\"lyricsList\":{}}}",
+      "json": {
+        "subsonic-response": {
+          "status": "ok",
+          "version": "1.16.1",
+          "type": "navidrome",
+          "serverVersion": "0.64.2 (10114574)",
+          "openSubsonic": true,
+          "lyricsList": {}
+        }
+      }
+    }
+  ],
+  "extensionsEndpointRefused": false
+}

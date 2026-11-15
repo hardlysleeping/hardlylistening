@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Slow Hands</title>
+    <link>https://example.test/slow-hands</link>
+    <item>
+      <title>Episode &amp; One</title>
+      <guid isPermaLink="false">slow-hands-1</guid>
+      <link>https://example.test/slow-hands/1</link>
+      <pubDate>Fri, 30 Oct 2026 09:00:00 +0000</pubDate>
+      <description><![CDATA[<p>Hello <b>there</b></p><script>alert(1)</script>]]></description>
+      <itunes:image href="https://example.test/art/1.jpg"/>
+    </item>
+    <item>
+      <title>Episode Two</title>
+      <link>https://example.test/slow-hands/2</link>
+      <pubDate>Sat, 31 Oct 2026 09:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

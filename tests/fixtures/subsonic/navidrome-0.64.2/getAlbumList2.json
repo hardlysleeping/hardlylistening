@@ -1,0 +1,225 @@
+{
+  "subsonic-response": {
+    "albumList2": {
+      "album": [
+        {
+          "artist": "pornophonique",
+          "artistId": "24jpYAI4N8TG0cCAYyzZk5",
+          "artists": [
+            {
+              "id": "24jpYAI4N8TG0cCAYyzZk5",
+              "name": "pornophonique"
+            }
+          ],
+          "averageRating": 5,
+          "coverArt": "al-2cahnhu6UPen2wbYDm4CHK_7eb6dcd5d7a140cd",
+          "created": "2025-03-26T22:26:48.822020234Z",
+          "discTitles": [],
+          "displayArtist": "pornophonique",
+          "duration": 1954,
+          "explicitStatus": "",
+          "genres": [],
+          "id": "2cahnhu6UPen2wbYDm4CHK",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "8-bit lagerfeuer",
+          "originalReleaseDate": {},
+          "playCount": 6754,
+          "played": "2026-11-14T09:29:44.128Z",
+          "recordLabels": [],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 8,
+          "sortName": "8-bit lagerfeuer",
+          "userRating": 5,
+          "version": "",
+          "year": 2007
+        },
+        {
+          "artist": "Maya Filipič",
+          "artistId": "5vrYCaubPfhYUEBmovhIIB",
+          "artists": [
+            {
+              "id": "5vrYCaubPfhYUEBmovhIIB",
+              "name": "Maya Filipič"
+            }
+          ],
+          "averageRating": 2,
+          "coverArt": "al-4YmahYjTLJyCPvqjT7975H_477d1f3d7a12126e",
+          "created": "2025-03-26T22:26:41.427305785Z",
+          "discTitles": [],
+          "displayArtist": "Maya Filipič",
+          "duration": 2186,
+          "explicitStatus": "",
+          "genre": "Classical",
+          "genres": [
+            {
+              "name": "Classical"
+            },
+            {
+              "name": "newage"
+            }
+          ],
+          "id": "4YmahYjTLJyCPvqjT7975H",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "Between two worlds",
+          "originalReleaseDate": {},
+          "playCount": 7239,
+          "played": "2026-11-14T09:18:11Z",
+          "recordLabels": [
+            {
+              "name": "http://www.jamendo.com"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 11,
+          "sortName": "between two worlds",
+          "userRating": 2,
+          "version": "",
+          "year": 2008
+        },
+        {
+          "artist": "CrumbSnatchers",
+          "artistId": "54xIbFYq9XbxPHSjN4m90c",
+          "artists": [
+            {
+              "id": "54xIbFYq9XbxPHSjN4m90c",
+              "name": "CrumbSnatchers"
+            }
+          ],
+          "averageRating": 4,
+          "coverArt": "al-2h5JJXNsEdrYbwM5b7hbAS_7aec65882144c5cc",
+          "created": "2025-03-26T22:26:38.753934963Z",
+          "discTitles": [],
+          "displayArtist": "CrumbSnatchers",
+          "duration": 3176,
+          "explicitStatus": "",
+          "genre": "Punk",
+          "genres": [
+            {
+              "name": "Punk"
+            }
+          ],
+          "id": "2h5JJXNsEdrYbwM5b7hbAS",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "39c6fa9e-42aa-40e3-89e8-f303eb15141c",
+          "name": "Big House",
+          "originalReleaseDate": {
+            "day": 20,
+            "month": 5,
+            "year": 2016
+          },
+          "playCount": 2377,
+          "played": "2026-11-14T07:18:12.956Z",
+          "recordLabels": [
+            {
+              "name": "Jamendo"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [
+            "album"
+          ],
+          "songCount": 13,
+          "sortName": "big house",
+          "userRating": 4,
+          "version": "",
+          "year": 2016
+        },
+        {
+          "artist": "Back On Earth",
+          "artistId": "04HrSORpypcLGNUdQp37gn",
+          "artists": [
+            {
+              "id": "04HrSORpypcLGNUdQp37gn",
+              "name": "Back On Earth"
+            }
+          ],
+          "averageRating": 4,
+          "coverArt": "al-5mCHAKT6FQSLoJKREdMum8_b225bb6fbf9f2dd0",
+          "created": "2025-03-26T22:26:35.344479456Z",
+          "discTitles": [],
+          "displayArtist": "Back On Earth",
+          "duration": 560,
+          "explicitStatus": "",
+          "genres": [],
+          "id": "5mCHAKT6FQSLoJKREdMum8",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "Brighten",
+          "originalReleaseDate": {},
+          "playCount": 1336,
+          "played": "2026-11-14T07:18:24.18Z",
+          "recordLabels": [
+            {
+              "name": "http://www.jamendo.com"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 3,
+          "sortName": "brighten",
+          "starred": "2026-11-02T02:59:12.897157326Z",
+          "userRating": 4,
+          "version": "",
+          "year": 2013
+        },
+        {
+          "artist": "Diablo Swing Orchestra",
+          "artistId": "1HwxFm38Myi4KG5WMEDS2K",
+          "artists": [
+            {
+              "id": "1HwxFm38Myi4KG5WMEDS2K",
+              "name": "Diablo Swing Orchestra"
+            }
+          ],
+          "averageRating": 5,
+          "coverArt": "al-3Ss0LvMLYHiAOYlMrwcxtj_a36347d281b468b5",
+          "created": "2025-03-26T22:26:39.814531353Z",
+          "discTitles": [],
+          "displayArtist": "Diablo Swing Orchestra",
+          "duration": 3009,
+          "explicitStatus": "",
+          "genre": "Rock",
+          "genres": [
+            {
+              "name": "Rock"
+            }
+          ],
+          "id": "3Ss0LvMLYHiAOYlMrwcxtj",
+          "isCompilation": false,
+          "moods": [],
+          "musicBrainzId": "",
+          "name": "The Butcher's Ballroom",
+          "originalReleaseDate": {},
+          "playCount": 3007,
+          "played": "2026-11-14T06:21:16.456Z",
+          "recordLabels": [
+            {
+              "name": "http://www.jamendo.com"
+            }
+          ],
+          "releaseDate": {},
+          "releaseTypes": [],
+          "songCount": 13,
+          "sortName": "butcher's ballroom",
+          "starred": "2026-11-13T21:28:51.381844466Z",
+          "userRating": 5,
+          "version": "",
+          "year": 2009
+        }
+      ]
+    },
+    "openSubsonic": true,
+    "serverVersion": "0.64.2 (10114574)",
+    "status": "ok",
+    "type": "navidrome",
+    "version": "1.16.1"
+  }
+}

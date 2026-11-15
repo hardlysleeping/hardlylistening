@@ -1,0 +1,40 @@
+# HardlyListening — one container, two volumes, one host port.
+#
+#   cp -r deploy /srv/hardlylistening && cd /srv/hardlylistening
+#   docker compose up -d
+#
+# The data directory sits beside this file so replacing the deployment folder cannot delete the
+# library; the media tree is an absolute path for the same reason. Both are outside the Compose
+# project directory in spirit — never point either at a path the project owns.
+# Named, so `docker compose` does not take the checkout directory's name (`deploy`) as the project
+# and label the container with it.
+name: hardlylistening
+
+services:
+  hardlylistening:
+    build:
+      context: ..
+    image: hardlylistening:local
+    container_name: hardlylistening
+    restart: unless-stopped
+
+    environment:
+      # Loopback-published below, so this is only for the proxy in front.
+      HARDLYLISTENING_AUTH_REQUIRED: "1"
+      HARDLYLISTENING_PUBLIC_ORIGIN: "${HARDLYLISTENING_PUBLIC_ORIGIN:-https://music.example.com}"
+
+    volumes:
+      - ./data:/data
+      - /srv/hardlylistening/music:/music
+
+    ports:
+      # Loopback only. A reverse proxy owns the public side; publishing 8470 broadly because
+      # "Docker does not listen on localhost" would be the mistake this line prevents.
+      - "127.0.0.1:8470:8470"
+
+    # The health check lives in the image (see Dockerfile), so native and Docker agree on what
+    # "healthy" means: /api/health answers.
+
+    stop_grace_period: 30s
+    # SIGTERM reaches PID 1 through the sh wrapper's `exec`, so the documented shutdown order
+    # (HTTP → scheduler → queue → SQLite) runs instead of a timeout kill.

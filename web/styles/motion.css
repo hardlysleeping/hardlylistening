@@ -1,0 +1,67 @@
+/* Every @keyframes in the app, in one place so names cannot collide.
+
+   One owner for this surface. Edit these rules here; do not append an override
+   further down the cascade or in another file. */
+
+@keyframes syncspin{to{transform:rotate(360deg)}}
+
+/* One dip when the removal lands; the dashed state is what stays. */
+@keyframes acardout{0%{transform:scale(1)}45%{transform:scale(.97);opacity:.55}100%{transform:scale(1);opacity:1}}
+
+@keyframes bubbleFloat{
+0%{opacity:0;transform:translateY(16px) scale(.95)}
+10%{opacity:1;transform:translateY(0) scale(1)}
+82%{opacity:1;transform:translateY(-4px)}
+100%{opacity:0;transform:translateY(-16px) scale(.98)}
+}
+
+@keyframes votePulse{
+0%{transform:scale(1)}
+35%{transform:scale(1.18);box-shadow:0 0 0 6px #58d3a833}
+100%{transform:scale(1)}
+}
+
+@keyframes lsavepop{from{transform:scale(.82)}to{transform:scale(1)}}
+
+@keyframes lsavecheck{to{stroke-dashoffset:0}}
+
+@keyframes npulse{50%{opacity:.3}}
+
+@keyframes pqpulse{0%,100%{opacity:.3}50%{opacity:1}}
+
+@keyframes pqlive{0%{box-shadow:0 0 0 0 #4fd18b88}70%{box-shadow:0 0 0 7px #4fd18b00}100%{box-shadow:0 0 0 0 #4fd18b00}}
+
+/* Playback arrives instead of appearing. The bar used to switch from `display:none` to `display:flex`
+   at full size — the first press of play produced a hard cut. It now fades in over 160 ms and rises
+   10 px; `transform` is already the horizontal centring, so the motion is a Y term on that value and
+   the resting rule (and the animation's last frame) are the same `translateX(-50%)`. An entrance
+   animation, not a transition, because the bar is only ever turned on — `.on` is never removed. */
+@keyframes hl-player-in{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
+
+@keyframes votePulse{0%,100%{transform:scale(1)}35%{transform:scale(1.14)}}
+
+/* Opened from the bar, so it rises out of it: a 160 ms fade with a 12 px lift and almost no scale —
+   enough to read as a transition rather than a cut, small enough not to feel slow. An entrance
+   animation keeps `display:none` as the closed state, so a shut player is genuinely not in the
+   layout (no invisible full-screen overlay over the app). */
+@keyframes hl-full-in{from{opacity:0;transform:translateY(12px) scale(.994)}to{opacity:1;transform:none}}
+
+@keyframes pf-vinyl-spin{to{transform:rotate(360deg)}}
+
+@keyframes hl-full-rise{from{opacity:.4;transform:translateY(28px)}to{opacity:1;transform:none}}
+
+@keyframes pf-title-mq{
+  0%{transform:translateX(0)}
+  88%{transform:translateX(calc(-1 * var(--mq-dist,0px)))}
+  100%{transform:translateX(calc(-1 * var(--mq-dist,0px)))}}
+
+@keyframes pl-title-mq{
+  0%{transform:translateX(0)}
+  88%{transform:translateX(calc(-1 * var(--mq-dist,0px)))}
+  100%{transform:translateX(calc(-1 * var(--mq-dist,0px)))}}
+
+@keyframes hlPanelIn{from{opacity:0;transform:translate(var(--pq-x,-50%),10px)}
+  to{opacity:1;transform:translate(var(--pq-x,-50%),0)}}
+
+@keyframes hlPanelOut{from{opacity:1;transform:translate(var(--pq-x,-50%),0)}
+  to{opacity:0;transform:translate(var(--pq-x,-50%),10px)}}

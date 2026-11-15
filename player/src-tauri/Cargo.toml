@@ -1,0 +1,47 @@
+[package]
+name = "hardlylistening-player"
+version = "0.1.0"
+description = "A player for any Subsonic / OpenSubsonic server: a Tauri 2 shell around the app's own web UI"
+edition = "2021"
+# 1.90 is the floor `reqwest`'s current release and this crate's lockfile already assume. The
+# declared version is what a person building from source needs; a downloaded binary does not.
+rust-version = "1.90"
+
+# The library is what iOS and Android link against (staticlib for Apple, cdylib for Android),
+# and `rlib` is what the desktop binary here uses. One crate, three targets, no per-platform
+# copy of the code.
+[lib]
+name = "hardlylistening_player"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# No HTTP plugin: `tauri-plugin-http` exists to hand a page a general-purpose `fetch`, which is
+# the one thing this player must not have. The client below is called from `subsonic.rs` only,
+# after the address and the credential have been resolved from the bound account.
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2", "charset"] }
+# Token authentication is `md5(secret + salt)`; the salt is fresh per request, from the OS.
+md-5 = "0.10"
+getrandom = "0.3"
+
+# The keychain, per platform: the Keychain on macOS and iOS, the Credential Manager on Windows,
+# the Secret Service (through dbus) on Linux. Android has no backend in this crate, so it lands
+# on the in-memory fallback that `accounts.rs` documents.
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# `offline.rs` asks `statvfs` for free space on unix; elsewhere it reports no figure rather than
+# guessing one.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

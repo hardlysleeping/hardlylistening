@@ -1,0 +1,25 @@
+{
+  "name": "hardlylistening-player",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A Subsonic / OpenSubsonic client. The library lives on your server; this is the window onto it.",
+  "scripts": {
+    "dev": "vite",
+    "build": "svelte-check --tsconfig ./tsconfig.json --threshold warning && vite build",
+    "build:only": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tsconfig/svelte": "^5.0.4",
+    "svelte": "^5.19.0",
+    "svelte-check": "^4.1.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}

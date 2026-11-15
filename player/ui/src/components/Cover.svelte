@@ -1,0 +1,77 @@
+<script lang="ts">
+  /* One album cover, resolved through the client's transport.
+   *
+   * The markup and the fallback are the host's: an image when the server has one, and the
+   * tile's own gradient with initials when it does not — a cover that fails to load must read
+   * as a release without artwork, not as a broken image.
+   */
+  import type { Library } from "../lib/library/store.svelte";
+
+  interface Props {
+    library: Library;
+    coverArt: string | undefined;
+    label: string;
+    size?: number;
+  }
+
+  let { library, coverArt, label, size = 400 }: Props = $props();
+
+  let url = $state<string | null>(null);
+  let failed = $state(false);
+
+  function hue(text: string): number {
+    let h = 0;
+    for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return h;
+  }
+
+  function initials(text: string): string {
+    return (
+      String(text || "?")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((word) => word[0] ?? "")
+        .join("") || "?"
+    ).toUpperCase();
+  }
+
+  const gradient = $derived(`linear-gradient(140deg,hsl(${hue(label)} 42% 26%),hsl(${(hue(label) + 48) % 360} 38% 16%))`);
+
+  $effect(() => {
+    let alive = true;
+    failed = false;
+    if (!coverArt) {
+      url = null;
+      return;
+    }
+    void library
+      .serverCover(coverArt, size)
+      .then((resolved) => {
+        if (alive) url = resolved;
+      })
+      .catch(() => {
+        if (alive) url = null;
+      });
+    return () => {
+      alive = false;
+    };
+  });
+</script>
+
+<div class="acover" style={url && !failed ? "" : `background:${gradient}`}>
+  {#if url && !failed}
+    <img
+      class="cover"
+      src={url}
+      alt=""
+      draggable="false"
+      loading="lazy"
+      onerror={() => {
+        failed = true;
+      }}
+    />
+  {:else}
+    {initials(label)}
+  {/if}
+</div>
