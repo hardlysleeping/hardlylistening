@@ -200,9 +200,12 @@ class Security:
 
     def create_user(self, store, actor, name, role):
         self.admin(actor)
-        if name not in (None, '') or role not in ('member', 'admin'):
+        if role not in ('member', 'admin'):
             raise Denied(400, 'Only role may be chosen by administrators')
-        name = ''
+        if name is None:
+            name = ''
+        if not isinstance(name, str) or len(name) > 100:
+            raise Denied(400, 'Display name must be at most 100 characters')
         self.schema(store)
         uid = secrets.token_hex(16)
         with store.lock:

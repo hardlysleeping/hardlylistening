@@ -33,9 +33,14 @@ class Profiles(unittest.TestCase):
                 self.assertEqual(self.request(path,headers=h)[0],200)
             self.assertEqual(self.request('/api/profile','POST',h,json.dumps({'display_name':'x','profile_icon':[]}))[0],400)
 
+    def test_admin_can_choose_name_when_creating_user(self):
+        self.user('admin'); actor={'id':'u1','role':'admin'}
+        uid=self.sec.create_user(self.store,actor,'Friend','member')
+        row=self.store.conn.execute('SELECT display_name,role FROM members WHERE id=?',(uid,)).fetchone()
+        self.assertEqual(tuple(row),('Friend','member'))
+
     def test_unnamed_atomic_profile_recovery(self):
         self.user('admin'); actor={'id':'u1','role':'admin'}
-        with self.assertRaises(Denied): self.sec.create_user(self.store,actor,'Admin chosen','member')
         uid=self.sec.create_user(self.store,actor,None,'member')
         token=self.sec.invite(self.store,actor,uid).split('invite=')[1]
         for name,icon in [(None,None),(' ','music'),('Friend','remote')]:
