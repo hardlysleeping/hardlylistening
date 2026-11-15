@@ -1,7 +1,7 @@
 # Backlog — HardlyListening
 
 Open work only. Board ids refer to `KANBAN.md`; finished work lives in `BOARD.md`.
-Last reconciled against the code 2026-11-11.
+Reconciled against `PLAN.md` and the current tree 2026-11-15.
 
 ## Platform separation and the two applications
 
@@ -61,7 +61,7 @@ Before the player — client SDK
 
 Desktop host
 
-- [x] **HOST-001** GUI shell that launches and manages the server binary. It is a client of the HTTP API and of the `web/` the server already serves; it holds no domain rules of its own. Done 2026-11-12 — Tauri 2 in `desktop/`: six commands (status, start, stop, open UI, quit, env), the launcher as an `externalBin` sidecar staged by `tools/stage_sidecar.py` with SHA-256 drift check, dependencies tauri/serde only, CSP `default-src 'self'`, UI reads `/api/health` + `/api/v1/capabilities` and nothing else. Ownership is explicit (`none|ours|external`) so a stop never touches a server this window did not start. Never compiled here — no WebView dev packages (see the memory note); `rustfmt --check` + 38 Python and 49 node assertions stand in.
+- [x] **HOST-001** GUI shell that launches and manages the server binary. It is a client of the HTTP API and of the `web/` the server already serves; it holds no domain rules of its own. Done 2026-11-12 — Tauri 2 in `desktop/`: six commands (status, start, stop, open UI, quit, env), the launcher as an `externalBin` sidecar staged by `tools/stage_sidecar.py` with SHA-256 drift check, dependencies tauri/serde only, CSP `default-src 'self'`, UI reads `/api/health` + `/api/v1/capabilities` and nothing else. Ownership is explicit (`none|ours|external`) so a stop never touches a server this window did not start. Native compile and Xvfb walk completed in `huibuild` for HL-224; still no installable bundle.
 - [x] **HOST-002** First-run wizard: music folder, data folder, server name, admin account. Done 2026-11-12 — `desktop/host/setup.py` decides the four answers and resumes a half-finished run; `desktop/ui/wizard.js` asks them and `app.js` gates the shell on it; `wizard::server_env()` feeds the spawn plan so a start after the wizard needs no window restart. The admin account goes through the server's own one-shot account path, never a write from the window.
 - [x] **HOST-003** Start/stop the local server from the GUI. Closing the GUI must not be what stops a server that was already running. Done 2026-11-12 — one lifecycle, one child slot: `lifecycle_step` is the only command, `server_status` reads ownership from the same slot, and Quit calls the same `on_close` as the window close. `SIGTERM` with a 3-second grace; a server this window did not start is never signalled; `lifecycle.json` holds the close preference and the handoff record.
 - [x] **HOST-004** Two independent choices, not one mode switch: *run a local server on/off*, and *point the UI at local or remote*. Remote-only, with no local server, is a supported state. Done 2026-11-12 — `desktop/host/mode.py` models the two axes and `desktop/ui/mode.js` renders them; each handler moves only its own axis. Remembered in `localStorage`; the Rust side does not write `mode.json` yet, and the file says so.
@@ -92,12 +92,17 @@ lines were folded into SERVER-PKG-001/005/007/011 rather than kept as a second s
 - [x] **SERVER-001** The canonical runtime: the same core the Desktop launches, runnable alone. No Tauri, WebView, display or Node toolchain needed to start it. Done — `bin/hardlylistening-server` (`run`/`check`/`version`), stdlib only, no build step; the Dockerfile and the native install use the same entry. The "same core the Desktop launches" half is asserted when HOST-001 exists.
 - [x] **SERVER-PKG-001** Runtime config: `HARDLYLISTENING_DATA_DIR`, `MUSIC_DIR`, `HOST`, `PORT`; existing installs keep today's defaults. `MUSIC_DIR` seeds a new database's root only, never overrides a chosen one.
 - [x] **SERVER-PKG-003** `bin/hardlylistening-server` launcher with `run`, `check`, `version`; no daemonisation, no PID file.
-- [ ] **SERVER-PKG-005** Production systemd unit: dedicated `hardlylistening` user, env file,
-      `ProtectSystem=strict`, two writable paths, `ExecStartPre=… check`. The current per-user unit
-      stays. Blocked: there is no host to start it on yet. The public name is decided —
-      `music.hardlysleep.ing` (2026-11-13) — but the cutover is the last step, not a prerequisite for
-      the remaining code cards. The target model is a real move, not a front door: the instance runs
-      on the VPS and this machine stops serving traffic, keeping only the backups of its state.
+- [x] **SERVER-PKG-005** Production packaging — re-scoped to the container and closed 2026-11-15.
+      Containers are the standing preference, so the production package is the Docker image already in
+      this tree (`Dockerfile`, non-root uid 10001, `/data` + `/music`), deployed as the Coolify
+      application `player.hardlysleep.ing` on the VPS from Forgejo `dilroopgill/hardlylistening`
+      (`master`, `1c4df377`): container on port 8470, `restart: unless-stopped`,
+      `HARDLYLISTENING_PUBLIC_ORIGIN=https://player.hardlysleep.ing`, `HARDLYLISTENING_AUTH_REQUIRED=1`,
+      live `/api/health` 200 `0.18.0` and `/rest/ping.view` 200. The systemd unit in `deploy/` stays as
+      the portable/offline install path, not the production target. There is **no cutover**: the PC
+      instance (`music.hardlysleep.ing` via tunnel to `127.0.0.1:8470`) keeps the real library and stays
+      primary; the VPS instance is the test one and may hold a different library. The PC later becomes
+      the backup/fallback rather than shutting off the traffic.
 - [x] **SERVER-PKG-006** Native install script/package: user, directories, permissions, config, unit. Never delete music or database on uninstall.
 - [x] **SERVER-PKG-007** Dockerfile: same runtime, non-root uid 10001, `/data` + `/music` volumes, no special server implementation.
 - [x] **SERVER-PKG-008** Compose example with persistent `/data` and external music tree.
@@ -308,15 +313,37 @@ P1
       change, web-only no restart, syntax-error restore with no restart, and health-failure
       rollback + second restart with state left at the last good version.
 
-## Carded 2026-11-14 — the plan's own limitations, plus the unbuilt apps
+## Player architecture — one client, spike before implementation
+
+- [ ] **HL-220** Player architecture decision/spike: prove the risky iOS pieces for one
+      OpenSubsonic client — playback, background audio, lock-screen controls, Bluetooth/Car controls —
+      and compare Tauri with Flutter only enough to choose. Use a throwaway/minimal vertical slice,
+      not a second product app. Record actual-device evidence separately from simulated evidence.
+      Tauri/Svelte is the default because the existing `player/ui` is reusable; switch only if the
+      spike shows serious iOS background/media-control problems. HL-225 depends on this decision.
+      Local half measured 2026-11-15 in `player/ui`: `npm test` 122 passing / 10 files, `npm run check`
+      0 errors and 0 warnings. Device half unmeasured: `PLATFORM_PLAYER_PRESENT` is `false`, this host
+      has no `xcodebuild`/`swiftc`, and `cargo check` stops at `glib-sys` — background audio, lock
+      screen, Bluetooth and Car controls still need iOS hardware on a macOS runner.
+      Offline downloads/local audio import remain outside the initial player scope pending a later decision.
+
+## Carded 2026-11-14 — the plan's own limitations, plus app validation
 
 Open work. Detail is in `KANBAN.md`; these are here so `BACKLOG.md` stops looking shorter than the
-project. Each one is a limitation that `PLAN.md` states in its own words, not a new feature.
+project. Each one is a limitation that `PLAN.md` states in its own words, not a new feature. HL-220
+is the only actionable player card; HL-225 is dependent on its architecture decision, and HL-224
+still needs a bundle and an auth-mode decision.
 
-- [ ] **HL-224** Desktop app: compile the Tauri crate, then walk desktop MVP — wizard, folders, admin,
-      start, full UI, OpenSubsonic, LAN, quit/reopen. Never built; this machine cannot build Tauri.
-- [ ] **HL-225** Player app: Linux build plus an iOS build on a CI runner. Never built; the tests
-      drive the shell in Chromium against a fake Tauri bridge.
+- [ ] **HL-224** Desktop app: bundle the compiled Tauri crate and close the desktop MVP gaps —
+      installable package plus a decision on desktop authentication so the full served UI can be
+      exercised. Crate compiled and walked under Xvfb; no bundle exists yet.
+- [ ] **HL-225** Implement and validate the single OpenSubsonic player in the stack selected by
+      HL-220. The current source is Tauri + Svelte; no native app build or iOS device run is verified.
+      Linux build requires the Tauri/WebView development dependencies; iOS requires a macOS runner
+      and a checked-in build workflow/config. Acceptance: connect to HardlyListening and another
+      OpenSubsonic server; browse/search, play, queue and seek; verify background playback and
+      lock-screen/Bluetooth controls on device; safe credentials; no Repo acquisition surface.
+      Do not build a parallel Flutter client.
 - [x] **HL-226** PWA installable *with music offline* — done 2026-11-14. The shell, the last
       library, the covers and the played audio are kept; eviction is announced and a kept row
       says so. The install prompt and airplane-mode walk on a physical phone are a device

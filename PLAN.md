@@ -568,10 +568,11 @@ unchanged shared pool. Deployment is parent-owned; no restart/live DB/media writ
 - Personal playlist authoring/editing and richer community member pages/activity
   history remain unfinished; current My profile is name/icon self-management,
   not a public member directory/history. Existing Queue ownership is not a full
-  editable personal playlist system — **not carded yet**.
-- Funkwhale/federation, native iPhone/offline playback (**HL-220**), extension
+  editable personal playlist system — **not carded yet**. These are separate uncarded gaps,
+  not part of HL-220/HL-225.
+- Funkwhale/federation, native iPhone playback (**HL-220** spike, **HL-225** single-client implementation), extension
   host/acquisition (**HL-218**, **HL-219**) and B2/WebDAV/Drive storage (B2 is
-  **HL-215**, the rest is **HL-223**) remain roadmap, not hidden working screens.
+  **HL-215**, the rest is **HL-223**) remain roadmap, not hidden working screens. Offline playback is not committed scope for the initial client.
 - Following now covers **SoundCloud, Apple and any RSS/Atom feed** (**HL-232**, shipped
   2026-11-14): `providers/feed.py` claims a URL that names itself a feed, entries dedupe
   by id → guid → link, entry bodies are dropped before storage, and a dead feed is
@@ -781,10 +782,17 @@ No live accounts, migration, service restart, public exposure or audible playbac
    explicit personal Save/Remove save controls using existing scoped APIs.
    Shared browsing, playback and administrator/acquisition controls stay separate.
    Isolated tests only; no deployment or real-client compatibility verification.
-3. **Generic Flutter iPhone player (PLAY-IOS / row 52), later.** User-configured
-   compatible server, streaming, seek/queue/background playback; explicit offline
-   downloads to an app Files folder, local audio import and offline indexes,
-   interrupted-download recovery and disk limits. No acquisition dependency.
+3. **One cross-platform OpenSubsonic player (PLAY-IOS / row 52), after an architecture spike.**
+   HL-220 is a bounded spike to prove iOS OpenSubsonic playback, background audio,
+   lock-screen controls and Bluetooth/Car controls, then compare Tauri with Flutter
+   only enough to choose. Tauri/Svelte is the default because the existing `player/ui`
+   already provides the client UI; switch only if the spike shows serious iOS
+   background/media-control problems. HL-225 implements and validates the one selected
+   stack on Linux and iOS. Do not build independent Tauri and Flutter clients. The
+   intended scope remains a user-configured compatible server, streaming, seek/queue/
+   background playback and no acquisition dependency. Offline downloads, local audio
+   import, offline indexes, interrupted-download recovery and disk limits remain
+   uncommitted scope; revisit only after the core player works.
 4. **Generic opt-in extension host (EXT-HOST / row 53).** Disabled by
    default, explicit installation/trust, capability manifests, isolation,
    permissions, revocation and removal. NO bundled acquisition functionality.
@@ -1204,8 +1212,9 @@ This is how the player discovers HardlyListening extensions without assuming the
 
 ### Packaging: one core, three packages
 
-* **HardlyListening Server** — the canonical runtime. The same Python core, headless: runs directly,
-  under systemd, or in Docker. Exposes the full web UI, OpenSubsonic and the API. **Zero GUI
+* **HardlyListening Server** — the canonical runtime. The same Python core, headless: runs in Docker
+  (the production path — containers are preferred over distro units), or directly / under systemd for
+  a portable offline install. Exposes the full web UI, OpenSubsonic and the API. **Zero GUI
   dependencies** — no Tauri, no WebView, no display, no Node toolchain needed to start it.
 * **HardlyListening Desktop** — an optional GUI **controller and client** for that same server:
   first-run wizard (music folder, data folder, server name, admin account), start/stop the local
@@ -1278,10 +1287,17 @@ browser-download cache and `artist-art/` — now resolve through `paths.py` and 
 short goes back to `queued` rather than being marked cancelled. What is left of the packaging is
 the launcher (`check`/`backup`), the system unit itself, Docker, and the migration test.
 
-Moving an existing install to a VPS is a data-and-service move, not an application change: the same
-core, the same database, the same `web/`, run headlessly. A VPS never needs the Desktop package, and
-the Desktop package never becomes the server. Clients reach the VPS through its public web UI, its
-OpenSubsonic endpoint, and (later) the Player.
+Two instances of this core run today, deliberately, on the same codebase and different subdomains:
+the PC (`music.hardlysleep.ing`, a Cloudflare tunnel to a local server holding the real library) and
+the VPS (a container, `player.hardlysleep.ing`, a test instance whose library may hold different
+songs). The PC is primary for now and becomes the backup/fallback later; neither is retired and
+nothing proxies between them. A VPS never needs the Desktop package, and the Desktop package never
+becomes the server. Clients reach either instance through its public web UI, its OpenSubsonic
+endpoint, and (later) the Player.
+
+**Production packaging is the container**, following the standing preference for Docker over distro
+units: the same image serves both instances. The systemd unit is kept as the portable/offline install
+path, not the deployment target.
 
 ### Federation, split by domain (still deferred)
 
@@ -1301,21 +1317,28 @@ Repo Browse, personal Library, the acquisition Queue and the current player are 
 tests and visual baselines pass; still one process and one database; **the core still starts and
 serves with no GUI dependency** (a test asserts no GUI/desktop import exists).
 
-**Player MVP:** connects to HardlyListening and to another OpenSubsonic server; browses, searches,
-plays, queues, seeks; background/media/Bluetooth controls; credentials stored safely; optional
-Social; contains no Repo acquisition surface.
+**Player MVP:** one client stack selected by HL-220, with Tauri/Svelte the default unless its iOS
+background/media-control spike exposes serious problems. HL-220 proves OpenSubsonic playback,
+background audio, lock-screen and Bluetooth/Car controls; HL-225 implements and validates the
+selected stack. The client connects to HardlyListening and another OpenSubsonic server; browses,
+searches, plays, queues and seeks; stores credentials safely; optionally supports Social; and
+contains no Repo acquisition surface. Do not build parallel Tauri and Flutter clients.
 
 **Desktop MVP:** install, choose music folder and data folder, create the admin account, start,
 use the full UI, enable OpenSubsonic, enable LAN, quit and reopen with settings intact — no terminal.
-*Not yet met once:* the crate has never been compiled on any machine, so this gate is unproven and
-is carded as **HL-224**. The **Player MVP** gate is unproven for the same reason (**HL-225**): its
-tests run the shell in Chromium against a fake Tauri bridge.
+The crate compiled and was walked under Xvfb for **HL-224**, but this gate is not met: no
+installable bundle exists and the full served UI still needs an auth-mode decision. The **Player
+MVP** gate remains unproven (**HL-220/HL-225**): the Svelte/Tauri source passes its own suite, but
+that does not establish a native app build, iOS background playback or media controls.
 Both choices are independent: running a local server on/off, and pointing the UI at a local or a
 remote server — including a remote-only client with no local server running.
 
 **Headless MVP:** `hardlylistening-server` runs on a host with no display, no desktop session and no
 Node toolchain, under systemd or in Docker, and serves the full web UI, OpenSubsonic and the API; the
-database and `web/` are the same artefact the Desktop package uses.
+database and `web/` are the same artefact the Desktop package uses. **Met 2026-11-15** by the VPS
+container (Coolify application `player.hardlysleep.ing`, no display or session on the host): the live
+instance answers `/api/health` 200 `0.18.0`, `/rest/ping.view` 200 and the web UI's own sign-in page,
+from the same image and `web/` the Desktop package stages.
 
 ### What not to do
 

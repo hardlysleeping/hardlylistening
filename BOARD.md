@@ -1,5 +1,49 @@
 # Board — HardlyListening
 
+## Deployment — two instances, one platform — 2026-11-15
+
+HardlyListening is deployed, and the earlier board said it was not. Verified on the host, not from
+notes:
+
+- **VPS** — Coolify application `player.hardlysleep.ing` (project `hardly-sites`), container
+  `e1wjnhmipaa9jnju9t2k5lyv-20261115T112001`, `restart: unless-stopped`, port 8470 behind the
+  Coolify proxy, built 2026-11-15 11:21 UTC from Forgejo `dilroopgill/hardlylistening` branch
+  `master` at `1c4df377`. Environment: `HARDLYLISTENING_PUBLIC_ORIGIN=https://player.hardlysleep.ing`,
+  `HARDLYLISTENING_AUTH_REQUIRED=1`. Volumes `-data:/data`, `-music:/music`. Live answers:
+  `/api/health` 200 `0.18.0`, `/rest/ping.view` 200, `/` 303 → `/login` 200, capabilities with the
+  web UI and OpenSubsonic 1.16.1 on. The music volume holds **no files** — it is a test instance and
+  may be given a different library on purpose.
+- **PC** — `cloudflared-hardlylistening.service` tunnels `music.hardlysleep.ing` to
+  `127.0.0.1:8470`, where `server.py` runs from `~/apps/hardlylistening`. Same version. This one
+  carries the real library: **998 tracks, 4 members**, 5.9 MB database. The VPS origin answers 503
+  for that hostname, which is how the two front doors were told apart.
+
+**Owner's direction, recorded:** both stay up. They are two instances of the same application on
+the same codebase, on different subdomains — not a migration in progress. The PC keeps the real
+library and remains the primary instance for now; later it becomes the backup/fallback while
+`player.` is used for testing. No retirement, no cutover, no reverse proxy between them.
+
+**Packaging follows the standing preference: containers, not distro units.** `SERVER-PKG-005` was
+written as a production systemd unit blocked on a host. The deployment answers it differently, so
+the card is re-scoped and closed: the container image already in the tree is the production package,
+and the systemd unit stays only as the portable/offline install path. That also settles the
+**Headless MVP** gate — the VPS container runs the core with no display, no desktop session and no
+Node toolchain, serving the web UI, OpenSubsonic and the API.
+
+**What it changes:** `HL-220`/`HL-225` gain a real https OpenSubsonic target to test a client
+against; the iOS gate itself is unchanged (no `xcodebuild` here, build needs a macOS runner).
+`HL-224`'s desktop bundle is untouched — a container deployment is not a desktop installer. The
+open deployment question is no longer "is it installed" but "which instance a client should default
+to", which is a player-side decision, not a server one.
+
+## Player direction — one client, spike before implementation — 2026-11-15
+
+The board had HL-220 as a separate generic Flutter iPhone app and HL-225 as the Tauri player, despite both targeting the same OpenSubsonic client. That would create parallel UIs and playback implementations. Reframed the work: **HL-220 is a bounded architecture spike** to test the risky iOS behavior (OpenSubsonic playback, background audio, lock-screen controls, Bluetooth/Car controls) and compare Tauri with Flutter only enough to decide. **Tauri/Svelte remains the default** because it reuses `player/ui`; switch only if the spike shows serious iOS background/media-control problems. **HL-225 is the single implementation/validation card**, dependent on the spike. No second Flutter product is to be built in parallel. This records the owner's direction; the final stack decision still waits on the device half of the spike.
+
+**Spike, local half measured 2026-11-15.** Run in the live tree at `player/ui` with its installed dependencies: `npm test` **122 passing in 10 files** (native engine, Subsonic client/transport/auth/compat, library store, session, social, lyrics, native seam), `npm run check` **0 errors, 0 warnings**. That makes the reusable-asset argument for Tauri measured rather than assumed: the Svelte client, its Subsonic transport and its player engine seam all hold up under their own tests.
+
+**What the spike did not measure, and why.** `PLATFORM_PLAYER_PRESENT` is `false` in `player/src-tauri/src/native_audio.rs`, so `native_audio_available` answers `false` on every build and playback runs through the WebView's `<audio>`; the platform bridge is a seam with no player behind it. This host has no `xcodebuild` and no `swiftc`, and `cargo check` stops at `glib-sys` for want of the WebKitGTK/GTK development packages, so neither the crate's commands nor any iOS behavior can be compiled here. **Background audio, lock-screen controls, Bluetooth and Car controls remain unproven on a device** — that is the half of HL-220 that decides Tauri versus Flutter, and it needs iOS hardware on a macOS runner. Until it runs, the default stands: no measured iOS failure justifies a second client.
+
 ## HL-413: the server card belongs to the choice — 2026-11-15
 
 Measured on the `HL-224` build, pointing the window at `https://music.hardlysleep.ing` while running
@@ -789,13 +833,15 @@ first — it was testing ownership, not permission.
 
 Two things were wrong in opposite directions, so neither is a "cleanup".
 
-**The applications were counted as Done and had never been built.** `HOST-001…008` and
-`PLAYER-001…009` are source plus tests; there is no `src-tauri/target`, no binary, no bundle and no
-`.ipa` in either tree, and this machine has no `webkit2gtk-4.1` / `gtk+-3.0` / `libsoup-3.0` dev
-packages, so a Tauri crate cannot be compiled here (`desktop/README.md:171` says so). Their tests
-drive Python host logic and the shell in Chromium against a fake Tauri bridge — proof of logic,
-not of an app. They now sit in their own section and are **not** done; `HL-224` and `HL-225` are
-the build-and-walk cards, and the plan's Desktop/Player MVP gates are annotated as never met.
+**The applications were counted as Done without native-app proof.** `HOST-001…008` and
+`PLAYER-001…009` have source and tests; generated frontend `dist/` artifacts are not a native
+Tauri build, bundle or device run. On this machine the required WebView development packages are
+absent, so the Tauri crate cannot be compiled here without the `huibuild` environment
+(`desktop/README.md:171`). Browser tests against a fake Tauri bridge prove logic, not native
+playback or media controls. The rows remain not done. HL-224 has since compiled and walked the
+desktop host under Xvfb, but it still lacks an installable bundle and its full served UI needs an
+auth-mode decision. Player work is split into HL-220 (architecture/iOS-risk spike) and HL-225
+(single selected-stack implementation and validation).
 
 **The plan's closing limitations had no cards at all.** `PLAN.md` § *User-visible unfinished-area
 audit* names ten limitations and the board carried none of them, which is why "what's left" kept
@@ -2522,10 +2568,12 @@ No live accounts, migration, service restart, public exposure or audible playbac
    explicit personal Save/Remove save controls using existing scoped APIs.
    Shared browsing, playback and administrator/acquisition controls stay separate.
    Isolated tests only; no deployment or real-client compatibility verification.
-3. **Generic Flutter iPhone player (PLAY-IOS / row 52), later.** User-configured
-   compatible server, streaming, seek/queue/background playback; explicit offline
-   downloads to an app Files folder, local audio import and offline indexes,
-   interrupted-download recovery and disk limits. No acquisition dependency.
+3. **One cross-platform OpenSubsonic player (PLAY-IOS / row 52), after an architecture spike.**
+   HL-220 proves iOS playback/background/lock-screen/Bluetooth-Car controls and chooses
+   Tauri or Flutter; Tauri/Svelte is the default because `player/ui` already exists.
+   HL-225 implements and validates the single chosen stack. No parallel clients. Initial
+   scope is compatible-server streaming, seek/queue/background playback, no acquisition;
+   offline downloads and local audio remain undecided/out of initial scope.
 4. **Generic opt-in extension host (EXT-HOST / row 53), later.** Disabled by
    default, explicit installation/trust, capability manifests, isolation,
    permissions, revocation and removal. NO bundled acquisition functionality.
