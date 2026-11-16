@@ -4412,13 +4412,23 @@ What happened, in order: the shell rendered with **Start enabled**; the four wiz
 `cli.py --host 127.0.0.1 --port 8492` as a **child of the window's pid** and `/api/health` answered
 `0.18.0`; the server's `/login` signed that account in on loopback — a plain `hl_session` cookie —
 and the full library UI rendered; **Stop from the package** ended the spawned pid and closed the
-port; quit and relaunch showed no wizard and the same address. Three limits came out of it, none of
-them silent: the wizard's **path fields did not take typed input** in this run (its text, email and
-password fields did, so it is not a keyboard problem; the walk used the defaults, and whether the
-cause is the field or the hit target is unresolved); an `https://` **remote target is accepted but
-never probed** — `probe.rs` strips `http://` only, and the window states the consequence in words
-("another machine · this window does not probe it") rather than showing a stale "running"; and
-`Open in browser` was not exercised, the container having no `xdg-open` target.
+port; quit and relaunch showed no wizard and the same address. Two limits came out of it, neither of them
+silent. An `https://` **remote target is accepted but never probed** — `probe.rs` strips `http://`
+only, and the window states the consequence in words ("another machine · this window does not probe
+it") rather than showing a stale "running"; the options for closing that are listed in PLAN.md under
+"Remote targets the window cannot check". And the wizard **creates its suggested data folder** even
+when another path is typed — an empty directory, harmless, but a write nobody asked for.
+
+A third suspicion from that run did not survive a second look: I recorded that the wizard's path
+fields ignored typed input. They do not. A follow-up run on a fresh package typed `/tmp/…` paths and
+step 4 summarised them as `Music`/`Data`; a click on the field then appended text to it. What I had
+clicked in the first run was the **notice box above the field** ("… was created."), and the page
+scrolls between polls, so hand-measured coordinates went stale while the field kept its real values.
+The lesson is about the harness, not the app: re-take the screenshot immediately before each click.
+
+That run also closed the browser handoff: with a stub `xdg-open` first on `PATH`, pressing **Open in
+browser** recorded the single argument `http://127.0.0.1:8493` — the window hands the address to the
+desktop's default browser and keeps nothing of its own.
 
 One thing to know before repeating this: restarting the shell **without** the port in the
 environment falls back to 8470 and adopts the owner's live PC instance

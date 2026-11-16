@@ -1350,14 +1350,41 @@ packaged app on 2026-11-16: extracted package → wizard (4 steps, no terminal) 
 the administrator itself → Start spawned it (child of the window's pid) → the server's `/login`
 signed that account in on loopback and the full UI rendered → Stop from the package ended the
 spawned process and closed the port → quit and relaunch showed no wizard and a resolvable address.
-What is still unproven is narrower: the wizard's *path* fields did not accept typed input in that
-run (its text, email and password fields did; the walk used the defaults), so entering a folder by
-typing — as opposed to the `Choose folder…` picker — is untested, and `Open in browser` was not
-exercised (the container has no xdg-open target). The **Player MVP** gate remains unproven (**HL-220/HL-225**):
+A second, instrumented run closed the two gaps that first run left: the wizard's path fields
+**do** take typed input (typed `/tmp/…` paths landed in the step-4 summary as `Music`/`Data`), and
+`Open in browser` **does** hand off — a stub `xdg-open` on `PATH` recorded
+`http://127.0.0.1:<port>`. What remains open is one deliberate limit, not a defect: an `https://`
+remote target can be entered but is never probed (`desktop/src-tauri/src/probe.rs` speaks `http://`
+only), and the window says so in words. Options for closing it are recorded under "Remote targets
+the window cannot check" below. The **Player MVP** gate remains unproven (**HL-220/HL-225**):
 the Svelte/Tauri source passes its own suite, but that does not establish a native app build, iOS
 background playback or media controls.
 Both choices are independent: running a local server on/off, and pointing the UI at a local or a
 remote server — including a remote-only client with no local server running.
+
+### Remote targets the window cannot check
+
+The probe (`desktop/src-tauri/src/probe.rs`) is a plain `std::net` HTTP/1.1 client with no TLS
+stack, by an earlier decision to keep the window small ("the price is that this client understands
+`http://` only"). The address rules, meanwhile, accept an `https://` origin, because that is what a
+real deployment uses. So a remote card can be pointed at `https://player.example.org` and the window
+can only say *another machine · this window does not probe it* — honest, but it means "connect to a
+remote instance" cannot show whether that instance is up.
+
+Four ways to close it, cheapest first; **nothing below is implemented**:
+
+1. **Leave it and keep saying so.** Zero code. The browser does the arrival check by opening the
+   URL, and the window never claims a state it cannot see. Cost: a remote card always looks unknown.
+2. **Probe through the WebView.** Ask the page to `fetch()` the target's `/api/health` and
+   `/api/v1/capabilities`; the WebView already has a TLS stack. Needs the server to answer CORS for
+   the shell's origin (it answers for the local instance today, so the mechanism exists), and needs
+   the CSP/handoff rules to allow it. No new Rust dependency.
+3. **Add a TLS client** (`tauri-plugin-http` or `reqwest` + rustls) and keep `probe.rs`'s shape.
+   Straightforward, but it reverses the documented choice and adds a dependency to review and keep
+   patched.
+4. **Narrow the address rules to what the window can check** (accept `http://` only for the *target*
+   field, and treat an `https://` origin as "open in browser, unmanaged"). Honest, but removes the
+   remote card for the deployments that actually exist.
 
 **Headless MVP:** `hardlylistening-server` runs on a host with no display, no desktop session and no
 Node toolchain, under systemd or in Docker, and serves the full web UI, OpenSubsonic and the API; the

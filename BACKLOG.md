@@ -349,8 +349,11 @@ needed a bundle and an auth-mode decision; the bundle landed and the loopback au
       no terminal), Start spawning the launcher as a child of the window, that account signing in on
       loopback and the full UI rendering, Stop from the package killing the spawned pid, and a
       relaunch with no wizard. The in-bundle sidecar sits at `/usr/bin/hardlylistening-server` and is
-      correctly refused (no `cli.py` beside it). Open: typing into the wizard's path fields (not
-      focused in that run; defaults used) and `Open in browser`.
+      correctly refused (no `cli.py` beside it). A second, instrumented run closed both leftovers:
+      typed `/tmp/…` paths were accepted (step 4 summarised them) and a stub `xdg-open` recorded
+      `http://127.0.0.1:8493` from `Open in browser` — the first run's "path fields ignore typing"
+      was stale click coordinates, not a defect. One limit stays open: an `https://` remote target is
+      accepted but never probed (`probe.rs` is `http://` only); options are listed in PLAN.md.
 
 ## Removed — no longer applicable
 
