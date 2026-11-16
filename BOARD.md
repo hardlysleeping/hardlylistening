@@ -4398,3 +4398,37 @@ Documented limit: invite links minted on a loopback install point at `127.0.0.1`
 the machine can use them, another device cannot, and that is what a public origin is for. Cookies
 written by every flow (session, signup, OAuth, party) follow the same rule, so no flow silently
 breaks on one side.
+## The package runs the whole first run — 2026-11-16
+
+The desktop card's last two unproven items were "Stop on a server the window spawned" and the
+window-in-browser walk. Both were driven from the **extracted `.deb`** today, with
+`HARDLYLISTENING_SERVER` pointed at the checkout's launcher and a scratch Xvfb display (plus the
+four WebKit env vars; a minimal window manager had to be installed in `huibuild`, because with no
+WM the toplevel never takes X focus and every keystroke is dropped — clicks worked, typing did not).
+
+What happened, in order: the shell rendered with **Start enabled**; the four wizard steps answered;
+`Finish` made the *server* create the administrator (`members: owner@example.com, role admin`,
+`settings.root` written) so the first run needs **no terminal**; Start spawned
+`cli.py --host 127.0.0.1 --port 8492` as a **child of the window's pid** and `/api/health` answered
+`0.18.0`; the server's `/login` signed that account in on loopback — a plain `hl_session` cookie —
+and the full library UI rendered; **Stop from the package** ended the spawned pid and closed the
+port; quit and relaunch showed no wizard and the same address. Three limits came out of it, none of
+them silent: the wizard's **path fields did not take typed input** in this run (its text, email and
+password fields did, so it is not a keyboard problem; the walk used the defaults, and whether the
+cause is the field or the hit target is unresolved); an `https://` **remote target is accepted but
+never probed** — `probe.rs` strips `http://` only, and the window states the consequence in words
+("another machine · this window does not probe it") rather than showing a stale "running"; and
+`Open in browser` was not exercised, the container having no `xdg-open` target.
+
+One thing to know before repeating this: restarting the shell **without** the port in the
+environment falls back to 8470 and adopts the owner's live PC instance
+("Running (started elsewhere)"). That is the documented resolution order working, but it means a
+test run should keep `HARDLYLISTENING_PORT` set for every launch.
+
+The in-bundle sidecar question is answered by the same walk: the deb **does** ship
+`/usr/bin/hardlylistening-server`, and the shell correctly refuses it, because `spawnable()` wants
+`cli.py` beside it and a client-only bundle has none. That is the designed outcome, not a miss.
+
+Scratch state was removed afterwards (`~/.local/share/hardlylistening`,
+`~/.local/state/hardlylistening-desktop`, the extracted tree), and the wizard's default music
+folder — which points at the owner's **real** library — was left exactly as it was.

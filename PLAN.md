@@ -1345,9 +1345,15 @@ authentication for a loopback install — was made on the server side (2026-11-1
 forwarding headers) is served as `http://127.0.0.1:<port>` and signs in with a plain
 `hl_session` cookie; a tunnel fails those checks together, and a configured https origin keeps
 `__Host-`+`Secure`. Proven live end to end (invite → cookie → `/api/state` 200, the same cookie
-delivered the way a tunnel does → 503). What keeps this gate from "met": the window-in-browser
-walk (sign-in → full UI → quit/reopen) has not been driven from the packaged app itself, and Stop
-on a server the window spawned is untested from the package. The **Player MVP** gate remains unproven (**HL-220/HL-225**):
+delivered the way a tunnel does → 503). The window-in-browser walk **was** driven from the
+packaged app on 2026-11-16: extracted package → wizard (4 steps, no terminal) → the server created
+the administrator itself → Start spawned it (child of the window's pid) → the server's `/login`
+signed that account in on loopback and the full UI rendered → Stop from the package ended the
+spawned process and closed the port → quit and relaunch showed no wizard and a resolvable address.
+What is still unproven is narrower: the wizard's *path* fields did not accept typed input in that
+run (its text, email and password fields did; the walk used the defaults), so entering a folder by
+typing — as opposed to the `Choose folder…` picker — is untested, and `Open in browser` was not
+exercised (the container has no xdg-open target). The **Player MVP** gate remains unproven (**HL-220/HL-225**):
 the Svelte/Tauri source passes its own suite, but that does not establish a native app build, iOS
 background playback or media controls.
 Both choices are independent: running a local server on/off, and pointing the UI at a local or a

@@ -344,8 +344,13 @@ needed a bundle and an auth-mode decision; the bundle landed and the loopback au
       that. **Auth resolved the same day** (owner decision, `core/security.py`): with no
       `PUBLIC_ORIGIN`, a provably local request — loopback peer, loopback `Host`, no forwarding
       headers — signs in over plain http with a plain `hl_session` cookie; tunnels are refused, and
-      a configured https origin keeps `__Host-`+`Secure`. Proven live. Open: the sidecar's
-      in-bundle location and Stop-from-package are untested.
+      a configured https origin keeps `__Host-`+`Secure`. Proven live. The package was then walked
+      end to end from the extracted deb: wizard in four steps (the server created the administrator,
+      no terminal), Start spawning the launcher as a child of the window, that account signing in on
+      loopback and the full UI rendering, Stop from the package killing the spawned pid, and a
+      relaunch with no wizard. The in-bundle sidecar sits at `/usr/bin/hardlylistening-server` and is
+      correctly refused (no `cli.py` beside it). Open: typing into the wizard's path fields (not
+      focused in that run; defaults used) and `Open in browser`.
 
 ## Removed — no longer applicable
 
