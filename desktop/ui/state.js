@@ -77,6 +77,9 @@
       noticeKind: 'info',
       noticeAt: 0,
       startedAt: 0,
+      /* Whether a local launcher was found. A miss is a supported state (the window drives a
+       * server it does not own), so it disables Start and says why instead of failing later. */
+      launcherMissing: false,
       quitting: false
     };
   }
@@ -206,6 +209,13 @@
       return next;
     }
 
+    if (type === 'launcher') {
+      /* HOST-003's spawn needs a launcher that can actually run. The bundle used to start one
+       * whose `../cli.py` was absent, so Start looked live and did nothing. */
+      next.launcherMissing = event.found === false;
+      return next;
+    }
+
     if (type === 'notice') {
       /* From `app.js`, and always a fact about the install (an unusable address, a config it had
        * to fall back from, a missing launcher) rather than about one attempt, so it stands. */
@@ -241,7 +251,7 @@
       status = { text: 'Stopped', kind: 'down' };
     }
 
-    var canStart = state.health !== 'up' && state.health !== 'starting';
+    var canStart = state.health !== 'up' && state.health !== 'starting' && !state.launcherMissing;
     var canStop = state.ownership === 'ours';
     var canOpen = state.health === 'up';
 
@@ -256,9 +266,11 @@
       buttons: {
         start: {
           enabled: canStart,
-          hint: canStart ? 'Start the bundled server on ' + state.address.listen
-            : (state.ownership === 'ours' ? 'This window already started a server'
-              : 'A server is already running here')
+          hint: canStart ? 'Start the local server on ' + state.address.listen
+            : state.launcherMissing
+              ? 'No local server was found to start — this window can drive a server it does not own'
+              : (state.ownership === 'ours' ? 'This window already started a server'
+                : 'A server is already running here')
         },
         stop: {
           enabled: canStop,

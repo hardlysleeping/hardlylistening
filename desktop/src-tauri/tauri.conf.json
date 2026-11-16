@@ -5,7 +5,7 @@
   "identifier": "app.hardlylistening.desktop",
   "build": {
     "frontendDist": "../ui",
-    "beforeBuildCommand": "python3 ../tools/stage_sidecar.py"
+    "beforeBuildCommand": "python3 tools/stage_sidecar.py"
   },
   "app": {
     "withGlobalTauri": true,

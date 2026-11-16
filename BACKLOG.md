@@ -61,7 +61,7 @@ Before the player — client SDK
 
 Desktop host
 
-- [x] **HOST-001** GUI shell that launches and manages the server binary. It is a client of the HTTP API and of the `web/` the server already serves; it holds no domain rules of its own. Done 2026-11-12 — Tauri 2 in `desktop/`: six commands (status, start, stop, open UI, quit, env), the launcher as an `externalBin` sidecar staged by `tools/stage_sidecar.py` with SHA-256 drift check, dependencies tauri/serde only, CSP `default-src 'self'`, UI reads `/api/health` + `/api/v1/capabilities` and nothing else. Ownership is explicit (`none|ours|external`) so a stop never touches a server this window did not start. Native compile and Xvfb walk completed in `huibuild` for HL-224; still no installable bundle.
+- [x] **HOST-001** GUI shell that launches and manages the server binary. It is a client of the HTTP API and of the `web/` the server already serves; it holds no domain rules of its own. Done 2026-11-12 — Tauri 2 in `desktop/`: six commands (status, start, stop, open UI, quit, env), the launcher as an `externalBin` sidecar staged by `tools/stage_sidecar.py` with SHA-256 drift check, dependencies tauri/serde only, CSP `default-src 'self'`, UI reads `/api/health` + `/api/v1/capabilities` and nothing else. Ownership is explicit (`none|ours|external`) so a stop never touches a server this window did not start. Native compile and Xvfb walk completed in `huibuild` for HL-224; a `.deb` now builds (2026-11-16), client-only: it resolves a launcher and disables Start when none is usable.
 - [x] **HOST-002** First-run wizard: music folder, data folder, server name, admin account. Done 2026-11-12 — `desktop/host/setup.py` decides the four answers and resumes a half-finished run; `desktop/ui/wizard.js` asks them and `app.js` gates the shell on it; `wizard::server_env()` feeds the spawn plan so a start after the wizard needs no window restart. The admin account goes through the server's own one-shot account path, never a write from the window.
 - [x] **HOST-003** Start/stop the local server from the GUI. Closing the GUI must not be what stops a server that was already running. Done 2026-11-12 — one lifecycle, one child slot: `lifecycle_step` is the only command, `server_status` reads ownership from the same slot, and Quit calls the same `on_close` as the window close. `SIGTERM` with a 3-second grace; a server this window did not start is never signalled; `lifecycle.json` holds the close preference and the handoff record.
 - [x] **HOST-004** Two independent choices, not one mode switch: *run a local server on/off*, and *point the UI at local or remote*. Remote-only, with no local server, is a supported state. Done 2026-11-12 — `desktop/host/mode.py` models the two axes and `desktop/ui/mode.js` renders them; each handler moves only its own axis. Remembered in `localStorage`; the Rust side does not write `mode.json` yet, and the file says so.
@@ -336,72 +336,13 @@ still needs a bundle and an auth-mode decision.
 
 - [ ] **HL-224** Desktop app: bundle the compiled Tauri crate and close the desktop MVP gaps —
       installable package plus a decision on desktop authentication so the full served UI can be
-      exercised. Crate compiled and walked under Xvfb; no bundle exists yet.
-- [ ] **HL-225** Implement and validate the single OpenSubsonic player in the stack selected by
-      HL-220. The current source is Tauri + Svelte; no native app build or iOS device run is verified.
-      Linux build requires the Tauri/WebView development dependencies; iOS requires a macOS runner
-      and a checked-in build workflow/config. Acceptance: connect to HardlyListening and another
-      OpenSubsonic server; browse/search, play, queue and seek; verify background playback and
-      lock-screen/Bluetooth controls on device; safe credentials; no Repo acquisition surface.
-      Do not build a parallel Flutter client.
-- [x] **HL-226** PWA installable *with music offline* — done 2026-11-14. The shell, the last
-      library, the covers and the played audio are kept; eviction is announced and a kept row
-      says so. The install prompt and airplane-mode walk on a physical phone are a device
-      check, not a desktop emulation. Record in `BOARD.md`.
-- [x] **HL-227** Lyrics: word timing, an editor, vocal removal, fullscreen on a phone — done
-      2026-11-14. Enhanced LRC (`<mm:ss.xx>` per word) renders per word inside the existing line
-      highlight; line-timed and plain files are unchanged. A member's correction is stored against
-      the track and wins over sidecar and provider, so it survives a reload. Vocal removal is
-      refused by decision — it is DSP, not metadata. Fullscreen measured at 390×844. Record in
-      `BOARD.md`.
-- [x] **HL-228** DJ export as USB preparation — done 2026-11-14. The audio is written onto the drive
-      under `HardlyListening/` and verified by SHA-256 and size before it takes its real name; the plan
-      comes first and says what fits, what is missing and what needs converting; a pulled-out drive fails
-      the job with nothing reported as copied; the Rekordbox XML and M3U8 sit at the drive's root and name
-      the drive's paths, with `AverageBpm` and hot cues but **no key and no length** (never measured here).
-      A queued job, one in-process worker, state in SQLite. `docs/usb-export.md`, `BOARD.md`.
-- [x] **HL-229** Replacement retention — done 2026-11-14. A source change keeps the file it replaced
-      so a reverse can restore it; a window (`replacements_keep_days`, default 30, `0` = keep
-      everything) now decides when that keep has done its job. Past it the copy is collected, one log
-      line per file written before the unlink, the row is marked `pruned`, and `reverse` answers with
-      the date instead of failing on a missing file. The scratch directory each download used is
-      collected too — at once when empty, after the window when it still holds a failed download, and
-      never while a queued/downloading row points at it. Runs at boot and every six hours in one
-      daemon thread, and `POST /api/replacements/collect` runs it on demand. The disk ceiling still
-      purges the trash first: retention never takes an undo away early. `docs/replacement-retention.md`,
-      `BOARD.md`.
-- [x] **HL-230** Moving the library root: the swap history, the trash and their rows travel with
-      it. `.replacements/` (retained media + scratch directories) and `.trash/` move into the new
-      root and `source_replacements`/`library_trash` are rewritten against it, so an old replacement
-      still reverses and a deleted song still restores. Unique folder names mean the two trees merge
-      instead of overwriting, so a move that died halfway can be re-run. A destination inside the
-      current library is refused before anything moves (400 with the sentence), and a swap whose
-      previous file already lives outside the library is reported in `unserviceable` rather than
-      rewritten into a path that does not exist. `docs/replacement-retention.md`, `BOARD.md`.
-- [x] **HL-231** Third-party Subsonic compatibility, both directions, against recorded fixtures.
-      Thirteen real responses from the public Navidrome 0.64.2 demo (`tests/fixtures/subsonic/
-      navidrome-0.64.2/`, `manifest.json` provenance, SHA-256 per file, recorder issues only `GET`)
-      drive our SDK client over third-party JSON and judge our own server cell by cell:
-      envelope keys, extension list, JSON/XML agreement, form POST, error codes, pagination,
-      child fields, singular-key arrays, empty answers, a declared extension that answers, and
-      error 30 for what we refuse. `docs/subsonic-compatibility.md` is the matrix, one row per cell,
-      each naming its test. The recordings corrected two assumptions: a missing `id` is 70 on both
-      servers, and an empty `lyricsList` may omit `structuredLyrics` entirely. Found on the way:
-      `lyrics.lookup` left an `HTTPError` unclosed, and the suite now stubs the provider instead of
-      reaching LRCLIB. Limit: one third-party server, no real third-party client.
-- [x] **HL-232** Generic RSS/Atom follows — shipped. `providers/feed.py` follows any RSS/Atom feed
-      (identify by extension, last path segment or query), dedupes by id → guid → link, drops entry
-      bodies before storage, reports dead feeds as `FeedUnavailable`, and stays out of pages: it never
-      parses a page for links. `tests/test_feed_follow.py`, `docs/feeds.md`.
-- [x] **HL-233** BPM/sync: reconciled — the plan line was stale, not the feature. SYNC is a tempo
-      match (pitch percent, refused past ±8 %) and Auto DJ picks by BPM with a crossfade; both ship
-      and are pinned. Beat/phase alignment, MIDI clock and multi-speaker sync are absent and now
-      stated as such in `PLAN.md`; `tests/test_dj_sync_scope.cjs` fails if SYNC's scope changes
-      without the text following.
-- [x] **HL-234** Podcast storage: a pruning policy — shipped. Opt-in per channel (newest N / N days),
-      purged by the scheduler and before a download needs room, every removal audited in
-      `listening_podcast_prunes` and reported as `getPodcasts.storage.pruned`; pruned episodes keep their
-      row and can be downloaded again. `tests/test_podcast_prune.py`, `docs/podcast-retention.md`.
+      exercised. **2026-11-16:** the `.deb` builds and installs (`HardlyListening_0.1.0_amd64.deb`,
+      1.50 MiB) after fixing `beforeBuildCommand`, which pointed one directory too high — that wrong
+      path is why no bundle had ever been produced. The package is client-only by decision (no server
+      core): it resolves a launcher, accepts it only when `cli.py` is beside it, and disables Start
+      with the stated reason otherwise; the extracted package was walked under Xvfb and shows exactly
+      that. Open: the sidecar's in-bundle location and Stop-from-package are untested, and the full UI
+      on loopback still needs the desktop auth-mode decision.
 
 ## Removed — no longer applicable
 

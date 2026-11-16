@@ -369,11 +369,15 @@
       } else if (env.config_problem) {
         dispatch({ type: 'notice', text: env.config_problem + ' — using the defaults.', kind: 'warn' });
       }
+      /* The package ships no server core, so "no launcher" is the ordinary case for a bundle
+       * driving a container or a remote instance. Start is disabled below rather than left live:
+       * a button that spawns a launcher with no `cli.py` behind it fails silently. */
+      dispatch({ type: 'launcher', found: env.launcher_exists !== false });
       if (env.launcher_exists === false) {
         dispatch({
           type: 'notice',
-          text: 'No server launcher was found. Bundle bin/hardlylistening-server as the sidecar, ' +
-            'or set HARDLYLISTENING_SERVER to a checkout.',
+          text: env.launcher_problem || ('No local server was found to start. Set ' +
+            'HARDLYLISTENING_SERVER to a launcher, or install one at /opt/hardlylistening.'),
           kind: 'warn'
         });
       }

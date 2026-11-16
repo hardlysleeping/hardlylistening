@@ -77,7 +77,7 @@ cd desktop/src-tauri
 cargo tauri build
 ```
 
-`beforeBuildCommand` runs `python3 ../tools/stage_sidecar.py` first, which asks `rustc -vV` for
+`beforeBuildCommand` runs `python3 tools/stage_sidecar.py` first, which asks `rustc -vV` for
 the target triple and copies `bin/hardlylistening-server` to
 `src-tauri/bin/hardlylistening-server-<triple>` (byte-identical, `--check` verifies). Tauri
 resolves `externalBin` by that suffixed name; a copy without the suffix builds and then ships
@@ -94,16 +94,33 @@ What the bundle contains:
 
 ### What the bundle does *not* contain, and why that matters
 
-The launcher is a `sh` script whose only job is to `exec python3 cli.py "$@"`. So a bundled
-build **still needs a Python 3 on the target machine**, plus whatever the server itself needs to
-be useful (`yt-dlp`, `ffmpeg`, a media root). The window is not a self-contained application and
-this README will not pretend otherwise.
+**No server core.** The package is client-only by decision: containers and systemd own the
+server's lifecycle, and a second copy of the tree inside a `.deb` would be a second distribution
+channel for the same code. The launcher is a `sh` script whose only job is to
+`exec python3 cli.py "$@"`, so it can only start a server when the tree beside it is there.
 
-A future self-contained build would have to freeze the interpreter — PyInstaller/Nuitka
-one-file output, or an embedded CPython — and stage *that* as the sidecar instead of the script.
-That is a packaging change with a real cost (startup time, size, `ffmpeg`/`yt-dlp` still
-external) and it is not HOST-001. Until then, the honest install instructions are "install the
-server the way systemd or Docker does, then install the window".
+The window therefore searches for a launcher, in this order, and accepts one only when both the
+launcher and the `cli.py` beside it exist:
+
+1. `HARDLYLISTENING_SERVER` — an explicit path, honoured even when it turns out not to be usable,
+   so the failure can be reported instead of hidden;
+2. a system install at `/opt/hardlylistening/bin/hardlylistening-server`;
+3. the bundle's own sidecar locations;
+4. a development checkout, walked up from the binary.
+
+A miss is a supported state, not an error: the window drives a server it does not own — the VPS
+container, one started by systemd, or one started by Docker — and Start is disabled with the
+reason shown. `desktop/host/resolve.py` is the tested statement of this rule and
+`src-tauri/src/host.rs` mirrors it; `spawnable()` in both is what prevents a Start button that
+spawns a launcher and immediately dies on a `cli.py` that is not there.
+
+It is **not a self-contained application**: even once a launcher resolves, the server it starts
+still needs a Python 3 on the target machine, plus whatever the server needs to be useful
+(`yt-dlp`, `ffmpeg`, a media root).
+
+A self-contained build would have to freeze the interpreter — PyInstaller/Nuitka one-file output,
+or an embedded CPython — and ship the tree that launcher execs. That is a packaging change with a
+real cost (startup time, size, `ffmpeg`/`yt-dlp` still external) and it is not HOST-001.
 
 ## Address and configuration
 
@@ -211,9 +228,20 @@ What that does **not** cover, stated plainly:
   always failed; an exit warning stayed on screen after the server was up again; and a deliberate
   Stop was reported as "The local server exited." because only the `lifecycle` module was told
   about it. The last three now have guards that fail if the fix is removed.
-* **Bundling.** No `.deb`/AppImage has been produced, so the sidecar's location inside a bundle
-  is inferred (`resource_dir()`, the executable's directory) rather than measured. The search
-  order in `host.rs` is explicit for that reason; a miss is reported to the window.
+* **Bundling.** A `.deb` is produced (`tauri build --bundles deb`, 1.50 MiB,
+  `Depends: libwebkit2gtk-4.1-0, libgtk-3-0`) and its contents were checked: the window binary,
+  the launcher byte-identical to `bin/hardlylistening-server`, the `.desktop` entry, the icons and
+  `/usr/lib/HardlyListening/host/`. It ships no server core, so on an installed system the window
+  is a client until a launcher resolves; that is the decision above, not a gap. The build only
+  worked after `beforeBuildCommand` was corrected (it pointed one directory above the tree).
+* **The packaged window, rendered.** The extracted `.deb` was run under Xvfb with
+  `GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1
+  WEBKIT_DISABLE_DMABUF_RENDERER=1` — without the last two, WebKitGTK creates no mapped window
+  and the root capture is blank, which is what earlier runs saw. The shell renders with
+  **Start local server disabled** and the notice "No usable local server was found to start…",
+  exactly the client-only state described above. **Not proven:** the sidecar's in-bundle location
+  is still inferred rather than exercised (the package has no core for it to find), and Stop on a
+  server this window spawned is untested from the package.
 * **The full served UI on a loopback install.** `HARDLYLISTENING_AUTH_REQUIRED=0` serves `/` and
   `/api/state`, but every member-scoped route (`/api/listening/*`, `/api/genres`) answers
   `503 Authentication is not configured`, because `Security.authenticate` needs an https

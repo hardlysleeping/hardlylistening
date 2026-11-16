@@ -26,7 +26,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 
 #: The packaged entry point, relative to the application root. Same name systemd's
 #: `ExecStart` and the Dockerfile's `CMD` use.
@@ -75,6 +75,72 @@ def launcher(env: Mapping[str, str] | None = None, app: Path | None = None) -> P
     if declared:
         return Path(declared).expanduser()
     return app_dir(app) / LAUNCHER_RELATIVE
+
+
+#: Where a system install puts the same launcher (`deploy/`, SERVER-PKG-006). The desktop does
+#: not ship a server core of its own: it drives the one this machine already runs, and the
+#: container deployment means there may be no local server at all.
+INSTALL_ROOT = Path('/opt') / 'hardlylistening'
+
+
+def app_root_of(launcher_path: Path) -> Path:
+    """The directory whose `cli.py` a launcher execs: one level above its own `bin/`."""
+    return launcher_path.parent.parent
+
+
+def spawnable(launcher_path: Path) -> bool:
+    """Whether spawning this launcher would actually reach a server.
+
+    The launcher is four lines of `sh`: it resolves `$(dirname "$0")/..` and execs
+    `cli.py` from there. A copy without that tree beside it — which is exactly what a bundle
+    that ships the sidecar but no core produces, `/usr/bin/hardlylistening-server` wanting
+    `/usr/cli.py` — starts, fails, and leaves the window with a Start button that does nothing.
+    So a candidate counts only when both files are there.
+    """
+    return launcher_path.is_file() and (app_root_of(launcher_path) / 'cli.py').is_file()
+
+
+def resolve_launcher(env: Mapping[str, str] | None = None,
+                     checkout: Path | None = None,
+                     bundled: Sequence[Path] = ()) -> Path | None:
+    """The shell's search order, in the order that makes a miss explainable.
+
+    1. `HARDLYLISTENING_SERVER` — an explicit choice always wins, and is used even if it turns
+       out not to be spawnable: the person naming a path is entitled to see why it failed
+       rather than have the window silently pick another.
+    2. A system install at `/opt/hardlylistening/bin/`.
+    3. The bundle's own sidecar locations, in the order the target's layout puts them.
+    4. A development checkout (walked up from the binary by the caller).
+
+    `None` means "no local server", which is a supported state, not a failure: the window then
+    drives a server it does not own — the VPS instance, or one started by systemd or Docker.
+    """
+    env = os.environ if env is None else env
+    declared = (env.get('HARDLYLISTENING_SERVER') or '').strip()
+    if declared:
+        return Path(declared).expanduser()
+    installed = INSTALL_ROOT / LAUNCHER_RELATIVE
+    if spawnable(installed):
+        return installed
+    # Tauri's bundle layout differs per target — the binary lands beside the app or in a `bin/`
+    # under it — so both shapes are checked, in that order, exactly as `host.rs` does.
+    for root in bundled:
+        for candidate in (Path(root) / LAUNCHER_NAME, Path(root) / LAUNCHER_RELATIVE):
+            if spawnable(candidate):
+                return candidate
+    if checkout is not None:
+        candidate = Path(checkout) / LAUNCHER_RELATIVE
+        if spawnable(candidate):
+            return candidate
+    return None
+
+
+#: What the window says when the search above finds nothing. One sentence, with the two ways out.
+#: It also covers a `HARDLYLISTENING_SERVER` that names a file without a server behind it: that
+#: counts as no local server, because spawning it would fail the same way.
+NO_LAUNCHER = ('No usable local server was found to start. Point HARDLYLISTENING_SERVER at a '
+               'launcher that has cli.py beside it, or install one at /opt/hardlylistening; '
+               'until then this window can drive only a server it does not own.')
 
 
 def sidecar_filename(triple: str) -> str:
@@ -350,13 +416,15 @@ def resolve(env: Mapping[str, str] | None = None, app: Path | None = None,
     """
     env = os.environ if env is None else env
     config = Path(path) if path is not None else config_path(env)
-    server = launcher(env, app)
+    server = resolve_launcher(env, checkout=app_dir(app))
+    usable = server is not None and spawnable(server)
     stored, problem = read_config(config)
     return {
         'app_dir': str(app_dir(app)),
-        'launcher': str(server),
-        'launcher_exists': server.is_file(),
-        'launcher_executable': server.is_file() and os.access(server, os.X_OK),
+        'launcher': str(server) if server is not None else None,
+        'launcher_exists': usable,
+        'launcher_problem': None if usable else NO_LAUNCHER,
+        'launcher_executable': usable and os.access(server, os.X_OK),
         'address': address(env, config),
         'config_path': str(config),
         'config_problem': problem,

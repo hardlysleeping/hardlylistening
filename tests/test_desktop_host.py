@@ -57,8 +57,15 @@ def load_resolve():
 resolve = load_resolve()
 
 
+#: Build output, not source. `target/` holds generated Rust artefacts that embed the build
+#: machine's paths, so scanning it would flag the compiler's own output as a privacy leak.
+BUILD_DIRS = {'target', 'node_modules', 'dist', '.git'}
+
+
 def text_files(root):
     for path in sorted(root.rglob('*')):
+        if any(part in BUILD_DIRS for part in path.relative_to(root).parts):
+            continue
         if path.is_file() and path.suffix in TEXT_SUFFIXES:
             yield path
 
@@ -134,6 +141,12 @@ class TauriConfig(unittest.TestCase):
         self.assertEqual(launcher.name, (APP_DIR / 'bin' / resolve.LAUNCHER_NAME).name)
         # The bundle builds the staged copy itself, from that same file.
         self.assertIn('stage_sidecar.py', self.conf['build']['beforeBuildCommand'])
+        # ...and the command has to actually resolve: Tauri runs it from `desktop/`, and a wrong
+        # relative path fails the build before any bundling happens (it pointed at
+        # `../tools/stage_sidecar.py`, one level above the tree, so no bundle could be produced).
+        script = self.conf['build']['beforeBuildCommand'].split()[-1]
+        self.assertTrue((DESKTOP / script).is_file(),
+                        f'beforeBuildCommand names {script}, which is not under desktop/')
 
     def test_the_icon_list_names_files_that_exist(self):
         icons = self.conf['bundle']['icon']
@@ -296,13 +309,15 @@ class TheReadmeIsHonest(unittest.TestCase):
             self.assertIn(page, self.text)
 
     def test_it_states_what_could_not_be_verified(self):
-        # This used to pin "the Rust has never seen a compiler", which was true and then stopped
-        # being true: HOST-001's crate builds in the `huibuild` distrobox and a release binary
-        # was walked under Xvfb. Pinning the old apology would have made the README dishonest in
-        # the other direction, so the test now pins the two limitations that are still real —
-        # where it compiles, and that nothing has been bundled.
+        # This has been rewritten twice, each time because the honest limitation changed: first
+        # "the Rust has never seen a compiler", then "no `.deb` has been produced". Both stopped
+        # being true. The test pins what is still unverified — that a window was actually mapped,
+        # that the sidecar's in-bundle location has been exercised — rather than an old apology.
         self.assertRegex(self.text, r'(?i)compiled there|compiles only')
-        self.assertRegex(self.text, r'(?i)no `\.deb`/appimage has been produced')
+        self.assertRegex(self.text, r'(?i)a `\.deb` is produced')
+        self.assertRegex(self.text, r'(?i)not proven')
+        self.assertRegex(self.text, r'(?i)start local server disabled')
+        self.assertRegex(self.text, r'(?i)xvfb')
         self.assertRegex(self.text, r'(?i)webview')
 
 
@@ -497,6 +512,79 @@ class LauncherResolution(unittest.TestCase):
         self.assertEqual(resolve.target_triple('linux', 'x86_64'), 'x86_64-unknown-linux-gnu')
         self.assertEqual(resolve.target_triple('darwin', 'arm64'), 'aarch64-apple-darwin')
         self.assertIsNone(resolve.target_triple('sunos', 'sparc'))
+
+
+class LauncherDiscovery(unittest.TestCase):
+    """The client-only search order, and the rule that keeps Start honest.
+
+    A launcher is four lines of `sh` that exec `cli.py` one directory up. The deb that shipped
+    only `/usr/bin/hardlylistening-server` produced exactly the failure this class exists to
+    prevent: a file that exists, spawns, and immediately dies on `/usr/cli.py`.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self._install_root = resolve.INSTALL_ROOT
+        resolve.INSTALL_ROOT = self.root / 'opt' / 'hardlylistening'
+
+    def tearDown(self):
+        resolve.INSTALL_ROOT = self._install_root
+        self._tmp.cleanup()
+
+    def _tree(self, *parts, cli=True):
+        """A launcher at `<root>/bin/hardlylistening-server`, optionally with its `cli.py`."""
+        root = self.root.joinpath(*parts)
+        (root / 'bin').mkdir(parents=True, exist_ok=True)
+        launcher = root / 'bin' / resolve.LAUNCHER_NAME
+        launcher.write_text('#!/bin/sh\nexec python3 "$(dirname "$0")/../cli.py" "$@"\n')
+        launcher.chmod(0o755)
+        if cli:
+            (root / 'cli.py').write_text('# server\n')
+        return launcher
+
+    def test_a_launcher_without_the_core_beside_it_is_not_spawnable(self):
+        lonely = self._tree('usr', cli=False)
+        self.assertTrue(lonely.is_file())
+        self.assertFalse(resolve.spawnable(lonely),
+                         'exists but execs a cli.py that is not there — the deb defect')
+        self.assertTrue(resolve.spawnable(self._tree('good')))
+
+    def test_an_explicit_launcher_wins_even_when_it_is_not_spawnable(self):
+        chosen = self.root / 'elsewhere' / 'my-server'
+        found = resolve.resolve_launcher({'HARDLYLISTENING_SERVER': str(chosen)})
+        self.assertEqual(found, chosen, 'a named path is honoured so the failure can be reported')
+
+    def test_the_system_install_is_found_when_its_core_is_present(self):
+        installed = self._tree(resolve.INSTALL_ROOT.relative_to(self.root))
+        self.assertEqual(resolve.resolve_launcher({}), installed)
+
+    def test_a_system_install_without_its_core_is_skipped(self):
+        self._tree(resolve.INSTALL_ROOT.relative_to(self.root), cli=False)
+        self.assertIsNone(resolve.resolve_launcher({}), 'no usable launcher, so a miss')
+
+    def test_a_bundled_sidecar_counts_only_with_its_core(self):
+        bundle = self.root / 'bundle'
+        lonely = self._tree(bundle, cli=False)
+        self.assertEqual(resolve.resolve_launcher({}, bundled=[bundle]), None)
+        (bundle / 'cli.py').write_text('# server\n')
+        self.assertEqual(resolve.resolve_launcher({}, bundled=[bundle]), lonely)
+
+    def test_a_checkout_is_the_last_resort(self):
+        self._tree('checkout')
+        expected = self.root / 'checkout' / 'bin' / resolve.LAUNCHER_NAME
+        self.assertEqual(resolve.resolve_launcher({}, checkout=self.root / 'checkout'), expected)
+
+    def test_a_miss_is_none_with_a_sentence_that_names_both_ways_out(self):
+        self.assertIsNone(resolve.resolve_launcher({}))
+        self.assertIn('HARDLYLISTENING_SERVER', resolve.NO_LAUNCHER)
+        self.assertIn('/opt/hardlylistening', resolve.NO_LAUNCHER)
+
+    def test_the_probe_payload_reports_the_miss_instead_of_a_path(self):
+        payload = resolve.resolve({'HARDLYLISTENING_SERVER': str(self.root / 'absent')},
+                                  path=self.root / 'host.json')
+        self.assertFalse(payload['launcher_exists'])
+        self.assertEqual(payload['launcher_problem'], resolve.NO_LAUNCHER)
 
 
 if __name__ == '__main__':

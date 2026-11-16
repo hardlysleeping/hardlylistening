@@ -1324,12 +1324,26 @@ selected stack. The client connects to HardlyListening and another OpenSubsonic 
 searches, plays, queues and seeks; stores credentials safely; optionally supports Social; and
 contains no Repo acquisition surface. Do not build parallel Tauri and Flutter clients.
 
-**Desktop MVP:** install, choose music folder and data folder, create the admin account, start,
-use the full UI, enable OpenSubsonic, enable LAN, quit and reopen with settings intact — no terminal.
-The crate compiled and was walked under Xvfb for **HL-224**, but this gate is not met: no
-installable bundle exists and the full served UI still needs an auth-mode decision. The **Player
-MVP** gate remains unproven (**HL-220/HL-225**): the Svelte/Tauri source passes its own suite, but
-that does not establish a native app build, iOS background playback or media controls.
+**Desktop MVP:** install, connect to a local or remote instance — a wizard when a local server is
+present, a remote address otherwise — use the full UI, enable OpenSubsonic, enable LAN, quit and
+reopen with settings intact — no terminal. **The package is client-only by decision (2026-11-16):**
+it ships no server core, because containers and systemd own the server's lifecycle and a second
+copy inside a `.deb` would be a second distribution channel for the same code. The window resolves
+a launcher (`HARDLYLISTENING_SERVER` → `/opt/hardlylistening/bin/` → the bundle's own sidecar → a
+development checkout) and offers Start/Stop only when spawning it would actually reach a server;
+otherwise it is a client for a server it does not own and says why Start is unavailable, which is
+the ordinary case for a bundle driving the VPS container. **HL-224 (2026-11-16):** the `.deb` now
+builds and installs (`HardlyListening_0.1.0_amd64.deb`), and the resolution rule is proven in
+`desktop/host/resolve.py` and in the Rust mirror (`spawnable`), so the old "spawn a launcher whose
+`cli.py` is missing" failure cannot recur silently. The extracted package was run under Xvfb
+(`GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1
+WEBKIT_DISABLE_DMABUF_RENDERER=1`): the shell renders, finds the local instance answering on
+8470 and marks it external ("Running (started elsewhere)"), and Start is **disabled** with "No
+usable local server was found to start…". This gate is **not yet met end to end**: the full served
+UI on loopback still needs the desktop auth-mode decision, and Stop on a server the window spawned
+is untested from the package. The **Player MVP** gate remains unproven (**HL-220/HL-225**):
+the Svelte/Tauri source passes its own suite, but that does not establish a native app build, iOS
+background playback or media controls.
 Both choices are independent: running a local server on/off, and pointing the UI at a local or a
 remote server — including a remote-only client with no local server running.
 

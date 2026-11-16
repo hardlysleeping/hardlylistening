@@ -52,6 +52,24 @@ const HEALTHY = { ok: true, version: "0.16.6" };
         view.buttons.stop.hint);
 }
 
+// ---- no local server: Start is refused with a reason, the window still runs ----
+{
+  const missing = run(fresh(), { type: "launcher", found: false });
+  const view = Host.view(missing);
+  check("a missing launcher disables Start", !view.buttons.start.enabled);
+  check("a missing launcher says why, and what to do",
+        /No local server was found/.test(view.buttons.start.hint),
+        view.buttons.start.hint);
+  check("a missing launcher does not disable Stop on its own",
+        !view.buttons.stop.enabled);
+
+  /* A launcher that turns up later (systemd started one, or the profile changed) re-arms Start:
+   * the flag is a report from the last probe, not a permanent verdict. */
+  const found = run(missing, { type: "launcher", found: true });
+  check("Start comes back when a launcher is found", Host.view(found).buttons.start.enabled);
+  check("the missing-launcher hint is gone", !/No local server/.test(Host.view(found).buttons.start.hint));
+}
+
 // ---- unknown → up → down -------------------------------------------------
 {
   const up = run(fresh(), { type: "probe", owned: false, health: HEALTHY });

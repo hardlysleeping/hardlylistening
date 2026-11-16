@@ -98,7 +98,8 @@ Suite: `node tests/test_host_mode.cjs` 123 checks (was 94), `test_desktop_state`
 `cargo test --release` 2 passed, `rustfmt --check` clean; `python3 -m unittest` over the seven host
 modules 260 tests OK; `snap.cjs` Visual baseline PASS. `tests/test_desktop_host.py` had pinned the
 old README line "the Rust has never seen a compiler" — true in HL-224, false since — so it now pins
-where the crate compiles and that no bundle exists.
+where the crate compiles, that a `.deb` is produced, and what is still not proven (a spawned
+server's Stop from the package, the sidecar's in-bundle location).
 
 **Still open, plainly.** How a remote target may be *checked* is a decision this card does not make:
 a TLS client in the crate, `connect-src` plus CORS on the server, or an explicit *Check the remote*

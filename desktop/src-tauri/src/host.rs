@@ -21,6 +21,11 @@ pub const LAUNCHER_NAME: &str = "hardlylistening-server";
 pub const DEFAULT_HOST: &str = "127.0.0.1";
 pub const DEFAULT_PORT: u16 = 8470;
 
+/// Where a system install puts the same launcher (`deploy/`, SERVER-PKG-006). The desktop ships
+/// no server core of its own: containers and systemd own the server's lifecycle, and this window
+/// drives whichever server this machine already runs.
+pub const INSTALL_ROOT: &str = "/opt/hardlylistening";
+
 const CONFIG_DIR: &str = "hardlylistening-desktop";
 const CONFIG_FILE: &str = "host.json";
 
@@ -236,7 +241,9 @@ fn bundled(app: &tauri::AppHandle) -> Option<PathBuf> {
     }
     for root in roots {
         for candidate in [root.join(&name), root.join(LAUNCHER_NAME)] {
-            if candidate.is_file() {
+            // `spawnable`, not `is_file`: a sidecar whose `cli.py` is absent cannot start
+            // anything, and returning it would hand the window a Start button that fails.
+            if spawnable(&candidate) {
                 return Some(candidate);
             }
         }
@@ -246,11 +253,14 @@ fn bundled(app: &tauri::AppHandle) -> Option<PathBuf> {
 
 /// A development run: walk up from the binary looking for a checkout (`bin/` beside `web/`).
 /// No build-machine path is compiled in — a release bundle simply finds nothing here.
+///
+/// `cli.py` is the file the launcher execs, so it is the one that has to be beside `bin/`;
+/// checking for `server.py` instead accepted a tree the launcher could not actually run.
 fn dev_launcher() -> Option<PathBuf> {
     let mut dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     for _ in 0..6 {
         let candidate = dir.join("bin").join(LAUNCHER_NAME);
-        if candidate.is_file() && dir.join("server.py").is_file() {
+        if candidate.is_file() && dir.join("cli.py").is_file() {
             return Some(candidate);
         }
         dir = dir.parent()?.to_path_buf();
@@ -258,11 +268,50 @@ fn dev_launcher() -> Option<PathBuf> {
     None
 }
 
+/// Whether spawning this launcher would actually reach a server.
+///
+/// The launcher is four lines of `sh`: it resolves `$(dirname "$0")/..` and execs `cli.py` from
+/// there. A copy without that tree beside it — exactly what a bundle that ships the sidecar but
+/// no core produces, `/usr/bin/hardlylistening-server` wanting `/usr/cli.py` — starts, fails, and
+/// leaves the window with a Start button that does nothing. So a candidate counts only when both
+/// files are there. Mirror of `resolve.spawnable`.
+fn spawnable(launcher: &Path) -> bool {
+    match launcher.parent().and_then(Path::parent) {
+        Some(root) => launcher.is_file() && root.join("cli.py").is_file(),
+        None => false,
+    }
+}
+
 pub fn launcher(app: &tauri::AppHandle) -> Option<PathBuf> {
     if let Some(declared) = env_text("HARDLYLISTENING_SERVER") {
         return Some(PathBuf::from(declared));
     }
+    let installed = Path::new(INSTALL_ROOT).join("bin").join(LAUNCHER_NAME);
+    if spawnable(&installed) {
+        return Some(installed);
+    }
     bundled(app).or_else(dev_launcher)
+}
+
+/// Whether the resolved launcher can actually start a server. A path that exists but has no
+/// `cli.py` behind it is not usable, and `launcher_exists` has to say so — that is the deb defect.
+pub fn launcher_exists(app: &tauri::AppHandle) -> bool {
+    launcher(app).is_some_and(|path| spawnable(&path))
+}
+
+/// Why no local server was found, in one sentence, or `None` when one was.
+///
+/// "No local server" is a supported state — the window drives the VPS instance, one started by
+/// systemd, or a container. The sentence names both ways to give it one.
+pub fn launcher_problem(app: &tauri::AppHandle) -> Option<&'static str> {
+    match launcher(app) {
+        Some(path) if spawnable(&path) => None,
+        _ => Some(
+            "No usable local server was found to start. Point HARDLYLISTENING_SERVER at a \
+             launcher that has cli.py beside it, or install one at /opt/hardlylistening; until \
+             then this window can drive only a server it does not own.",
+        ),
+    }
 }
 
 /// Where `addresses.py` lives: an override, the bundle's resources, then a development
@@ -291,4 +340,46 @@ pub fn detector(app: &tauri::AppHandle) -> Option<PathBuf> {
         .into_iter()
         .map(|root| root.join("addresses.py"))
         .find(|candidate| candidate.is_file())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::spawnable;
+    use std::path::{Path, PathBuf};
+
+    /// The repository root, from this crate's manifest directory. Compile-time only: no path is
+    /// written into the release binary, and nothing here writes a file.
+    fn repo() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .canonicalize()
+            .expect("the checkout is present")
+    }
+
+    /// The positive half: the canonical launcher with its `cli.py` beside it.
+    #[test]
+    fn the_checkout_launcher_is_spawnable() {
+        let launcher = repo().join("bin").join(super::LAUNCHER_NAME);
+        assert!(launcher.is_file(), "the canonical launcher is in the tree");
+        assert!(spawnable(&launcher));
+    }
+
+    /// The deb defect, in the cheapest honest form: a file that exists, whose application root
+    /// has no `cli.py`. The package shipped `/usr/bin/hardlylistening-server` wanting
+    /// `/usr/cli.py`, so every spawn died after Start had already claimed it had started.
+    #[test]
+    fn a_launcher_without_its_core_is_not_spawnable() {
+        let source = repo().join("desktop").join("src-tauri").join("Cargo.toml");
+        assert!(
+            source.is_file(),
+            "an existing file with no cli.py at its root"
+        );
+        assert!(!spawnable(&source));
+    }
+
+    #[test]
+    fn a_path_that_does_not_exist_is_not_spawnable() {
+        assert!(!spawnable(&repo().join("bin").join("not-a-launcher")));
+    }
 }
