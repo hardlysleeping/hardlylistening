@@ -74,7 +74,7 @@ class PublishRoute(unittest.TestCase):
                     os.environ.get("HARDLYLISTENING_FUNKWHALE_TOKEN"))
         os.environ["HARDLYLISTENING_AUTH_REQUIRED"] = "1"
         os.environ["HARDLYLISTENING_PUBLIC_ORIGIN"] = "https://music.example"
-        server.SECURITY.config = lambda: ("", "", "https://music.example")
+        server.SECURITY.config = lambda handler=None: ("", "", "https://music.example")
         server.SECURITY.csrf = lambda handler: None
         # The route's own bucket (5 a minute) would make a suite of one-shot uploads flaky;
         # the limiter itself is exercised by its own tests.

@@ -103,8 +103,8 @@ server's Stop from the package, the sidecar's in-bundle location).
 
 **Still open, plainly.** How a remote target may be *checked* is a decision this card does not make:
 a TLS client in the crate, `connect-src` plus CORS on the server, or an explicit *Check the remote*
-button. Until one is chosen a remote card can only say it was not asked. And the desktop install's
-auth mode — the reason "use the full UI" is unreachable on loopback — is still the owner's call.
+button. Until one is chosen a remote card can only say it was not asked. The desktop install's
+auth mode stopped being open the same day: see the 2026-11-16 entry below.
 
 ## HL-224: the desktop shell compiles, and running it found five things — 2026-11-14
 
@@ -153,7 +153,7 @@ member-scoped route (`/api/listening/*`, `/api/genres`) returns `503 Authenticat
 configured`, because `Security.authenticate` needs an https `HARDLYLISTENING_PUBLIC_ORIGIN` and a
 `__Host-` cookie that plain http forbids. That is documented behaviour (`docs/api-v1.md`), not a
 desktop bug — but it means the Desktop MVP needs a decision this card cannot make: which auth mode
-a desktop install runs in.
+a desktop install runs in. (Made the next day, 2026-11-16 — entry below.)
 
 Suite on this build: `node tests/test_desktop_state.cjs` 55, `test_host_wizard` 92,
 `test_host_address` 44, `test_host_mode` 94, `test_host_settings` 64, `test_host_lifecycle` 69
@@ -4367,3 +4367,34 @@ modules) and untouched here.
 What a test cannot settle, stated plainly: whether a real head unit redraws the artwork or keeps
 playing. There is no iPhone and no BMW in this tree. What is pinned is what the page publishes and
 what the server answers; `docs/player/playback.md` now says so in those words.
+## The loopback install signs in — 2026-11-16
+
+The desktop's last open decision, made where it belongs — in the server (`core/security.py`), so
+every client gets it at once. With **no** `HARDLYLISTENING_PUBLIC_ORIGIN` configured, a request is
+authenticated when it is *provably* local: the socket peer is loopback, the `Host` header names
+loopback, and no proxy or forwarding header is present (`CF-Connecting-IP`, `X-Forwarded-*`,
+`Forwarded`). Such a request is served as `http://127.0.0.1:<port>` and its session travels as a
+plain `hl_session` cookie — the `__Host-` prefix is a promise about an https origin, and its
+protection (no subdomain can mint a parent-domain cookie) does not exist on a single-name loopback
+origin anyway. A configured `https` origin keeps `__Host-`+`Secure` everywhere, including for the
+dev convenience of opening the same server on 127.0.0.1.
+
+Why the three checks together: every real tunnel or reverse proxy connects to the server *from*
+loopback, so the socket peer alone proves nothing. The `Host` check rejects what tunnels actually
+forward (the public name), and the header check rejects proxies that connect from loopback. For a
+stranger to get past all three, the operator would have to configure their own proxy to rewrite
+`Host` and strip forwarding headers — at that point the operator has claimed "treat these as
+local", and no code can second-guess a deliberate configuration.
+
+Proven live on a fresh install with no origin configured: `auth_admin.py` recovery (it now states
+its own loopback eligibility, which it must, being the terminal-only tool), invite →
+`POST /api/auth/session` → 200 with `Set-Cookie: hl_session=…; Path=/; HttpOnly; SameSite=Lax` →
+`GET /api/state` 200; the same cookie arriving with `X-Forwarded-For` → 503; a public `Host:` →
+503; `/login` → 200. Suite: full `python3 -m unittest discover` **1780 tests OK**, including 3 new
+loopback-mode HTTP tests and the 503-tunnel test; three test stubs of `Security.config` updated to
+carry the handler the signature now takes.
+
+Documented limit: invite links minted on a loopback install point at `127.0.0.1` — the person at
+the machine can use them, another device cannot, and that is what a public origin is for. Cookies
+written by every flow (session, signup, OAuth, party) follow the same rule, so no flow silently
+breaks on one side.

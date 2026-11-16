@@ -242,13 +242,16 @@ What that does **not** cover, stated plainly:
   exactly the client-only state described above. **Not proven:** the sidecar's in-bundle location
   is still inferred rather than exercised (the package has no core for it to find), and Stop on a
   server this window spawned is untested from the package.
-* **The full served UI on a loopback install.** `HARDLYLISTENING_AUTH_REQUIRED=0` serves `/` and
-  `/api/state`, but every member-scoped route (`/api/listening/*`, `/api/genres`) answers
-  `503 Authentication is not configured`, because `Security.authenticate` needs an https
-  `HARDLYLISTENING_PUBLIC_ORIGIN` and a session cookie that `__Host-` forbids over plain http.
-  That is documented behaviour (`docs/api-v1.md`), not a desktop bug, but it means "use the full
-  UI" is unreachable from a loopback first run until the auth mode for a desktop install is
-  chosen.
+* **The full served UI on a loopback install.** This was the desktop's last open decision, and
+  it was made on the server side (2026-11-16): a deployment with **no** `PUBLIC_ORIGIN` now
+  authenticates a request that is *provably* local — loopback socket peer, loopback `Host`
+  header, and no proxy or forwarding header — and signs it in with a plain `hl_session` cookie.
+  A tunnel or reverse proxy fails those checks together (it connects from loopback but forwards
+  the public `Host` and adds `X-Forwarded-*`), so an exposed server never looks local, and a
+  configured `https` origin keeps `__Host-`+`Secure` everywhere. Proven live: invite →
+  `hl_session` cookie → `/api/state` 200, and the same cookie with `X-Forwarded-For` → 503.
+  Still true and unchanged: a *remote* device needs a real https origin, and invite links minted
+  on a loopback install point at `127.0.0.1` — useless to anyone else.
 * **WebView behaviour beyond that walk.** CSP, `withGlobalTauri` and the `xdg-open` handoff were
   exercised only as far as the screenshots show; `tests/test_desktop_state.cjs` still runs the
   state logic in Node, not in a WebView.

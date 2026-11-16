@@ -17,6 +17,10 @@ from dataclasses import dataclass, field
 
 #: The session cookie `security.py` authenticates, and `server.py` expires on sign-out.
 SESSION_COOKIE = '__Host-hl_session'
+#: The same session on a provably local origin: the `__Host-` prefix is a promise about an
+#: https origin, so `core/security.py` drops it there. Parsing accepts either name, and a
+#: parsed session answers with the name the browser actually held.
+SESSION_COOKIE_LOOPBACK = 'hl_session'
 
 
 @dataclass(frozen=True)
@@ -28,21 +32,22 @@ class Session:
     """
 
     cookie: str = field(default='', repr=False)
+    name: str = field(default=SESSION_COOKIE, repr=False)
 
     @classmethod
-    def from_cookie(cls, value):
+    def from_cookie(cls, value, name=SESSION_COOKIE):
         """From the cookie's value, as sign-in answered it."""
-        return cls(cookie=str(value or ''))
+        return cls(cookie=str(value or ''), name=str(name or SESSION_COOKIE))
 
     @classmethod
     def from_cookie_header(cls, header):
         """From a `Cookie:` header a browser already holds; an absent name is an empty session."""
         for part in str(header or '').split(';'):
             name, _, value = part.strip().partition('=')
-            if name == SESSION_COOKIE:
-                return cls(cookie=value)
+            if name in (SESSION_COOKIE, SESSION_COOKIE_LOOPBACK):
+                return cls(cookie=value, name=name)
         return cls()
 
     def header(self):
         """The one header this session contributes, or nothing when there is no cookie."""
-        return {'Cookie': f'{SESSION_COOKIE}={self.cookie}'} if self.cookie else {}
+        return {'Cookie': f'{self.name}={self.cookie}'} if self.cookie else {}

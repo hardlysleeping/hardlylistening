@@ -374,7 +374,8 @@ def dispatch(handler, store, security):
     """Member-only JSON API: GET/POST /api/shares, DELETE /api/shares/<id>."""
     schema(store)
     # A party guest bears only the party cookie; that is not a member account.
-    if security.cookie(handler, '__Host-hl_party') and not security.cookie(handler, '__Host-hl_session'):
+    if security.cookie(handler, security.cookie_name(handler, '__Host-hl_party')) \
+            and not security.cookie(handler, security.cookie_name(handler, '__Host-hl_session')):
         raise Denied(403, 'Guests cannot create or manage shares')
     member = security.authenticate(handler, store)
     path = urlparse(handler.path).path

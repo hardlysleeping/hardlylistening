@@ -82,8 +82,11 @@ client.like('track', '7', page.comments[0].id)   # toggles; there is no unlike r
 `social.album_id` produces. Neither is validated here — the server answers `400` or `404`, and
 `sdk.social.NotFound` is how that arrives.
 
-A write needs the member's browser session: the `__Host-hl_session` cookie value, plus the
-`Origin` header `security.csrf` compares against `Host`. Both travel in headers, never in a URL;
+A write needs the member's browser session: the session cookie value — `__Host-hl_session` on a
+deployment with a public origin, plain `hl_session` on one served as `http://127.0.0.1:<port>` by
+the loopback rule in `core/security.py` — plus the `Origin` header `security.csrf` compares against
+`Host`. `Session.from_cookie_header` and `header()` accept either name and answer with the one the
+browser actually held. Both travel in headers, never in a URL;
 nothing is stored, and no message the module raises carries either. Between them, the refusals say
 what happened: `Unavailable` when the capability document does not advertise the flag,
 `SignInRequired` for a missing or expired session, `RateLimited` with `retry_after` for a spent

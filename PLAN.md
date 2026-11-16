@@ -1339,9 +1339,15 @@ builds and installs (`HardlyListening_0.1.0_amd64.deb`), and the resolution rule
 (`GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1
 WEBKIT_DISABLE_DMABUF_RENDERER=1`): the shell renders, finds the local instance answering on
 8470 and marks it external ("Running (started elsewhere)"), and Start is **disabled** with "No
-usable local server was found to start…". This gate is **not yet met end to end**: the full served
-UI on loopback still needs the desktop auth-mode decision, and Stop on a server the window spawned
-is untested from the package. The **Player MVP** gate remains unproven (**HL-220/HL-225**):
+usable local server was found to start…". The gate's last open decision —
+authentication for a loopback install — was made on the server side (2026-11-16): with no
+`PUBLIC_ORIGIN` configured, a provably local request (loopback peer, loopback `Host`, no
+forwarding headers) is served as `http://127.0.0.1:<port>` and signs in with a plain
+`hl_session` cookie; a tunnel fails those checks together, and a configured https origin keeps
+`__Host-`+`Secure`. Proven live end to end (invite → cookie → `/api/state` 200, the same cookie
+delivered the way a tunnel does → 503). What keeps this gate from "met": the window-in-browser
+walk (sign-in → full UI → quit/reopen) has not been driven from the packaged app itself, and Stop
+on a server the window spawned is untested from the package. The **Player MVP** gate remains unproven (**HL-220/HL-225**):
 the Svelte/Tauri source passes its own suite, but that does not establish a native app build, iOS
 background playback or media controls.
 Both choices are independent: running a local server on/off, and pointing the UI at a local or a

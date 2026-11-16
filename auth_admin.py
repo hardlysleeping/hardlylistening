@@ -12,7 +12,13 @@ def main():
     g.add_argument('--member-id', help='Issue a recovery invite for an existing administrator')
     args = p.parse_args()
     sec = Security()
-    sec.config()
+
+    class Local:
+        """The CLI is by definition the local operator: loopback eligibility, stated as a request."""
+        headers = {'Host': '127.0.0.1'}
+        client_address = ('127.0.0.1', 0)
+
+    sec.config(Local())
     from pathlib import Path
     if not Path(args.db).is_file():
         p.error('Database must already exist')
@@ -26,7 +32,7 @@ def main():
             uid = args.member_id
         else:
             uid = sec.create_user(store, actor, args.name, 'admin')
-        print(sec.invite(store, actor, uid))
+        print(sec.invite(store, actor, uid, handler=Local()))
     finally:
         store.conn.close()
 

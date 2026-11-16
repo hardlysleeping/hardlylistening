@@ -67,7 +67,7 @@ class Gate:
                 return False
             # Temporary party credentials NEVER enable the legacy local bypass.
             # A real independent browser membership may still use its own scope.
-            if security().cookie(self, '__Host-hl_party') and path not in ('/login', '/auth/link', '/auth/google', '/auth/google/callback', '/signup', '/api/health', '/api/auth/session', '/api/auth/logout', '/api/auth/signup', '/api/auth/signup/begin', '/api/auth/signup/password', '/api/auth/login/password', '/api/auth/providers'):
+            if security().cookie(self, security().cookie_name(self, '__Host-hl_party')) and path not in ('/login', '/auth/link', '/auth/google', '/auth/google/callback', '/signup', '/api/health', '/api/auth/session', '/api/auth/logout', '/api/auth/signup', '/api/auth/signup/begin', '/api/auth/signup/password', '/api/auth/login/password', '/api/auth/providers'):
                 security().authenticate(self, boot()[0])
             # Device auth is independent of browser/email login, never the local bypass.
             if path.startswith('/rest/'):
@@ -467,7 +467,7 @@ class Gate:
                 store, _ = boot()
                 if path == '/api/auth/signup' and self.command == 'GET':
                     # Does this browser still hold a validated signup link?
-                    self.json(security().signup_state(store, security().cookie(self, '__Host-hl_signup')))
+                    self.json(security().signup_state(store, security().cookie(self, security().cookie_name(self, '__Host-hl_signup'))))
                     return False
                 if self.command != 'POST':
                     raise Denied(405, 'Method not allowed')
@@ -478,7 +478,7 @@ class Gate:
                     return False
                 payload = self.body()
                 sid = security().signup(
-                    store, security().cookie(self, '__Host-hl_signup'),
+                    store, security().cookie(self, security().cookie_name(self, '__Host-hl_signup')),
                     payload.get('display_name'), payload.get('profile_icon'),
                     payload.get('email'), payload.get('password'))
                 self.signed_in(sid, clear_signup=True)
@@ -530,7 +530,7 @@ class Gate:
                 self.member = security().authenticate(self, store)
                 security().admin(self.member)
                 token, expires = security().mint_signup(store, self.member['id'])
-                self.json({'url': security().signup_url(token), 'expires_at': expires})
+                self.json({'url': security().signup_url(token, self), 'expires_at': expires})
                 return False
             if path.startswith('/api/members'):
                 store, _ = boot()
@@ -540,9 +540,9 @@ class Gate:
                     payload = self.body()
                     if path == '/api/members/create':
                         uid = security().create_user(store, self.member, payload.get('display_name'), payload.get('role'))
-                        self.json({'id': uid, 'invite': security().invite(store, self.member, uid)})
+                        self.json({'id': uid, 'invite': security().invite(store, self.member, uid, handler=self)})
                     elif path == '/api/members/invite':
-                        self.json({'invite': security().invite(store, self.member, payload.get('id'))})
+                        self.json({'invite': security().invite(store, self.member, payload.get('id'), handler=self)})
                     elif path == '/api/members/revoke':
                         if payload.get('id') == self.member['id']:
                             raise Denied(400, 'Use Sign out to end your own session')
@@ -557,10 +557,13 @@ class Gate:
                 security().csrf(self)
                 security().schema(store)
                 with store.lock:
-                    store.conn.execute('DELETE FROM browser_sessions WHERE digest=?', (security().digest(security().cookie(self, '__Host-hl_session')),))
+                    store.conn.execute('DELETE FROM browser_sessions WHERE digest=?',
+                                   (security().digest(security().cookie(
+                                       self, security().cookie_name(self, '__Host-hl_session'))),))
                     store.conn.commit()
                 self.send_response(200)
-                self.send_header('Set-Cookie', '__Host-hl_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0')
+                self.send_header('Set-Cookie', f'{security().cookie_name(self, "__Host-hl_session")}=; '
+                                 f'{security().cookie_attrs(self)}; Max-Age=0')
                 self.send_header('Content-Length', '0')
                 self.end_headers()
                 return False
@@ -610,7 +613,7 @@ class Gate:
                 return False
             if not security().required:
                 return True
-            security().config()
+            security().config(self)
             if path.startswith('/auth/') and self.command == 'GET':
                 raise Denied(404, 'Not found')
             if path == '/api/acquisitions':

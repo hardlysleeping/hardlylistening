@@ -70,7 +70,9 @@ class SecurityHTTP(unittest.TestCase):
         with self.store.lock:
             self.store.conn.execute('INSERT INTO browser_sessions(digest,member_id,expires) VALUES(?,?,?)', (self.sec.digest(sid), uid, time.time()+3600))
             self.store.conn.commit()
-        return '__Host-hl_session='+sid
+        # Both spellings: the https name and the loopback one, so a test signs in
+        # the same way whatever origin mode the server under test resolves to.
+        return '__Host-hl_session='+sid+'; hl_session='+sid
 
     def test_disabled_compatibility_and_noindex(self):
         os.environ['HARDLYLISTENING_AUTH_REQUIRED'] = '0'
@@ -80,16 +82,70 @@ class SecurityHTTP(unittest.TestCase):
         self.assertEqual(self.request('/server.py')[0], 404)
 
     def test_misconfigured_closed(self):
+        # With no public origin configured, a provably local request is served under the
+        # loopback origin (redirected to sign-in, since there is no session), while a
+        # request that arrives named for the public internet — as every tunnel and reverse
+        # proxy forwards it — is refused rather than trusted.
         with patch.dict(os.environ, {'HARDLYLISTENING_PUBLIC_ORIGIN': ''}):
             self.assertEqual(self.request('/api/health')[0], 200)
+            self.assertEqual(self.request('/')[0], 303)
+            self.assertEqual(self.request('/api/state')[0], 401)
             for path in ('/', '/api/state'):
-                self.assertEqual(self.request(path)[0],503)
+                self.assertEqual(self.request(path, headers={'Host': 'music.example'})[0], 503)
 
     def test_missing_invalid_audio_zip_gate(self):
         for path in ('/api/state','/api/track/1/audio','/api/playlist/1/download','/api/library/download?ids=1','/api/members'):
             self.assertEqual(self.request(path)[0],401)
         self.assertEqual(self.request('/api/state',headers={'Authorization':'Bearer invalid'})[0],401)
         self.assertEqual(self.request('/api/state',headers={'X-Forwarded-User':'owner'})[0],401)
+
+    def test_loopback_mode_signs_in_and_names_the_cookie_for_the_origin(self):
+        """No public origin configured + a provably local request = the desktop's own install.
+
+        The cookie drops the `__Host-` prefix and `Secure` — neither is honest over plain
+        http — and that same cookie is what authenticates the next request.
+        """
+        self.user()
+        link = self.sec.invite(self.store, {'role': 'admin'}, 'u1')
+        token = link.split('invite=')[1]
+        with patch.dict(os.environ, {'HARDLYLISTENING_PUBLIC_ORIGIN': ''}):
+            code, h, _ = self.request('/api/auth/session', 'POST',
+                                      {'Origin': f'http://127.0.0.1:{self.http.server_port}'},
+                                      json.dumps({'invite': token}))
+            self.assertEqual(code, 200)
+            cookie_line = h['Set-Cookie']
+            self.assertTrue(cookie_line.startswith('hl_session='), cookie_line)
+            self.assertNotIn('Secure', cookie_line)
+            self.assertIn('HttpOnly', cookie_line)
+            self.assertIn('SameSite=Lax', cookie_line)
+            self.assertEqual(self.request('/api/state',
+                                          headers={'Cookie': cookie_line.split(';')[0]})[0], 200)
+
+    def test_a_tunnel_or_proxy_never_counts_as_local(self):
+        """The failure that matters: the server on 127.0.0.1, the world through a tunnel.
+
+        Every real tunnel connects from loopback, so the socket peer cannot be trusted
+        alone; the forwarded headers it must add are what give it away.
+        """
+        self.user()
+        with patch.dict(os.environ, {'HARDLYLISTENING_PUBLIC_ORIGIN': ''}):
+            for header in ({'X-Forwarded-For': '203.0.113.9'},
+                           {'CF-Connecting-IP': '203.0.113.9'},
+                           {'Forwarded': 'for=203.0.113.9'}):
+                self.assertEqual(self.request('/api/state', headers=header)[0], 503)
+
+    def test_a_configured_https_origin_keeps_the_host_prefix_even_locally(self):
+        """One deployment, one kind of session: `https://music.example` keeps `__Host-`+Secure
+        even for the dev convenience of opening the same server on 127.0.0.1."""
+        self.user()
+        link = self.sec.invite(self.store, {'role': 'admin'}, 'u1')
+        token = link.split('invite=')[1]
+        code, h, _ = self.request('/api/auth/session', 'POST',
+                                  {'Origin': 'https://music.example'},
+                                  json.dumps({'invite': token}))
+        self.assertEqual(code, 200)
+        self.assertTrue(h['Set-Cookie'].startswith('__Host-hl_session='), h['Set-Cookie'])
+        self.assertIn('Secure', h['Set-Cookie'])
 
     def test_member_cannot_admin_csrf_and_cookie_exchange(self):
         self.user()

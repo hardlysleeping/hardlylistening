@@ -1,8 +1,10 @@
 """Accounts and browser sessions: invite-only signup, passwords, and the permanent login link.
 
 A member is the account. There are several ways to prove you are that member — a personal login
-link, an email and password, and (later) Google or Apple — and every one of them mints the same
-`__Host-hl_session`. Nothing downstream knows how someone signed in.
+link, an email and password, and (later) Google or Apple — and every one of them mints the same session. Its cookie is `__Host-hl_session` — a promise
+about an https origin — except on a deployment with no public origin, where a provably local
+request (`loopback_origin`) is served as `http://127.0.0.1:<port>` and the same session travels
+as plain `hl_session`. Nothing downstream knows how someone signed in.
 
 The two tokens are deliberately different things:
 
@@ -77,12 +79,87 @@ class Security:
     def required(self):
         return os.getenv('HARDLYLISTENING_AUTH_REQUIRED', '1').lower() not in ('0', 'false', 'no')
 
-    def config(self):
+    def config(self, handler=None):
+        """The deployment's canonical origin, or the loopback origin this request came through.
+
+        Strict when a public origin is configured: `https`, a hostname, no path, no credentials —
+        anything else is refused with 503. When no origin is configured, a request may still be
+        authenticated if it is *provably* local: the socket peer is loopback, the `Host` header
+        names loopback, and no proxy or forwarding header is present. A tunnel or reverse proxy
+        fails all three at once — it connects from loopback but passes the public `Host` through
+        and adds forwarding headers — so an exposed server never looks local. Only a person who
+        deliberately configures a proxy to rewrite `Host` and strip those headers can get past
+        it, and that is the operator claiming "treat these requests as local", which no code can
+        second-guess.
+        """
         origin = os.getenv('HARDLYLISTENING_PUBLIC_ORIGIN', '')
         p = urlparse(origin)
-        if p.scheme != 'https' or not p.hostname or p.username or p.password or p.path or p.query or p.fragment:
-            raise Denied(503, 'Authentication is not configured')
-        return '', '', origin
+        if p.scheme == 'https' and p.hostname and not p.username and not p.password \
+                and not p.path and not p.query and not p.fragment:
+            return '', '', origin
+        loopback = self.loopback_origin(handler)
+        if loopback is not None:
+            return '', '', loopback
+        raise Denied(503, 'Authentication is not configured')
+
+    #: Headers only a proxy, tunnel or load balancer writes. Their presence means the request did
+    #: not come straight from the machine this server runs on, whatever the socket peer says.
+    PROXY_HEADERS = ('CF-Connecting-IP', 'X-Forwarded-For', 'X-Forwarded-Proto',
+                     'X-Forwarded-Host', 'X-Real-IP', 'Forwarded')
+
+    def loopback_origin(self, handler):
+        """`http://127.0.0.1:<port>` for a request that provably came from this machine, else None.
+
+        All three conditions are required, and each one alone defeats the next trick: the peer
+        rules out a remote client, the `Host` header rules out a tunnel (which forwards the
+        public name), and the proxy-header check rules out a reverse proxy that connects from
+        loopback. `None` means "not proven local", and every caller treats it as ordinary
+        deployment rules instead.
+        """
+        if handler is None:
+            return None
+        address = getattr(handler, 'client_address', None)
+        if not address or (address[0] or '') not in self.LOOPBACK:
+            return None
+        host = (handler.headers.get('Host') or '').strip()
+        if not host or host.rsplit(':', 1)[0].strip('[]') not in self.LOOPBACK:
+            return None
+        for header in self.PROXY_HEADERS:
+            if (handler.headers.get(header) or '').strip():
+                return None
+        return 'http://' + host
+
+    def loopback_mode(self, handler):
+        """Whether this request is served under the loopback origin, not a configured one.
+
+        The deployment decides, not the request: a server configured for `https` keeps the
+        `__Host-` cookie and its `Secure` attribute even for the dev convenience of opening it
+        on 127.0.0.1, because one deployment mints one kind of session. Loopback mode exists
+        only where no origin is configured and the request is provably local.
+        """
+        try:
+            return self.config(handler)[2].startswith('http://')
+        except Denied:
+            return False
+
+    def cookie_name(self, handler, https_name):
+        """The cookie name this deployment's origin allows.
+
+        The `__Host-` prefix is a promise about the origin: Secure, Path=/, no Domain, https.
+        In loopback mode there is no such origin, so the cookie drops the prefix — the
+        protection the prefix buys (a subdomain cannot mint a parent-domain cookie) does not
+        exist on a single-name loopback origin anyway. Same request context on both sides:
+        a cookie written under one name is read under the same name.
+        """
+        if self.loopback_mode(handler):
+            return https_name.removeprefix('__Host-')
+        return https_name
+
+    def cookie_attrs(self, handler, same_site='Lax'):
+        """The attributes that must accompany `cookie_name()` — Secure only when the origin is."""
+        if self.loopback_mode(handler):
+            return f'Path=/; HttpOnly; SameSite={same_site}'
+        return f'Path=/; Secure; HttpOnly; SameSite={same_site}'
 
     @staticmethod
     def digest(token):
@@ -213,7 +290,7 @@ class Security:
             store.conn.commit()
         return uid
 
-    def invite(self, store, actor, uid, ttl=None):
+    def invite(self, store, actor, uid, ttl=None, handler=None):
         """The member's permanent link. One per profile, valid until revoked.
 
         `ttl` stays for the explicit-temporary callers (none today), but the
@@ -222,7 +299,7 @@ class Security:
         `revoke()` is what kills it.
         """
         self.admin(actor)
-        origin = self.config()[2]
+        origin = self.config(handler)[2]
         self.member(store, {'id': uid})
         token = secrets.token_urlsafe(32)
         expires = self.FOREVER if ttl is None else time.time() + ttl
@@ -435,8 +512,8 @@ class Security:
         return {'ok': True}
 
     # -- signup links ------------------------------------------------------
-    def signup_url(self, token):
-        return self.config()[2] + '/signup#invite=' + token
+    def signup_url(self, token, handler=None):
+        return self.config(handler)[2] + '/signup#invite=' + token
 
     def mint_signup(self, store, issued_by, ttl=None):
         """Mint one single-use signup link. Returns the raw token and its expiry."""
@@ -568,7 +645,7 @@ class Security:
         session cookie: it is `__Host-hl_session`, bound to the origin that set it.
         """
         origin = handler.headers.get('Origin', '')
-        if origin == self.config()[2]:
+        if origin == self.config(handler)[2]:
             return
         parsed = urlparse(origin)
         host = handler.headers.get('Host', '')
@@ -599,9 +676,9 @@ class Security:
             raise Denied(429, 'Rate limit exceeded', retry_after=retry_after)
 
     def authenticate(self, handler, store, requests_limit=None):
-        self.config()
+        self.config(handler)
         self.schema(store)
-        sid = self.cookie(handler, '__Host-hl_session')
+        sid = self.cookie(handler, self.cookie_name(handler, '__Host-hl_session'))
         digest = self.digest(sid)
         now = time.time()
         with store.lock:
@@ -638,9 +715,9 @@ class Security:
         401 the page, and it must not let anonymous traffic spend the verification budget
         that a real sign-in attempt needs.
         """
-        self.config()
+        self.config(handler)
         self.schema(store)
-        sid = self.cookie(handler, '__Host-hl_session')
+        sid = self.cookie(handler, self.cookie_name(handler, '__Host-hl_session'))
         with store.lock:
             row = store.conn.execute(
                 'SELECT member_id FROM browser_sessions WHERE digest=? AND expires>?',

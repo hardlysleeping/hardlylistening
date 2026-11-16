@@ -332,7 +332,7 @@ P1
 Open work. Detail is in `KANBAN.md`; these are here so `BACKLOG.md` stops looking shorter than the
 project. Each one is a limitation that `PLAN.md` states in its own words, not a new feature. HL-220
 is the only actionable player card; HL-225 is dependent on its architecture decision, and HL-224
-still needs a bundle and an auth-mode decision.
+needed a bundle and an auth-mode decision; the bundle landed and the loopback auth decision was made on 2026-11-16 (see HL-224's row).
 
 - [ ] **HL-224** Desktop app: bundle the compiled Tauri crate and close the desktop MVP gaps —
       installable package plus a decision on desktop authentication so the full served UI can be
@@ -341,8 +341,11 @@ still needs a bundle and an auth-mode decision.
       path is why no bundle had ever been produced. The package is client-only by decision (no server
       core): it resolves a launcher, accepts it only when `cli.py` is beside it, and disables Start
       with the stated reason otherwise; the extracted package was walked under Xvfb and shows exactly
-      that. Open: the sidecar's in-bundle location and Stop-from-package are untested, and the full UI
-      on loopback still needs the desktop auth-mode decision.
+      that. **Auth resolved the same day** (owner decision, `core/security.py`): with no
+      `PUBLIC_ORIGIN`, a provably local request — loopback peer, loopback `Host`, no forwarding
+      headers — signs in over plain http with a plain `hl_session` cookie; tunnels are refused, and
+      a configured https origin keeps `__Host-`+`Secure`. Proven live. Open: the sidecar's
+      in-bundle location and Stop-from-package are untested.
 
 ## Removed — no longer applicable
 

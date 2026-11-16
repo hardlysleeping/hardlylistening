@@ -592,7 +592,9 @@ def dispatch(handler, store, security):
         sid = result.pop('session')
         handler.send_response(200)
         handler.send_header('Cache-Control', 'no-store')
-        handler.send_header('Set-Cookie', f'{COOKIE}={sid}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age={max(0, int(result["expires"]-time.time()))}')
+        handler.send_header('Set-Cookie', f'{security.cookie_name(handler, COOKIE)}={sid}; '
+                            f'{security.cookie_attrs(handler, "Strict")}; '
+                            f'Max-Age={max(0, int(result["expires"]-time.time()))}')
         import json
         data = json.dumps(result).encode()
         handler.send_header('Content-Type', 'application/json')
@@ -638,8 +640,8 @@ def dispatch(handler, store, security):
                              payload.get('index'), payload.get('gain'))
     else:
         # A party cookie is never accepted by Security.authenticate or other APIs.
-        sid = security.cookie(handler, COOKIE)
-        if sid and not security.cookie(handler, '__Host-hl_session'):
+        sid = security.cookie(handler, security.cookie_name(handler, COOKIE))
+        if sid and not security.cookie(handler, security.cookie_name(handler, '__Host-hl_session')):
             identity = guest(store, sid, pid)
             actor = identity['id']
         else:

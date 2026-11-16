@@ -30,9 +30,11 @@ class BrowserSession:
         """A session was minted: hand over the cookie, and end the signup flow if there was one."""
         self.send_response(200)
         self.send_header('Cache-Control', 'no-store')
-        self.send_header('Set-Cookie', f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={security().SESSION_TTL}')
+        self.send_header('Set-Cookie', f'{security().cookie_name(self, "__Host-hl_session")}={sid}; '
+                         f'{security().cookie_attrs(self)}; Max-Age={security().SESSION_TTL}')
         if clear_signup:
-            self.send_header('Set-Cookie', '__Host-hl_signup=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0')
+            self.send_header('Set-Cookie', f'{security().cookie_name(self, "__Host-hl_signup")}=; '
+                             f'{security().cookie_attrs(self)}; Max-Age=0')
         self.send_header('Content-Length', '0')
         self.end_headers()
 
@@ -48,10 +50,10 @@ class BrowserSession:
         self.send_response(303)
         self.send_header('Location', location)
         self.send_header('Set-Cookie',
-                         f'__Host-hl_session={sid}; Path=/; Secure; HttpOnly; SameSite=Lax; '
-                         f'Max-Age={security().SESSION_TTL}')
-        self.send_header('Set-Cookie', '__Host-hl_oauth=; Path=/; Secure; HttpOnly; '
-                                      'SameSite=Lax; Max-Age=0')
+                         f'{security().cookie_name(self, "__Host-hl_session")}={sid}; '
+                         f'{security().cookie_attrs(self)}; Max-Age={security().SESSION_TTL}')
+        self.send_header('Set-Cookie', f'{security().cookie_name(self, "__Host-hl_oauth")}=; '
+                         f'{security().cookie_attrs(self)}; Max-Age=0')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('Content-Length', '0')
         self.end_headers()
@@ -77,14 +79,14 @@ class BrowserSession:
             self.send_response(303)
             self.send_header('Location', url)
             self.send_header('Set-Cookie',
-                             f'__Host-hl_oauth={cookie}; Path=/; Secure; HttpOnly; '
-                             f'SameSite=Lax; Max-Age={oauth_google.COOKIE_TTL}')
+                             f'{security().cookie_name(self, "__Host-hl_oauth")}={cookie}; '
+                             f'{security().cookie_attrs(self)}; Max-Age={oauth_google.COOKIE_TTL}')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('Content-Length', '0')
             self.end_headers()
             return
         query = parse_qs(urlparse(self.path).query)
-        saved = oauth_google.parse_cookie(security().cookie(self, oauth_google.COOKIE))
+        saved = oauth_google.parse_cookie(security().cookie(self, security().cookie_name(self, oauth_google.COOKIE)))
         if not saved:
             self.redirect('/login?google=expired')
             return
@@ -127,6 +129,7 @@ class BrowserSession:
         """A validated signup link becomes a short-lived cookie; the page erases the fragment."""
         self.send_response(200)
         self.send_header('Cache-Control', 'no-store')
-        self.send_header('Set-Cookie', f'__Host-hl_signup={digest}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={security().SIGNUP_FLOW_TTL}')
+        self.send_header('Set-Cookie', f'{security().cookie_name(self, "__Host-hl_signup")}={digest}; '
+                         f'{security().cookie_attrs(self)}; Max-Age={security().SIGNUP_FLOW_TTL}')
         self.send_header('Content-Length', '0')
         self.end_headers()
