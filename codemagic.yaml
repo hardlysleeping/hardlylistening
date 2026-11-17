@@ -58,8 +58,17 @@ workflows:
           # the build hand its own transcript over as an artifact (`build/build.log`).
           mkdir -p "$CM_BUILD_DIR/build"
           exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
-          npm i -g @tauri-apps/cli@^2
-          tauri -V
+          # The CLI is a project dependency, not a global install. `player/package.json`
+          # exists for this: Tauri writes the invocation it was *started* with into the
+          # generated Xcode project's "Build Rust Code" phase, and a bare global `tauri`
+          # is started as `node` with no npm environment, so that phase was written as
+          # `node tauri ios xcode-script` — Xcode then tried to load `tauri` as a module
+          # from `src-tauri/gen/apple` and the archive failed with MODULE_NOT_FOUND.
+          # Through `npm run` the phase is written as `npm run -- tauri ios xcode-script`,
+          # which resolves this local dependency from the project directory upward.
+          cd "$CM_BUILD_DIR/player"
+          npm ci --no-audit --no-fund
+          npm run tauri -- -V
       - name: XcodeGen
         script: |
           set -euo pipefail
@@ -108,9 +117,15 @@ workflows:
           export PATH="$CM_BUILD_DIR/bin:$PATH"
           cd "$CM_BUILD_DIR/player"
           # The Xcode project is a build product: it is regenerated from Tauri's template here
-          # rather than committed, so there is no pbxproj to drift.
-          tauri ios init --ci
+          # rather than committed, so there is no pbxproj to drift. Through `npm run` so the
+          # "Build Rust Code" phase is written as `npm run -- tauri ios xcode-script`.
+          npm run tauri -- ios init --ci
           ls -la src-tauri/gen/apple
+          # What the Xcode phase will actually run, before Xcode runs it. This is the line
+          # that failed as `node tauri ...`; printing it makes the failure readable from the
+          # transcript instead of from an archive error three steps later.
+          echo "--- project.yml pre-build scripts:"
+          grep -n -A 8 'preBuildScripts' src-tauri/gen/apple/project.yml || true
       - name: Build unsigned .app
         script: |
           set -euo pipefail
@@ -120,9 +135,10 @@ workflows:
           exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           source "$HOME/.cargo/env"
           cd "$CM_BUILD_DIR/player"
-          # Xcode's "Build Rust Code" phase shells out to `tauri ios xcode-script`, which only
-          # works while the CLI is driving it — a bare xcodebuild fails.
-          tauri ios build --ci --no-sign
+          # Xcode's "Build Rust Code" phase shells out to the CLI (`ios xcode-script`), which
+          # only works while the CLI is driving it — a bare xcodebuild fails. Driving it
+          # through `npm run` is also what makes that phase resolvable at all.
+          npm run tauri -- ios build --ci --no-sign
           find src-tauri/gen/apple/build build src-tauri/target -maxdepth 6 -name '*.app' -print 2>/dev/null || true
       - name: Package the unsigned IPA
         script: |

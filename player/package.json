@@ -1,0 +1,13 @@
+{
+  "name": "hardlylistening-player",
+  "private": true,
+  "description": "The Tauri shell around the player's web UI. Its own package.json exists so the CLI the generated Xcode project shells out to is a project dependency rather than a global install.",
+  "scripts": {
+    "tauri": "tauri",
+    "ios:init": "tauri ios init",
+    "ios:build": "tauri ios build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}
