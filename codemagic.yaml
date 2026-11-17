@@ -53,9 +53,12 @@ workflows:
           set -euo pipefail
           # The icon set is committed (`player/src-tauri/icons`, generated from `icon-512.png`).
           # It is not optional: `tauri::generate_context!()` refuses to compile without
-          # `icons/icon.png`, which is how this crate was found never to have been built at all.
+          # `icons/icon.png`, which is how this crate was found never to have been built at all,
+          # and iOS needs the catalogue. Tauri's 1024 asset is named `AppIcon-512@2x.png`.
           cd "$CM_BUILD_DIR/player/src-tauri"
-          ls -l icons/icon.png icons/ios/AppIcon-1024.png
+          ls -l icons/icon.png
+          ls icons/ios
+          test -f icons/ios/AppIcon-512@2x.png
       - name: Generate the Xcode project
         script: |
           set -euo pipefail
@@ -73,11 +76,11 @@ workflows:
           # Xcode's "Build Rust Code" phase shells out to `tauri ios xcode-script`, which only
           # works while the CLI is driving it — a bare xcodebuild fails.
           tauri ios build --ci --no-sign
-          find src-tauri/gen/apple/build -maxdepth 6 -name '*.app' -print || true
+          find src-tauri/gen/apple/build build src-tauri/target -maxdepth 6 -name '*.app' -print 2>/dev/null || true
       - name: Package the unsigned IPA
         script: |
           set -euo pipefail
-          APP=$(find "$CM_BUILD_DIR/player/src-tauri/gen/apple/build" -maxdepth 6 -name '*.app' -print -quit)
+          APP=$(find "$CM_BUILD_DIR/player/src-tauri/gen/apple/build" "$CM_BUILD_DIR/player/build" "$CM_BUILD_DIR/player/src-tauri/target" -maxdepth 6 -name '*.app' -print -quit 2>/dev/null || true)
           [ -n "$APP" ] || { echo "no .app was produced"; exit 1; }
           APP="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
           echo "app=$APP"
