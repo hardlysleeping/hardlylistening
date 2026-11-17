@@ -48,6 +48,14 @@ workflows:
           set -euo pipefail
           npm i -g @tauri-apps/cli@^2
           tauri -V
+      - name: XcodeGen
+        script: |
+          set -euo pipefail
+          # `tauri ios init` does not write a `.xcodeproj` itself: it fills in a template and
+          # runs XcodeGen over it. Without this the init step dies with "xcodegen: command not
+          # found", which is what the first CI run of this workflow did.
+          command -v xcodegen || brew install xcodegen
+          xcodegen --version
       - name: Icons present
         script: |
           set -euo pipefail
@@ -63,6 +71,17 @@ workflows:
         script: |
           set -euo pipefail
           source "$HOME/.cargo/env"
+          # tauri's iOS bootstrap asks Homebrew to reinstall libimobiledevice, and that formula's
+          # post-install can die where the keg is already linked. The package only matters for
+          # deploying to a physical device, so answer that one call with success.
+          mkdir -p "$CM_BUILD_DIR/bin"
+          printf '%s\n' '#!/bin/bash' \
+            'if { [ "$1" = reinstall ] || [ "$1" = install ]; } && [ "$2" = libimobiledevice ]; then' \
+            '  echo "brew wrapper: libimobiledevice is already installed"; exit 0' \
+            'fi' \
+            'exec /opt/homebrew/bin/brew "$@"' > "$CM_BUILD_DIR/bin/brew"
+          chmod +x "$CM_BUILD_DIR/bin/brew"
+          export PATH="$CM_BUILD_DIR/bin:$PATH"
           cd "$CM_BUILD_DIR/player"
           # The Xcode project is a build product: it is regenerated from Tauri's template here
           # rather than committed, so there is no pbxproj to drift.

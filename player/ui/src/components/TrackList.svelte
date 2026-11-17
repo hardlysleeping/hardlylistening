@@ -66,3 +66,60 @@
     </div>
   {/each}
 </div>
+
+<style>
+  /* The row's own columns.
+   *
+   * `library-row.css` gives `.songrow` the host's eight columns — index, cover, title,
+   * artist, album, duration, download pair, mark — because the host row manages a file. This row
+   * has five cells, so inheriting that template auto-placed them into the wrong cells: the queue
+   * button landed where the cover goes and the title started one column too far right. Naming
+   * the columns is the whole fix; the row's type, padding and borders still come from the host.
+   */
+  .songtable .songrow {
+    grid-template-columns: 32px minmax(0, 2.2fr) minmax(0, 1.3fr) 72px 34px;
+  }
+
+  .songtable .songrow .sdur {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .songtable .songrow .snext {
+    grid-column: 5;
+    grid-row: 1;
+    width: 30px;
+    height: 30px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    color: var(--text);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .songtable .songrow .snext:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* On a phone the artist line goes: the title and the duration are what a row is for. */
+  @media (max-width: 760px) {
+    .songtable .songrow {
+      grid-template-columns: 22px minmax(0, 1fr) 46px 30px;
+    }
+
+    .songtable .songrow .sartist {
+      display: none;
+    }
+
+    .songtable .songrow .sdur {
+      grid-column: 3;
+      grid-row: 1;
+      font-size: 12px;
+    }
+  }
+</style>
