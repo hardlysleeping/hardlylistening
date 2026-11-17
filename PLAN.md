@@ -1361,9 +1361,15 @@ suggestion follows `XDG_DATA_HOME`, as `resolve.default_data_dir` always did. Wh
 is one deliberate limit, not a defect: an `https://`
 remote target can be entered but is never probed (`desktop/src-tauri/src/probe.rs` speaks `http://`
 only), and the window says so in words. Options for closing it are recorded under "Remote targets
-the window cannot check" below. The **Player MVP** gate remains unproven (**HL-220/HL-225**):
-the Svelte/Tauri source passes its own suite, but that does not establish a native app build, iOS
-background playback or media controls.
+the window cannot check" below.
+
+The **Player MVP** gate is half proven (**HL-220/HL-225**). The native build exists and is
+measured: `codemagic.yaml` produces an unsigned IPA from the public tree on a macOS runner, and
+the packaged product was read back — arm64 device binary, `ing.hardlysleep.listening.player`,
+`MinimumOSVersion 13.0`, `UIBackgroundModes: [audio]`, and the built web assets embedded in the
+binary. What that cannot show is the half HL-220 exists for: background playback, the lock screen
+and Bluetooth/Car controls on a real iPhone. Installing needs a signature this repo does not
+carry (**HL-411/HL-412**), so the gate closes on device measurement, not on another CI run.
 Both choices are independent: running a local server on/off, and pointing the UI at a local or a
 remote server — including a remote-only client with no local server running.
 
