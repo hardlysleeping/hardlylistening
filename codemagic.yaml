@@ -30,6 +30,10 @@ workflows:
       - name: Toolchain
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
           source "$HOME/.cargo/env"
           rustup target add aarch64-apple-ios
@@ -37,6 +41,10 @@ workflows:
       - name: Frontend
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           # `npm run build` is `svelte-check --threshold warning && vite build`, so a type or
           # warning failure stops the job here instead of producing an app that renders wrong.
           cd "$CM_BUILD_DIR/player/ui"
@@ -46,11 +54,19 @@ workflows:
       - name: Tauri CLI
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           npm i -g @tauri-apps/cli@^2
           tauri -V
       - name: XcodeGen
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           # `tauri ios init` does not write a `.xcodeproj` itself: it fills in a template and
           # runs XcodeGen over it. Without this the init step dies with "xcodegen: command not
           # found", which is what the first CI run of this workflow did.
@@ -59,6 +75,10 @@ workflows:
       - name: Icons present
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           # The icon set is committed (`player/src-tauri/icons`, generated from `icon-512.png`).
           # It is not optional: `tauri::generate_context!()` refuses to compile without
           # `icons/icon.png`, which is how this crate was found never to have been built at all,
@@ -70,6 +90,10 @@ workflows:
       - name: Generate the Xcode project
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           source "$HOME/.cargo/env"
           # tauri's iOS bootstrap asks Homebrew to reinstall libimobiledevice, and that formula's
           # post-install can die where the keg is already linked. The package only matters for
@@ -90,6 +114,10 @@ workflows:
       - name: Build unsigned .app
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           source "$HOME/.cargo/env"
           cd "$CM_BUILD_DIR/player"
           # Xcode's "Build Rust Code" phase shells out to `tauri ios xcode-script`, which only
@@ -99,6 +127,10 @@ workflows:
       - name: Package the unsigned IPA
         script: |
           set -euo pipefail
+          # This image exposes no log API: the only way to read a failed step is to make
+          # the build hand its own transcript over as an artifact (`build/build.log`).
+          mkdir -p "$CM_BUILD_DIR/build"
+          exec > >(tee -a "$CM_BUILD_DIR/build/build.log") 2>&1
           APP=$(find "$CM_BUILD_DIR/player/src-tauri/gen/apple/build" "$CM_BUILD_DIR/player/build" "$CM_BUILD_DIR/player/src-tauri/target" -maxdepth 6 -name '*.app' -print -quit 2>/dev/null || true)
           [ -n "$APP" ] || { echo "no .app was produced"; exit 1; }
           APP="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
@@ -138,3 +170,4 @@ workflows:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CHECK/Info.plist"
     artifacts:
       - build/HardlyListeningPlayer-unsigned.ipa
+      - build/build.log

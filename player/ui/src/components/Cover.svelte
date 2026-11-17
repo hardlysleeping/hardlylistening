@@ -82,3 +82,33 @@
     {initials(label)}
   {/if}
 </div>
+
+<style>
+  /* The tile's own shape.
+   *
+   * The host styles a cover through its card — `.acard .acover` — because every cover it draws
+   * sits inside one. This component is also used where there is no card (the album header, the
+   * now-playing bar), and there the element had no box at all: no aspect ratio, no radius, no
+   * centring, so the header showed a one-line strip with the initials in the corner. Same tile,
+   * stated once, in the component that draws it.
+   */
+  .acover {
+    aspect-ratio: 1 / 1;
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background: var(--panel2);
+    color: #cfd3e1;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+  }
+
+  .acover .cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+</style>
