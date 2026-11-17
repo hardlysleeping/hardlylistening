@@ -97,8 +97,11 @@ Anything under `/api/` other than the two social reads is the failure this docum
 * **It reads bytes, not behaviour.** A URL built at runtime (`'/api/' + 'tracks'`, a string in
   a server payload, a redirect) passes every check here. What would close it: a policy at the
   layer that makes requests — `security.csp` `connect-src` allowing only the server the person
-  typed, or a Tauri HTTP scope. Neither exists; `csp` is `null` and no HTTP plugin is
-  registered, which is why the native transport (P2) matters more than this audit.
+  typed, or a Tauri HTTP scope. Since 2026-11-17 `csp` is set and no HTTP plugin is registered:
+  `connect-src` allows the asset origin and IPC only, so the page still cannot reach a host a
+  payload names, and the native transport (P2) is the only path that can. The limit that remains
+  is `img-src`/`media-src`, which must allow `http:`/`https:` because a cover and a stream are
+  URLs a media element fetches itself; see [`../player.md`](../player.md) for why.
 * **Vocabulary is a phrase list.** It catches the words acquisition uses about itself; it does
   not catch a synonym. It is a backstop, not the argument — the argument is that the modules
   do not exist.

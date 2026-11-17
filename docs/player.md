@@ -106,10 +106,42 @@ cargo tauri build
 the parity harness, and `node tools/parity.cjs` grades all of them against the stored
 baselines.
 
-`security.csp` is left at `null` on purpose. `vite.config.ts` sets `base: "./"` because the
-shell serves `dist/` over Tauri's asset protocol — there is no server to resolve an absolute
-path, on any of the three platforms. A CSP that justifies the risk belongs with the mobile
-build, where the asset origin is known.
+`vite.config.ts` sets `base: "./"` because the shell serves `dist/` over Tauri's asset
+protocol — there is no server to resolve an absolute path, on any of the three platforms.
+
+`security.csp` is set (2026-11-17), one policy for all three platforms:
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob: http: https:; media-src 'self' data: blob: http: https:;
+connect-src 'self' ipc: http://ipc.localhost; font-src 'self' data:;
+object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'
+```
+
+Each allowance has a reason, and the reasons are why the policy is not tighter:
+
+- **`img-src`/`media-src` need `http:`/`https:`.** A cover and a stream are URLs the native side
+  hands to an `<img>` and an `<audio>` element. A media element cannot carry headers, so its
+  authentication travels in the query string and the page itself must be allowed to fetch the
+  URL. The host is the account's own server, but a policy cannot name a host a person types.
+- **`style-src` needs `'unsafe-inline'`, for attributes only.** Sheets are one bundled file, but
+  several components set `style=` (the queue slot's position, the record's travel, the volume's
+  `--vol`). `style-src-attr` would say this more precisely; it is ignored by WebKit before 15.4,
+  which would then block those attributes outright, so the older spelling stays.
+- **`script-src 'self'`, with no `'unsafe-inline'`.** That is the point of the policy: the page
+  runs the bundle and nothing a server, a cover or a lyric could smuggle in.
+- **`connect-src` stays at the asset origin and IPC.** The page names endpoints and never URLs;
+  Rust resolves the host and the credential. The one page-side `fetch` left is the social probe
+  (`src/lib/hardly/social.ts`), which no surface calls yet — wiring it means routing that read
+  through the native side, because this policy will refuse it. The same holds for the
+  no-native `fetch` fallback in `transport.ts`, which only exists for shells older than the
+  native transport.
+
+Measured on the Linux build against a stub OpenSubsonic server: connect, album wall with real
+covers and the drawn fallback, artists, playlists, playlist detail, artist detail, album detail,
+a row's queue action, and the full player (record, label artwork, seek, volume) all render with
+no CSP refusal in the app log. `media-src` was not exercised — no playback was run on the
+workstation — so a stream under this policy is unproven until it plays on the device.
 
 ### iOS and Android
 
