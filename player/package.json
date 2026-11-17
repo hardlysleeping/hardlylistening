@@ -5,7 +5,8 @@
   "scripts": {
     "tauri": "tauri",
     "ios:init": "tauri ios init",
-    "ios:build": "tauri ios build"
+    "ios:build": "tauri ios build",
+    "build": "npm --prefix ui run build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4"
