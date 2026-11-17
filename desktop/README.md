@@ -195,7 +195,15 @@ distrobox enter huibuild -- bash -lc 'cd ~/apps/hardlylistening/desktop/src-taur
 ```
 
 `cargo tauri build` is not used — there is no `cargo-tauri` CLI in that box, and plain
-`cargo build` is enough to produce the window binary. The proof is still split:
+`cargo build` is enough to produce the window binary. To produce the *package*, the CLI comes from
+the Node toolchain instead, which also runs `beforeBuildCommand` (the sidecar staging):
+
+```sh
+distrobox enter huibuild -- bash -lc 'cd ~/apps/hardlylistening/desktop && npx --no-install tauri build --bundles deb'
+```
+
+The crate's own tests are in the library, not the binary — `cargo test --release --lib` runs them
+(there is no `cargo-tauri` here, so `tauri test` does not exist either). The proof is still split:
 
 ```sh
 python3 -m unittest tests.test_desktop_host     # config, capabilities, imports, sidecar, resolver
@@ -211,6 +219,8 @@ node tests/test_host_address.cjs                # the window's one line of truth
 node tests/test_host_settings.cjs               # the panel's decisions
 node tests/test_host_lifecycle.cjs              # the lifecycle's transitions
 rustfmt --check desktop/src-tauri/src/*.rs      # parses; formatting only
+distrobox enter huibuild -- bash -lc 'cd ~/apps/hardlylistening/desktop/src-tauri && \
+  cargo test --release --lib'                   # the crate's own unit tests (wizard defaults)
 ```
 
 `tests/test_desktop_host.py` parses `tauri.conf.json`, every capability file, the sidecar name

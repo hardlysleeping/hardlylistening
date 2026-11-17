@@ -1353,7 +1353,12 @@ spawned process and closed the port → quit and relaunch showed no wizard and a
 A second, instrumented run closed the two gaps that first run left: the wizard's path fields
 **do** take typed input (typed `/tmp/…` paths landed in the step-4 summary as `Music`/`Data`), and
 `Open in browser` **does** hand off — a stub `xdg-open` on `PATH` recorded
-`http://127.0.0.1:<port>`. What remains open is one deliberate limit, not a defect: an `https://`
+`http://127.0.0.1:<port>`. The first run's stray write was a real defect and is fixed: the
+wizard created its *suggested* data folder as soon as step 1 was answered, because the state
+it saves after every step already carries that suggestion — so choosing another folder left an
+empty one behind. The folder is now created only once the data step has been answered, and the
+suggestion follows `XDG_DATA_HOME`, as `resolve.default_data_dir` always did. What remains open
+is one deliberate limit, not a defect: an `https://`
 remote target can be entered but is never probed (`desktop/src-tauri/src/probe.rs` speaks `http://`
 only), and the window says so in words. Options for closing it are recorded under "Remote targets
 the window cannot check" below. The **Player MVP** gate remains unproven (**HL-220/HL-225**):

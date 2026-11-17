@@ -4416,8 +4416,39 @@ port; quit and relaunch showed no wizard and the same address. Two limits came o
 silent. An `https://` **remote target is accepted but never probed** — `probe.rs` strips `http://`
 only, and the window states the consequence in words ("another machine · this window does not probe
 it") rather than showing a stale "running"; the options for closing that are listed in PLAN.md under
-"Remote targets the window cannot check". And the wizard **creates its suggested data folder** even
-when another path is typed — an empty directory, harmless, but a write nobody asked for.
+"Remote targets the window cannot check".
+
+The other limit that came out of that run — the wizard **created its suggested data folder**
+even when another path was typed — turned out to have a precise cause, and it is fixed
+(2026-11-16). The wizard saves `setup.json` after every step, and the payload it saves already
+contains the *suggested* `data_dir`; so answering step 1 made `~/.local/share/hardlylistening`
+on the spot, and choosing a different folder on step 2 left it behind, empty. Creation is now
+gated on `completed` containing `data` — which is exactly what the step's own hint ("Created
+if it is not there yet") and `host/setup.py::prepare_data_dir` ("called when the data step is
+completed") already promised. `setup_admin` creates the folder itself, because it runs before
+the final save and a database cannot be opened in a folder that is not there, and nothing is
+lost by the delay: the server creates its own data directory at start (`paths.py`), so Start
+still works from a half-answered wizard.
+
+Isolating that run exposed a second, unrelated defect: `defaults()` in `wizard.rs` hardcoded
+`$HOME/.local/share` for the suggestion and ignored `XDG_DATA_HOME`, while `resolve.default_data_dir`
+honours it and the state path two functions above honours `XDG_STATE_HOME`. Pointing both XDG
+homes at `/tmp` and still seeing the wizard offer, and create, `/home/<user>/.local/share/hardlylistening`
+is how it surfaced. It now reads `XDG_DATA_HOME` too, and three unit tests pin the rule
+(`cargo test --release --lib`, 8 passing).
+
+Verified on a rebuilt package: extracted under Xvfb with both XDG homes in `/tmp` — nothing
+created after step 1; the *typed* folder created `0700` after step 2, with the notice naming
+it; the suggestion absent in both the scratch XDG home and the real one; the administrator
+database in the chosen folder; Start answering `/api/health` 0.18.0; Stop and Quit clean. The
+crate's tests live in the library target (`--lib`), not the binary — testing the binary
+reports "0 tests" and looks green while proving nothing.
+
+Two harness notes for the next walk. Pointing `XDG_DATA_HOME`/`XDG_STATE_HOME` at `/tmp` is
+what makes an app's own writes legible: without it, a folder under `~/.local/share` is
+indistinguishable from something that was already there. And a test fixture must not look like
+a private path — `tests/test_desktop_host.py` scans the sources for `/home/`, so `/home/example`
+in a unit test fails the suite even though it is only a string.
 
 A third suspicion from that run did not survive a second look: I recorded that the wizard's path
 fields ignored typed input. They do not. A follow-up run on a fresh package typed `/tmp/…` paths and

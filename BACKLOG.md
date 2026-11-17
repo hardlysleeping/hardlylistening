@@ -352,8 +352,15 @@ needed a bundle and an auth-mode decision; the bundle landed and the loopback au
       correctly refused (no `cli.py` beside it). A second, instrumented run closed both leftovers:
       typed `/tmp/…` paths were accepted (step 4 summarised them) and a stub `xdg-open` recorded
       `http://127.0.0.1:8493` from `Open in browser` — the first run's "path fields ignore typing"
-      was stale click coordinates, not a defect. One limit stays open: an `https://` remote target is
-      accepted but never probed (`probe.rs` is `http://` only); options are listed in PLAN.md.
+      was stale click coordinates, not a defect. **2026-11-16, after the walk:** the stray write it left behind is fixed — the
+      wizard saved state after every step with the *suggested* data folder already in it, so
+      step 1 created `~/.local/share/hardlylistening` and orphaned it when another folder was
+      chosen; creation is now gated on the data step being completed, `setup_admin` creates the
+      folder it needs, and `defaults()` honours `XDG_DATA_HOME` (it hardcoded
+      `$HOME/.local/share`). Proven by `cargo test --release --lib` (8 passing, 3 new) and a
+      rebuilt `.deb` walked with both XDG homes in `/tmp`. One limit stays open: an `https://`
+      remote target is accepted but never probed (`probe.rs` is `http://` only); options are
+      listed in PLAN.md.
 
 ## Removed — no longer applicable
 

@@ -114,12 +114,44 @@ fn state_path() -> PathBuf {
     base.join(CONFIG_DIR).join(SETUP_FILE)
 }
 
+/// The XDG data root: `XDG_DATA_HOME` when it is set, else `~/.local/share`.
+///
+/// `resolve.default_data_dir` is the same rule, and the state path above already honours
+/// `XDG_STATE_HOME`; ignoring the data one was an omission rather than a decision, and it showed
+/// up as a suggested folder no environment could move.
+fn data_root() -> PathBuf {
+    data_root_from(env_text("XDG_DATA_HOME"), home_dir())
+}
+
+fn data_root_from(declared: Option<String>, home: PathBuf) -> PathBuf {
+    match declared {
+        Some(root) => PathBuf::from(root),
+        None => home.join(XDG_DATA_SUFFIX),
+    }
+}
+
 fn defaults() -> Value {
     let home = home_dir();
     json!({
         "music_dir": home.join(MUSIC_SUFFIX).display().to_string(),
-        "data_dir": home.join(XDG_DATA_SUFFIX).join(DATA_LEAF).display().to_string(),
+        "data_dir": data_root().join(DATA_LEAF).display().to_string(),
     })
+}
+
+/// Whether a save may create the data folder.
+///
+/// `setup.json` is written after every step and begins with the *suggested* folder already in its
+/// values, so creating the folder on any save made a directory one question early — and left it
+/// behind when the person then chose another. The data step's own hint ("Created if it is not
+/// there yet") promises the write once that question is answered, and the saved payload records
+/// exactly that in `completed`, which is also how `host/setup.py::prepare_data_dir` puts it:
+/// created "when the data step is completed".
+fn data_step_answered(state: &Value) -> bool {
+    state
+        .get("completed")
+        .and_then(Value::as_array)
+        .map(|steps| steps.iter().any(|step| step.as_str() == Some("data")))
+        .unwrap_or(false)
 }
 
 /// The saved answers, plus a plain-language problem. A malformed file is reported and ignored,
@@ -566,19 +598,22 @@ pub fn setup_save(_app: tauri::AppHandle, state: Value) -> Value {
         }
     };
     // The data folder is the one directory the wizard creates: the account step has to put a
-    // database somewhere, and a first start must not fail on a missing parent.
+    // database somewhere, and a first start must not fail on a missing parent. Only once the
+    // folder question has been answered — see `data_step_answered`.
     let mut detail = String::new();
-    if let Some(data_dir) = data_dir_of(&checked) {
-        if !data_dir.exists() {
-            if let Err(error) = std::fs::create_dir_all(&data_dir) {
-                return json!({
-                    "saved": false,
-                    "field": "data_dir",
-                    "detail": format!("{}: {error}", data_dir.display()),
-                });
+    if data_step_answered(&checked) {
+        if let Some(data_dir) = data_dir_of(&checked) {
+            if !data_dir.exists() {
+                if let Err(error) = std::fs::create_dir_all(&data_dir) {
+                    return json!({
+                        "saved": false,
+                        "field": "data_dir",
+                        "detail": format!("{}: {error}", data_dir.display()),
+                    });
+                }
+                set_mode(&data_dir, 0o700);
+                detail = format!("{} was created.", data_dir.display());
             }
-            set_mode(&data_dir, 0o700);
-            detail = format!("{} was created.", data_dir.display());
         }
     }
     let path = state_path();
@@ -608,6 +643,17 @@ pub fn setup_admin(
             return json!({ "created": false, "field": "data_dir", "detail": detail });
         }
     };
+    // This runs before the final save, so the folder may not exist yet: `validate` accepts a
+    // path whose nearest existing ancestor is writable, and a database cannot be opened in a
+    // folder that is not there. Creating it here is what the account step needs.
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        return json!({
+            "created": false,
+            "field": "data_dir",
+            "detail": format!("{}: {error}", dir.display()),
+        });
+    }
+    set_mode(&dir, 0o700);
     let db = dir.join(DB_NAME);
     let root = match app_root(&app) {
         Some(root) => root,
@@ -679,5 +725,42 @@ pub fn setup_admin(
                 .to_string();
             json!({ "created": false, "field": "password", "detail": last })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_suggested_folder_honours_xdg_data_home() {
+        assert_eq!(
+            data_root_from(Some("/srv/xdg".to_string()), PathBuf::from("/srv/user"))
+                .join(DATA_LEAF),
+            PathBuf::from("/srv/xdg/hardlylistening"),
+            "XDG_DATA_HOME moves the suggestion, as resolve.default_data_dir does"
+        );
+    }
+
+    #[test]
+    fn the_suggested_folder_falls_back_to_the_home_directory() {
+        assert_eq!(
+            data_root_from(None, PathBuf::from("/srv/user")).join(DATA_LEAF),
+            PathBuf::from("/srv/user/.local/share/hardlylistening")
+        );
+    }
+
+    /// The stray write this guards: the wizard saves after every step, so a save that has not
+    /// yet answered the folder question must not create anything.
+    #[test]
+    fn the_folder_is_created_only_after_the_folder_question() {
+        assert!(!data_step_answered(&json!({})));
+        assert!(!data_step_answered(&json!({ "completed": [] })));
+        assert!(!data_step_answered(&json!({ "completed": ["music"] })));
+        assert!(data_step_answered(
+            &json!({ "completed": ["music", "data"] })
+        ));
+        assert!(data_step_answered(&json!({ "completed": ["data"] })));
     }
 }
