@@ -315,6 +315,12 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    /* `main` in the host's layout is a block: `max-width:1000px; margin:0 auto` centres it and it
+       still fills the page. Here it is a flex item, and auto cross-axis margins cancel the
+       stretch — so it shrink-to-fits. With `repeat(4, minmax(0,1fr))` album columns that inner
+       min-content is 0, and every card collapsed to a sliver. The width is this shell's job. */
+    width: 100%;
+    min-width: 0;
   }
 
   .ps-dim {

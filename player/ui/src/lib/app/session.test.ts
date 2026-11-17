@@ -32,6 +32,7 @@ const engine: AudioEngine = {
 
 const { PlayerStore } = await import("../player/store.svelte");
 const { Session } = await import("./session.svelte");
+const { Library } = await import("../library/store.svelte");
 
 const OK = { "subsonic-response": { status: "ok", version: "1.16.1", type: "navidrome" } };
 
@@ -128,6 +129,26 @@ describe("a session with native networking", () => {
     expect(store.get).not.toHaveBeenCalled();
     expect(JSON.stringify(calls)).not.toContain("hunter2");
     expect(session.client?.transport.kind).toBe("native");
+  });
+
+  it("hands the client to the browsable library, and takes it back on sign-out", async () => {
+    // The defect this pins, found by running the first build against a real server: the player
+    // was attached to the session's client and the library was not, so connecting succeeded,
+    // the shell appeared, and every wall stayed empty — silently, because `loadAlbums` returns
+    // early when it has no server. Both are bound together now, and sign-out unbinds both.
+    const store = fakeVault();
+    const { invoke } = fakeInvoke(() => OK);
+    const library = new Library();
+    const session = new Session(new PlayerStore(engine), { vault: store.vault, invoke, library });
+
+    expect(library.ready).toBe(false);
+    expect(await session.connect(SIGN_IN)).toBe(true);
+    expect(library.ready).toBe(true);
+    expect(session.client).not.toBeNull();
+
+    await session.signOut();
+    expect(library.ready).toBe(false);
+    expect(library.albums).toEqual([]);
   });
 
   it("reports a native refusal as a failed sign-in instead of throwing at the caller", async () => {

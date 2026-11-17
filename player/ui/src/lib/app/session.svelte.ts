@@ -82,6 +82,22 @@ export interface SessionOptions {
   /** `null` means "this build has no native side"; omitted means "ask the shell". */
   invoke?: InvokeLike | null;
   fetch?: FetchLike;
+  /**
+   * The browsing side of the app. It is here, not in `App.svelte`, because it has to be bound at
+   * exactly the moment a client exists and let go at exactly the moment one stops existing.
+   *
+   * It was missing from both places until the first build was run against a real server: the
+   * player was attached and the library was not, so connecting worked, the shell appeared, and
+   * every wall stayed empty — with no error to explain it, because `Library.loadAlbums` returns
+   * early when it has no server.
+   */
+  library?: LibrarySink;
+}
+
+/** The slice of `Library` this file needs, so the store stays out of the session's way. */
+export interface LibrarySink {
+  attach(server: SubsonicClient): void;
+  detach(): void;
 }
 
 export class Session {
@@ -97,14 +113,23 @@ export class Session {
   #player: PlayerStore;
   #invoke: InvokeLike | null;
   #fetch: FetchLike | undefined;
+  #library: LibrarySink | null;
 
   constructor(player: PlayerStore, options: SessionOptions = {}) {
     this.#player = player;
     this.#vault = options.vault ?? openVault();
     this.#invoke = options.invoke === undefined ? nativeInvoke() : options.invoke;
     this.#fetch = options.fetch;
+    this.#library = options.library ?? null;
     this.vaultMode = this.#vault.mode;
     this.#read();
+  }
+
+  /** One client, every subscriber: the player and the browsing store are bound together or not
+   * at all, so a signed-in window can never be half-wired. */
+  #attach(client: SubsonicClient): void {
+    this.#player.attach(client);
+    this.#library?.attach(client);
   }
 
   /** True when requests go through Rust and the page never sees the server's address. */
@@ -174,7 +199,7 @@ export class Session {
         this.#client = client;
         this.server = info;
         this.#remember(existing, id, target.origin, username, form);
-        this.#player.attach(client);
+        this.#attach(client);
         this.status = "ready";
         return true;
       } catch (error) {
@@ -224,7 +249,7 @@ export class Session {
       this.server = await client.ping();
       this.#client = client;
       this.activeId = id;
-      this.#player.attach(client);
+      this.#attach(client);
       this.#write();
       this.status = "ready";
       return true;
@@ -271,6 +296,9 @@ export class Session {
   async signOut(): Promise<void> {
     if (this.activeId) await this.#unbind(this.activeId);
     this.#client = null;
+    // The walls belong to the account that was just signed out; leaving them up would show one
+    // person's library to the next.
+    this.#library?.detach();
     this.server = null;
     this.activeId = null;
     this.status = "idle";

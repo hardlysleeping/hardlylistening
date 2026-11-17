@@ -22,12 +22,15 @@
     preview === "compact" || preview === "fullscreen" || preview === "queue" || preview === "lyrics";
 
   const player = new PlayerStore();
-  const session = new Session(player);
+  // Built before the session: the session binds it, because the moment a client exists is the
+  // only correct moment to bind it (and the moment it stops existing is the only correct moment
+  // to let it go — see `Session.signOut`).
+  const library = new Library();
+  const session = new Session(player, { library });
 
   // A phone gets the platform's player, so playback survives the lock screen; a browser and a
   // desktop build get the WebView's. Asked once, and the answer decides — see `select.ts`.
   void useNativeAudioIfPresent(player, nativeInvoke(), nativeListen());
-  const library = new Library();
 
   let fullscreen = $state(preview === "fullscreen" || preview === "queue" || preview === "lyrics");
   let queueOpen = $state(preview === "queue");

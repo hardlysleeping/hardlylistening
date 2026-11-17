@@ -1,0 +1,118 @@
+# The player's iOS build, on the macOS runner this project already uses for IPAs.
+#
+# Unsigned on purpose: AltStore/SideStore re-sign every install, so no Apple credentials exist in
+# CI and no certificate has to be rotated here. The recipe is the one proven for HardlyReader
+# (`ios init` + `ios build --no-sign` + a Payload zip), narrowed to what the player needs.
+#
+# What the player needs that a plain `tauri ios build` does not give it: **the audio background
+# mode**. Without `UIBackgroundModes: [audio]` iOS suspends the app when the screen locks, and
+# background playback, the lock screen and the car are exactly what HL-220 exists to measure — a
+# build missing it would look successful and prove nothing. The key cannot live in the repo,
+# because `tauri ios init`/`ios build` regenerate the Info.plist from Tauri's template on every
+# run, so it is written onto the built product and then read back from the IPA.
+workflows:
+  player-ios-unsigned:
+    name: HardlyListening Player iOS unsigned IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      node: 22.23.1
+      xcode: latest
+      vars:
+        CARGO_TERM_COLOR: always
+    cache:
+      cache_paths:
+        - ~/.cargo
+        - $HOME/.rustup
+        - $HOME/Library/Caches/tauri
+        - $CM_BUILD_DIR/player/src-tauri/target
+    scripts:
+      - name: Toolchain
+        script: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          source "$HOME/.cargo/env"
+          rustup target add aarch64-apple-ios
+          rustc -V; cargo -V; xcodebuild -version; node -v
+      - name: Frontend
+        script: |
+          set -euo pipefail
+          # `npm run build` is `svelte-check --threshold warning && vite build`, so a type or
+          # warning failure stops the job here instead of producing an app that renders wrong.
+          cd "$CM_BUILD_DIR/player/ui"
+          npm ci
+          npm run build
+          ls -l dist dist/assets | head
+      - name: Tauri CLI
+        script: |
+          set -euo pipefail
+          npm i -g @tauri-apps/cli@^2
+          tauri -V
+      - name: Icons present
+        script: |
+          set -euo pipefail
+          # The icon set is committed (`player/src-tauri/icons`, generated from `icon-512.png`).
+          # It is not optional: `tauri::generate_context!()` refuses to compile without
+          # `icons/icon.png`, which is how this crate was found never to have been built at all.
+          cd "$CM_BUILD_DIR/player/src-tauri"
+          ls -l icons/icon.png icons/ios/AppIcon-1024.png
+      - name: Generate the Xcode project
+        script: |
+          set -euo pipefail
+          source "$HOME/.cargo/env"
+          cd "$CM_BUILD_DIR/player"
+          # The Xcode project is a build product: it is regenerated from Tauri's template here
+          # rather than committed, so there is no pbxproj to drift.
+          tauri ios init --ci
+          ls -la src-tauri/gen/apple
+      - name: Build unsigned .app
+        script: |
+          set -euo pipefail
+          source "$HOME/.cargo/env"
+          cd "$CM_BUILD_DIR/player"
+          # Xcode's "Build Rust Code" phase shells out to `tauri ios xcode-script`, which only
+          # works while the CLI is driving it — a bare xcodebuild fails.
+          tauri ios build --ci --no-sign
+          find src-tauri/gen/apple/build -maxdepth 6 -name '*.app' -print || true
+      - name: Package the unsigned IPA
+        script: |
+          set -euo pipefail
+          APP=$(find "$CM_BUILD_DIR/player/src-tauri/gen/apple/build" -maxdepth 6 -name '*.app' -print -quit)
+          [ -n "$APP" ] || { echo "no .app was produced"; exit 1; }
+          APP="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
+          echo "app=$APP"
+          PLIST="$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST"
+
+          # The audio background mode, written onto the product and then read back. `ios build`
+          # regenerates Info.plist, so setting it before the build is not enough.
+          if /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes' "$PLIST" >/dev/null 2>&1; then
+            echo "UIBackgroundModes already present"
+          else
+            /usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes array' "$PLIST"
+          fi
+          /usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes:0 string audio' "$PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c 'Set :UIBackgroundModes:0 audio' "$PLIST"
+          MODE=$(/usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes:0' "$PLIST")
+          echo "background mode: $MODE"
+          [ "$MODE" = "audio" ] || { echo "the audio background mode did not land"; exit 1; }
+
+          rm -rf "$CM_BUILD_DIR/build/ipa"
+          mkdir -p "$CM_BUILD_DIR/build/ipa/Payload"
+          cp -R "$APP" "$CM_BUILD_DIR/build/ipa/Payload/"
+          cd "$CM_BUILD_DIR/build/ipa"
+          zip -qry "$CM_BUILD_DIR/build/HardlyListeningPlayer-unsigned.ipa" Payload
+
+          # The IPA, not the .app, is the artifact that reaches a phone, so ask the IPA.
+          unzip -l "$CM_BUILD_DIR/build/HardlyListeningPlayer-unsigned.ipa" | head -12
+          rm -rf "$CM_BUILD_DIR/build/ipa-check"
+          mkdir -p "$CM_BUILD_DIR/build/ipa-check"
+          unzip -q "$CM_BUILD_DIR/build/HardlyListeningPlayer-unsigned.ipa" -d "$CM_BUILD_DIR/build/ipa-check"
+          CHECK=$(find "$CM_BUILD_DIR/build/ipa-check/Payload" -maxdepth 1 -name '*.app' -print -quit)
+          ZIPMODE=$(/usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes:0' "$CHECK/Info.plist")
+          echo "background mode inside the IPA: $ZIPMODE"
+          [ "$ZIPMODE" = "audio" ] || { echo "the packaged IPA lost the audio background mode"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CHECK/Info.plist"
+    artifacts:
+      - build/HardlyListeningPlayer-unsigned.ipa

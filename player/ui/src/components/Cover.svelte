@@ -70,6 +70,13 @@
       onerror={() => {
         failed = true;
       }}
+      onload={(event) => {
+        /* A server with no artwork can still answer 200 — this one answers a 70-byte 1×1 PNG
+           placeholder — so `onerror` never fires and the tile goes blank instead of showing the
+           host's gradient and initials. One pixel is not a cover. */
+        const img = event.currentTarget as HTMLImageElement;
+        if (img.naturalWidth <= 1 || img.naturalHeight <= 1) failed = true;
+      }}
     />
   {:else}
     {initials(label)}

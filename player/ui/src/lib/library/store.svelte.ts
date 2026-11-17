@@ -51,6 +51,13 @@ export class Library {
     return this.#server !== null;
   }
 
+  /** Sign-out. `attach` is the only way in, so this is the only way back out. */
+  detach(): void {
+    this.#server = null;
+    this.#reset();
+    this.error = null;
+  }
+
   #reset(): void {
     this.albums = [];
     this.artists = [];
