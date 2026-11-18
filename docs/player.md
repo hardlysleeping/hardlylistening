@@ -131,17 +131,20 @@ Each allowance has a reason, and the reasons are why the policy is not tighter:
 - **`script-src 'self'`, with no `'unsafe-inline'`.** That is the point of the policy: the page
   runs the bundle and nothing a server, a cover or a lyric could smuggle in.
 - **`connect-src` stays at the asset origin and IPC.** The page names endpoints and never URLs;
-  Rust resolves the host and the credential. The one page-side `fetch` left is the social probe
-  (`src/lib/hardly/social.ts`), which no surface calls yet — wiring it means routing that read
-  through the native side, because this policy will refuse it. The same holds for the
-  no-native `fetch` fallback in `transport.ts`, which only exists for shells older than the
-  native transport.
+  Rust resolves the host and the credential. The two reads outside `/rest` — the capability
+  document and the feed — go through the native side for the same reason
+  (`lib/hardly/native.ts` → `subsonic_public`, `docs/player/social.md`), which is what keeps this
+  policy at IPC instead of widening it to `http: https:`. The only page-side `fetch` left is the
+  no-native fallback in `transport.ts`, which exists for shells older than the native transport
+  and is refused here by design.
 
 Measured on the Linux build against a stub OpenSubsonic server: connect, album wall with real
 covers and the drawn fallback, artists, playlists, playlist detail, artist detail, album detail,
 a row's queue action, and the full player (record, label artwork, seek, volume) all render with
 no CSP refusal in the app log. `media-src` was not exercised — no playback was run on the
-workstation — so a stream under this policy is unproven until it plays on the device.
+workstation — so a stream under this policy is unproven until it plays on the device. The policy
+is baked into the packaged binary: the string is present in the arm64 IPA's executable, so the
+shipped app carries it rather than the source only.
 
 ### iOS and Android
 

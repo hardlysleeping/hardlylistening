@@ -276,6 +276,44 @@ pub fn auth_query(bound: &Bound, secret: &str, salt: &str) -> Vec<(String, Strin
     out
 }
 
+/* ---- the server's own public documents ------------------------------------ */
+
+/// The two documents this build reads outside `/rest`: a capabilities probe and the feed.
+const PUBLIC_CAPABILITIES: &str = "capabilities";
+const PUBLIC_ACTIVITY: &str = "activity";
+/// What the app's own feed asks for, and what the server clamps to.
+pub const PUBLIC_ACTIVITY_LIMIT: u32 = 80;
+const PUBLIC_ACTIVITY_MAX: u32 = 200;
+
+/// The path for one public read, by the name the page uses.
+///
+/// The name is matched, never concatenated: a resource the page invents has no path, so this
+/// function cannot be talked into reaching an address of the caller's choosing.
+pub fn public_path(resource: &str) -> Result<&'static str, String> {
+    match resource {
+        PUBLIC_CAPABILITIES => Ok("/api/v1/capabilities"),
+        PUBLIC_ACTIVITY => Ok("/api/v1/social/activity"),
+        other => Err(format!(
+            "The player reads two public documents, and \"{other}\" is neither of them"
+        )),
+    }
+}
+
+/// One public read's URL: the bound account's origin, the document's own path, and **no
+/// credential** — both documents are public, and the page's probe deliberately sends none.
+pub fn public_url(bound: &Bound, resource: &str, limit: Option<u32>) -> Result<String, String> {
+    let path = public_path(resource)?;
+    let mut url = format!("{}{}", bound.origin, path);
+    if resource == PUBLIC_ACTIVITY {
+        // The server clamps to 1..=200; asking for less is asking for less.
+        let asked = limit
+            .unwrap_or(PUBLIC_ACTIVITY_LIMIT)
+            .clamp(1, PUBLIC_ACTIVITY_MAX);
+        url.push_str(&format!("?limit={asked}"));
+    }
+    Ok(url)
+}
+
 /// The URL for one request. `params` were checked by [`params_ok`] before they got here; they are
 /// encoded again regardless, because a value is data and not a fragment of the query.
 pub fn request_url(
@@ -483,5 +521,75 @@ mod tests {
         assert_eq!(first.len(), 32);
         assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(first, second, "two requests must not share a salt");
+    }
+
+    /* ---- the public reads ------------------------------------------------- */
+
+    /// A bound account with the token form, for the public reads. The helper above takes a form;
+    /// this one exists so these tests read as "the same account, three documents".
+    fn an_account() -> Bound {
+        bound("token")
+    }
+
+    #[test]
+    fn a_public_read_names_the_document_and_carries_no_credential() {
+        let url = public_url(&an_account(), "capabilities", None).unwrap();
+
+        assert_eq!(url, "https://music.example.com/api/v1/capabilities");
+        // The whole reason this path exists: nothing in it identifies anyone.
+        for key in ["u=", "t=", "s=", "p=", "v=", "c=", "f="] {
+            assert!(!url.contains(key), "{url} carries {key}");
+        }
+    }
+
+    #[test]
+    fn the_feed_says_how_much_it_wants_and_the_server_gets_the_last_word() {
+        assert_eq!(
+            public_url(&an_account(), "activity", Some(25)).unwrap(),
+            "https://music.example.com/api/v1/social/activity?limit=25"
+        );
+        // Asked for nothing: the app's own default, not the server's maximum.
+        assert_eq!(
+            public_url(&an_account(), "activity", None).unwrap(),
+            "https://music.example.com/api/v1/social/activity?limit=80"
+        );
+        // Out of range is clamped here as well as there, so a nonsense number never travels.
+        assert_eq!(
+            public_url(&an_account(), "activity", Some(10_000)).unwrap(),
+            "https://music.example.com/api/v1/social/activity?limit=200"
+        );
+        assert_eq!(
+            public_url(&an_account(), "activity", Some(0)).unwrap(),
+            "https://music.example.com/api/v1/social/activity?limit=1"
+        );
+    }
+
+    #[test]
+    fn a_resource_nobody_named_is_refused_rather_than_turned_into_a_path() {
+        for asked in [
+            "",
+            "/api/v1/capabilities",
+            "../admin",
+            "capabilities?x=1",
+            "ACTIVITY",
+        ] {
+            assert!(
+                public_url(&an_account(), asked, None).is_err(),
+                "\"{asked}\" should not name a document"
+            );
+        }
+        // The two names that do work are exactly the two the page can ask for.
+        assert!(public_path("capabilities").is_ok());
+        assert!(public_path("activity").is_ok());
+    }
+
+    #[test]
+    fn a_public_read_keeps_an_address_that_lives_under_a_path() {
+        // A reverse proxy is a normal deployment; the document is under the same base path.
+        let sub = Bound::new("https://example.com/music", "alex", "token").unwrap();
+        assert_eq!(
+            public_url(&sub, "capabilities", None).unwrap(),
+            "https://example.com/music/api/v1/capabilities"
+        );
     }
 }

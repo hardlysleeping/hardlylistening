@@ -26,6 +26,7 @@ import {
 } from "../subsonic";
 import { openVault, type Vault, type VaultMode } from "../accounts/vault";
 import { probeSocial, type SocialAvailability } from "../hardly/social";
+import { nativePublicFetch } from "../hardly/native";
 import type { PlayerStore } from "../player/store.svelte";
 
 export interface AccountRecord {
@@ -273,12 +274,19 @@ export class Session {
    * Social belongs to this server, not to the Subsonic protocol, so the question is asked of the
    * server's capability document rather than assumed from the app being this player. `null` means
    * there is no connected account to ask about. Never throws — `absent` carries the reason.
+   *
+   * The read itself goes through Rust when this build has it: the window's policy (`connect-src`
+   * is the asset origin and IPC) refuses a page `fetch` to any host, and loosening that to make a
+   * public document readable would be the wrong trade. `nativePublicFetch` names the document and
+   * lets the bound account supply the address. A build without a native side keeps the page path.
    */
   async social(): Promise<SocialAvailability | null> {
     const record = this.active;
     if (!record) return null;
-    const probe = this.#fetch ? { fetch: this.#fetch } : {};
-    return probeSocial(record.server, probe);
+    const read = this.#invoke
+      ? nativePublicFetch({ invoke: this.#invoke, accountId: record.id, origin: record.server })
+      : this.#fetch;
+    return probeSocial(record.server, read ? { fetch: read } : {});
   }
 
   async forget(id: string): Promise<void> {

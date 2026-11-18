@@ -39,6 +39,11 @@ keyring = { version = "3", default-features = false, features = ["apple-native",
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# The public read's glue is exercised against a real socket in `subsonic.rs`; a runtime is what
+# that test needs, and this is a test-only dependency — nothing here ships.
+[dev-dependencies]
+tokio = { version = "1", features = ["rt"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

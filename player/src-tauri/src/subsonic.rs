@@ -44,7 +44,7 @@ const TIMEOUT: Duration = Duration::from_secs(30);
 /// transport can raise, so nothing above this layer has to know which transport answered:
 /// `config` is a `ClientError`, `http` with 401/403 is the protocol's code 40, `json` is
 /// "answered, but not Subsonic", and everything else is a transport failure.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Failure {
     kind: &'static str,
     status: Option<u16>,
@@ -269,4 +269,210 @@ pub async fn subsonic_cover(
         "getCoverArt",
         &params,
     ))
+}
+
+/// One of the server's own public documents: the capability probe, or the activity feed.
+///
+/// This exists because the window's CSP forbids the page from fetching a host: `connect-src` is
+/// the asset origin and IPC, so a `fetch()` to the music server is refused by the platform before
+/// it leaves. The page still names what it wants — `capabilities` or `activity` — and the address
+/// comes from the bound account here, exactly as it does for `/rest`. Neither document takes a
+/// credential, which is why this path never reads the vault.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn subsonic_public(
+    registry: State<'_, Registry>,
+    account_id: String,
+    resource: String,
+    limit: Option<u32>,
+) -> Result<Value, Failure> {
+    public_document(&registry, &account_id, &resource, limit).await
+}
+
+/// The body of the command, taking the registry rather than Tauri's handle so a test can call
+/// it: the address still comes from the bound account, which is the part that matters.
+async fn public_document(
+    registry: &Registry,
+    account_id: &str,
+    resource: &str,
+    limit: Option<u32>,
+) -> Result<Value, Failure> {
+    let bound = registry
+        .bound(account_id)
+        .ok_or_else(|| Failure::config("That account is not connected"))?;
+    // Refused before anything is sent: an unknown name has no path, so no request exists to make.
+    let url = address::public_url(&bound, resource, limit).map_err(Failure::config)?;
+
+    let response = client()
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|error| {
+            Failure::transport(format!("Could not reach {} — {error}", bound.origin))
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let code = status.as_u16();
+        return Err(Failure::http(
+            code,
+            format!("{} answered HTTP {code}", bound.origin),
+        ));
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|error| Failure::transport(format!("The answer was cut short — {error}")))?;
+    serde_json::from_str(&body)
+        .map_err(|_| Failure::json(format!("{} answered, but not with JSON", bound.origin)))
+}
+
+#[cfg(test)]
+mod tests {
+    /* The public read, exercised against a socket rather than described.
+     *
+     * A one-request stub answers whatever this module asks, records the request line it got, and
+     * stops. That is enough to hold four things: the URL is the account's own address plus the
+     * document's path, no credential travels, an HTTP refusal is a refusal, and a document that
+     * is not JSON is not "no feed" by accident.
+     */
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    use super::*;
+    use crate::subsonic_url::Bound;
+
+    /// Serve exactly one request, answering with `status`, `content_type` and `body`.
+    fn once(status: &str, content_type: &str, body: &str) -> (String, thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
+        let origin = format!("http://{}", listener.local_addr().expect("an address"));
+        let status = status.to_string();
+        let content_type = content_type.to_string();
+        let body = body.to_string();
+        let handle = thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("a connection");
+            let mut reader = BufReader::new(stream.try_clone().expect("a clone"));
+            let mut first = String::new();
+            reader.read_line(&mut first).expect("a request line");
+            // Read the headers out so the response is not sent into a half-read request.
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 || line.trim_end().is_empty() {
+                    break;
+                }
+            }
+            let reply = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let mut writer = stream;
+            writer.write_all(reply.as_bytes()).expect("a reply");
+            first.trim().to_string()
+        });
+        (origin, handle)
+    }
+
+    fn registry_for(origin: &str) -> Registry {
+        let registry = Registry::new();
+        registry
+            .bind(
+                "acc-1",
+                Bound::new(origin, "alex", "token").expect("a normal address"),
+            )
+            .expect("a binding");
+        registry
+    }
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime")
+    }
+
+    #[test]
+    fn the_read_asks_the_accounts_own_address_for_the_document_and_carries_no_credential() {
+        let (origin, served) = once("200 OK", "application/json", r#"{"api":"v1"}"#);
+        let registry = registry_for(&origin);
+
+        let value = runtime()
+            .block_on(public_document(&registry, "acc-1", "capabilities", None))
+            .expect("the document");
+
+        assert_eq!(value["api"], "v1");
+        let request = served.join().expect("the stub");
+        assert_eq!(request, "GET /api/v1/capabilities HTTP/1.1");
+        for key in ["u=", "t=", "s=", "p=", "v=", "c="] {
+            assert!(!request.contains(key), "the request line carries {key}");
+        }
+    }
+
+    #[test]
+    fn the_feed_is_asked_for_with_its_size() {
+        let (origin, served) = once("200 OK", "application/json", r#"{"data":[]}"#);
+        let registry = registry_for(&origin);
+
+        runtime()
+            .block_on(public_document(&registry, "acc-1", "activity", Some(25)))
+            .expect("the feed");
+
+        assert_eq!(
+            served.join().expect("the stub"),
+            "GET /api/v1/social/activity?limit=25 HTTP/1.1"
+        );
+    }
+
+    #[test]
+    fn a_refusal_keeps_its_status_and_is_not_read_as_an_empty_feed() {
+        let (origin, served) = once("500 Internal Server Error", "text/plain", "nope");
+        let registry = registry_for(&origin);
+
+        let failure = runtime()
+            .block_on(public_document(&registry, "acc-1", "capabilities", None))
+            .expect_err("a 500 is a refusal");
+
+        assert_eq!(failure.kind, "http");
+        assert_eq!(failure.status, Some(500));
+        assert!(
+            failure.message.contains("answered HTTP 500"),
+            "{}",
+            failure.message
+        );
+        served.join().expect("the stub");
+    }
+
+    #[test]
+    fn a_document_that_is_not_json_says_so_rather_than_claiming_there_is_no_feed() {
+        let (origin, served) = once("200 OK", "text/html", "<html>a login page</html>");
+        let registry = registry_for(&origin);
+
+        let failure = runtime()
+            .block_on(public_document(&registry, "acc-1", "capabilities", None))
+            .expect_err("HTML is not a capability document");
+
+        assert_eq!(failure.kind, "json");
+        served.join().expect("the stub");
+    }
+
+    #[test]
+    fn an_unknown_document_and_an_unbound_account_are_refused_without_a_request() {
+        let registry = registry_for("http://127.0.0.1:1");
+
+        let unknown = runtime()
+            .block_on(public_document(&registry, "acc-1", "tracks", None))
+            .expect_err("no such document");
+        assert_eq!(unknown.kind, "config");
+        assert!(
+            !unknown.message.contains("127.0.0.1"),
+            "{}",
+            unknown.message
+        );
+
+        let unbound = runtime()
+            .block_on(public_document(&registry, "acc-2", "capabilities", None))
+            .expect_err("no address");
+        assert_eq!(unbound.kind, "config");
+    }
 }

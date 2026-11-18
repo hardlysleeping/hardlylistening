@@ -45,6 +45,7 @@ pub fn run() {
             subsonic::subsonic_request,
             subsonic::subsonic_source,
             subsonic::subsonic_cover,
+            subsonic::subsonic_public,
             native_audio::native_audio_available,
             native_audio::native_audio_queue,
             native_audio::native_audio_play,

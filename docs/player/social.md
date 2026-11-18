@@ -67,9 +67,29 @@ anything else from starting.
 Both calls send `credentials: "omit"` and no query parameter other than `limit`. The capability
 document and the feed are public reads; holding a member cookie is not this player's business.
 
-`Session.social()` is the seam: it asks the probe about `active.server` through the session's own
-`fetch`, and answers `null` when no account is connected. It is not called by anything yet, and
-no probe runs at connect — the module is inert until a view asks.
+`Session.social()` is the seam: it asks the probe about `active.server`, and answers `null` when no
+account is connected. It is not called by anything yet, and no probe runs at connect — the module
+is inert until a view asks.
+
+### The read when the window may not fetch
+
+The packaged window has a policy (`docs/player.md`): `connect-src` is the asset origin and IPC, so
+a page `fetch()` to the music server is refused by the platform before a packet leaves. Loosening
+that so a public document can be read would be the wrong trade, and it would let a runtime-built
+URL out.
+
+So the read goes through Rust, by the same rule `/rest` already follows: the page names a
+**document**, never an address. `player/ui/src/lib/hardly/native.ts` recognises exactly the two
+URLs the probe builds — the origin compared whole, so another host, scheme or port is not a read
+this build makes — and invokes `subsonic_public` with `{ accountId, resource, limit }`. Rust
+(`src-tauri/src/subsonic.rs`) resolves the address from the bound account, builds the URL
+(`subsonic_url::public_url`), sends no credential, and returns the parsed JSON. The adapter hands
+the probe a `Response` shaped like the network's, so `social.ts` is unchanged and knows nothing
+about transports — the same split `transport.md` describes for `/rest`.
+
+A refusal arrives as an `Error` carrying Rust's own sentence, which the probe turns into `absent`
+with that reason; an unknown URL is refused in the page, before IPC. A build without a native side
+(the browser preview) keeps the plain `fetch` path.
 
 ## The writes are not implemented, and that is the whole refusal
 
@@ -99,7 +119,20 @@ feed, `/api/v1/social/activity` appears in the build and no test changes.
 cd player/ui && npx vitest run src/lib/hardly/social.test.ts
 ```
 
-15 tests, no socket: a stub `fetch` records the URL and the init it was given.
+15 tests, no socket: a stub `fetch` records the URL and the init it was given. The native seam has
+its own 12 (`src/lib/hardly/native.test.ts`), with a recording `invoke`:
+
+* the two addresses recognised, and another host, scheme, port, path suffix or query refused;
+* no address in any argument — only the account id, the document name and the feed's size;
+* `limit` passed through, an absent one sent as `null`;
+* the answer reaching the probe unchanged, and Rust's refusal arriving as a sentence;
+* the probe's own two outcomes over the seam: `activity` from a real document, `absent` with the
+  refusal as its reason.
+
+And five in Rust (`src-tauri/src/subsonic.rs`), against a one-request socket rather than a mock:
+the request line is `GET /api/v1/capabilities` with no `u`/`t`/`s`/`p`/`v`/`c` on it; the feed is
+asked for with its size; a 500 stays an HTTP refusal instead of an empty feed; HTML stays "not a
+document"; an unknown name and an unbound account are refused without opening a connection.
 
 * the four states, each from a document shaped like the server's;
 * six degradations — a refused connection, HTTP 500, HTML, `{}`, an array, a plain Subsonic 404 —
@@ -113,16 +146,14 @@ cd player/ui && npx vitest run src/lib/hardly/social.test.ts
 
 ## What is still unverified
 
-* **CORS.** The WebView's origin is the asset protocol, not the server's, so
-  `/api/v1/capabilities` and `/api/v1/social/activity` must be answered with
-  `Access-Control-Allow-Origin`, the same gap [`library.md`](library.md) records for `/rest/*`.
-  Neither endpoint is credentialed, so a wildcard answer is enough; if the server sends none, the
-  probe degrades to `absent` and the player says it has no social rather than drawing a feed it
-  cannot read. `tauri-plugin-http` is not registered (P2 ruled it out), so this is the one path
-  that has no native fallback.
-* **No window was opened.** This machine has no WebKitGTK development packages, so every check
-  above runs under node with `fetch` stubbed. A real cross-origin preflight is a thing only a
-  build confirms.
+* **CORS no longer applies to the player.** The page does not fetch the server any more: the read
+  is Rust's, and a native client sends no `Origin`, so no preflight is involved. The browser
+  preview (`npm run dev`) still crosses origins and still needs `Access-Control-Allow-Origin`;
+  that is a development gap, not a shipping one.
+* **No window has been opened for the social read.** The Linux build compiles here and the page
+  is walked under Xvfb, but nothing calls `Session.social()` yet, so the command has never been
+  invoked from a page: Rust's half is proven against a socket and the seam's half against a
+  recording `invoke`, which is as far as a unit can go without a caller.
 * **The `members` state has not been run against a live deployment.** It is proven from the
   server's source and from documents shaped like its own, not from a server with
   `HARDLYLISTENING_AUTH_REQUIRED` on.
