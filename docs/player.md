@@ -141,7 +141,9 @@ Each allowance has a reason, and the reasons are why the policy is not tighter:
 Measured on the Linux build against a stub OpenSubsonic server: connect, album wall with real
 covers and the drawn fallback, artists, playlists, playlist detail, artist detail, album detail,
 a row's queue action, and the full player (record, label artwork, seek, volume) all render with
-no CSP refusal in the app log. `media-src` was not exercised — no playback was run on the
+no CSP refusal in the app log. Search (`search3` → one song), paging (a full 50-row page shows
+"Show more"; the short second page appends and the button goes) and the star toggle (the heart
+sends `star`, then `unstar`, and the pressed state follows) were walked the same way. `media-src` was not exercised — no playback was run on the
 workstation — so a stream under this policy is unproven until it plays on the device. The policy
 is baked into the packaged binary: the string is present in the arm64 IPA's executable, so the
 shipped app carries it rather than the source only.
