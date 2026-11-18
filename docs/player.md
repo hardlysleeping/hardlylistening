@@ -236,6 +236,12 @@ servers as rows (label and address, one tap to reconnect, no password — the ke
 it) and prefills the address and username of the newest one for the case where the secret is
 gone.
 
+**A saved server can be forgotten.** The list could only grow, so a typo that once pinged — or a
+machine that is gone — stayed there for good and failed on every tap. Each row now carries a
+`×` at its fixed width, and like the sign-out chip it asks: the first tap becomes "Forget?", the
+second removes the record, its keychain entry and its native binding, and five seconds or Escape
+puts the `×` back. `Session.forget()` already did all of that; nothing had ever called it.
+
 ## What is unverified, and why
 
 The host is Bazzite (immutable), with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`

@@ -40,6 +40,35 @@
     if (!username) username = newest.username;
   });
 
+  /* A saved server can be wrong: a typo that pinged, a host that moved, a machine that is gone.
+     A list that only grows keeps the wrong one for good and it fails on every tap, so a row can
+     be forgotten. It asks first, the way the sign-out chip does, because it takes the keychain
+     entry with it: the first tap turns the ✕ into "Forget?", the second removes the record and
+     its secret, and ignoring it puts the ✕ back. */
+  let forgetPending = $state<string | null>(null);
+  let forgetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function forgetTap(id: string): void {
+    if (forgetPending !== id) {
+      forgetPending = id;
+      if (forgetTimer) clearTimeout(forgetTimer);
+      forgetTimer = setTimeout(() => (forgetPending = null), 5000);
+      return;
+    }
+    if (forgetTimer) clearTimeout(forgetTimer);
+    forgetTimer = null;
+    forgetPending = null;
+    void session.forget(id);
+  }
+
+  function forgetKey(event: KeyboardEvent): void {
+    if (event.key !== "Escape" || !forgetPending) return;
+    event.preventDefault();
+    if (forgetTimer) clearTimeout(forgetTimer);
+    forgetTimer = null;
+    forgetPending = null;
+  }
+
   const busy = $derived(session.status === "connecting");
   const message = $derived(session.error ?? "");
   const kind = $derived(session.error ? "err" : "");
@@ -61,14 +90,31 @@
     <div class="saved">
       <p class="saved-title">Saved servers</p>
       {#each saved as account (account.id)}
-        <button
-          type="button"
-          class="saved-row"
-          disabled={busy}
-          onclick={() => void session.activate(account.id)}>
-          <span class="saved-name">{account.label}</span>
-          <span class="saved-server">{account.server}</span>
-        </button>
+        <div class="saved-row">
+          <button
+            type="button"
+            class="saved-open"
+            disabled={busy}
+            onclick={() => void session.activate(account.id)}>
+            <span class="saved-name">{account.label}</span>
+            <span class="saved-server">{account.server}</span>
+          </button>
+          <button
+            type="button"
+            class="saved-forget"
+            class:confirming={forgetPending === account.id}
+            disabled={busy}
+            title={forgetPending === account.id
+              ? "Tap again to forget this server"
+              : "Forget this server"}
+            aria-label={forgetPending === account.id
+              ? `Forget ${account.label} and its saved password`
+              : `Forget saved server ${account.label}`}
+            onkeydown={forgetKey}
+            onclick={() => forgetTap(account.id)}>
+            {forgetPending === account.id ? "Forget?" : "×"}
+          </button>
+        </div>
       {/each}
     </div>
     <p class="saved-or">Or connect another</p>
@@ -218,10 +264,18 @@
 
   .saved-row {
     display: flex;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .saved-open {
+    display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-    width: 100%;
+    min-width: 0;
     padding: 10px 12px;
     text-align: left;
     background: var(--panel);
@@ -232,11 +286,41 @@
     cursor: pointer;
   }
 
-  .saved-row:hover:not(:disabled) {
+  .saved-open:hover:not(:disabled) {
     border-color: var(--accent);
   }
 
-  .saved-row:disabled {
+  .saved-open:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  /* A fixed width on purpose: it is a thumb target on the screen a phone opens on, and it holds
+     "Forget?" without the row reflowing under the finger that is about to press it again. */
+  .saved-forget {
+    flex: 0 0 74px;
+    width: 74px;
+    padding: 0 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--dim);
+    font: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .saved-forget:hover:not(:disabled) {
+    color: var(--text);
+  }
+
+  .saved-forget.confirming {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .saved-forget:disabled {
     opacity: 0.6;
     cursor: default;
   }

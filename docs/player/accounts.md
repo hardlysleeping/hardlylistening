@@ -57,6 +57,13 @@ backend): `activate` answers "That account's password is gone. Enter it again to
 rather than failing silently. Switching between two saved servers was walked against the stub —
 two rows, a tap on either lands on that server's library.
 
+`forget(id)` is the other direction, and it used to have no caller: a saved server could be added
+and never removed, so a typo that once pinged stayed in the list for good. The row's `×` now calls
+it — `vault.forget`, `unbind`, the record dropped, and the session cleared if it was the active
+one — behind the same two-tap ask as sign-out. Walked at 1200×860 and 390×844: the confirming
+label fits the row's fixed width without reflowing, and the forgotten row is still gone after a
+restart, because the list write is the same one every other change goes through.
+
 `list()` and `serialise()` return copies of these fields and nothing else. `render()` is the
 text the UI shows, built from the same record, and `restore()` reads a saved list through an
 allow-list — a `password` key that found its way into a config file is dropped and *named* in

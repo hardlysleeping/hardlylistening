@@ -169,6 +169,30 @@ describe("a session with native networking", () => {
     expect(library.albums).toEqual([]);
   });
 
+  it("forgets a saved account: the record, the secret and its binding", async () => {
+    /* The connect screen lists every saved server and, until now, could only add to that list:
+       a wrong address was there for good and failed on every tap. The screen can drop one, so
+       this is the half that has to actually drop it — record, keychain entry and native
+       binding — rather than hide the row and leave the secret behind. */
+    const store = fakeVault();
+    const { invoke, calls } = fakeInvoke(() => OK);
+    const session = new Session(new PlayerStore(engine), { vault: store.vault, invoke });
+
+    expect(await session.connect(SIGN_IN)).toBe(true);
+    const id = session.records[0]?.id;
+    expect(id).toBeTruthy();
+    calls.length = 0;
+
+    await session.forget(id as string);
+
+    expect(session.records).toEqual([]);
+    expect(store.forget).toHaveBeenCalledWith(id);
+    expect(calls.map(([command]) => command)).toContain("subsonic_unbind");
+    // Signed out of the account it just forgot, rather than left holding its library.
+    expect(session.server).toBeNull();
+    expect(session.status).toBe("idle");
+  });
+
   it("reports a native refusal as a failed sign-in instead of throwing at the caller", async () => {
     // The keychain refused, or the account vanished between launches. The connect screen shows
     // the reason; it does not get an unhandled rejection.
