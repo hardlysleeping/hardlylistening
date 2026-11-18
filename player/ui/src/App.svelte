@@ -80,13 +80,25 @@
     void session.restore();
   });
 
+  /* The queue and the lyrics are two readings of the same square: the queue slot is drawn over
+     the disc, and the lyrics overlay is drawn inside the disc's column. Opening both left the
+     queue's rows printing through the words — "A starred song Alex Ross" across the second
+     line of the song — and the words' own tools row underneath the queue's header. One of them
+     at a time is the only arrangement that can be read. */
   function openQueue(): void {
     if (!fullscreen) fullscreen = true;
+    player.closeLyrics();
     queueOpen = true;
   }
 
   function closeQueue(): void {
     queueOpen = false;
+  }
+
+  function toggleLyrics(): void {
+    if (!fullscreen) fullscreen = true;
+    queueOpen = false;
+    player.toggleLyrics();
   }
 </script>
 
@@ -95,10 +107,7 @@
     {player}
     onqueue={() => {}}
     onopen={() => {}}
-    onlyrics={() => {
-      fullscreen = true;
-      player.toggleLyrics();
-    }}
+    onlyrics={toggleLyrics}
     saveSlot={params.get("save") === "1"}
   />
 {:else if preview === "fullscreen" || preview === "queue" || preview === "lyrics"}
@@ -106,10 +115,7 @@
     {player}
     onqueue={() => (queueOpen = true)}
     onopen={() => (fullscreen = true)}
-    onlyrics={() => {
-      fullscreen = true;
-      player.toggleLyrics();
-    }}
+    onlyrics={toggleLyrics}
     saveSlot={params.get("save") === "1"}
   />
   <FullPlayer
@@ -118,9 +124,11 @@
     onclose={() => {
       fullscreen = false;
       queueOpen = false;
+      player.closeLyrics();
     }}
     {queueOpen}
     onqueue={() => (queueOpen ? closeQueue() : openQueue())}
+    onlyrics={toggleLyrics}
   />
 {:else if !ready}
   <Connect {session} />
@@ -135,10 +143,7 @@
     {player}
     onqueue={openQueue}
     onopen={() => (fullscreen = true)}
-    onlyrics={() => {
-      fullscreen = true;
-      player.toggleLyrics();
-    }}
+    onlyrics={toggleLyrics}
   />
   <FullPlayer
     {player}
@@ -146,8 +151,10 @@
     onclose={() => {
       fullscreen = false;
       queueOpen = false;
+      player.closeLyrics();
     }}
     {queueOpen}
     onqueue={() => (queueOpen ? closeQueue() : openQueue())}
+    onlyrics={toggleLyrics}
   />
 {/if}

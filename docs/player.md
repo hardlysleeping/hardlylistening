@@ -254,6 +254,15 @@ the 62% the fullscreen player's subtitle has always used, so both names keep roo
 truncate. Measured at 390×844 with a 130-character artist: two 88 px halves and a 12 px
 separator, where the second half used to be 0.
 
+**The queue and the words are one square.** The queue slot is drawn over the disc column and
+the lyrics overlay inside it, and nothing stopped both from being open: the queue's own rows
+printed straight through the second line of the song ("A starred song Alex Ross" across it), and
+the words' tools row sat underneath the queue's header. Opening either now closes the other,
+from the page that owns the queue's state, and closing the fullscreen player closes the reading
+with it. Measured in the app's engine at 390×844 both ways round — queue open then Lyrics leaves
+the panel closed (`in-full`, no `queue-open`) and the words on; Lyrics then the queue button
+leaves the words off — then walked in the built binary: one surface, one reading.
+
 **Signing out asks.** The server chip in the header is the only control that is not a
 destination, and one tap used to end the session. It now becomes "Sign out?" (red) on the first
 tap, does the thing on the second, and returns to the address after five seconds or on Escape.

@@ -24,9 +24,15 @@
     onclose: () => void;
     queueOpen: boolean;
     onqueue: () => void;
+    /**
+     * Opens or closes the reading. It comes from the page rather than the store because the
+     * queue and the words share one square: the queue slot is drawn over the disc and the
+     * overlay inside it, so whichever opens must close the other.
+     */
+    onlyrics: () => void;
   }
 
-  let { player, open, onclose, queueOpen, onqueue }: Props = $props();
+  let { player, open, onclose, queueOpen, onqueue, onlyrics }: Props = $props();
 
   let seeking = $state(false);
   let seekAt = $state(0);
@@ -275,7 +281,7 @@
         disabled={!player.lyrics}
         aria-disabled={!player.lyrics}
         title="Lyrics"
-        onclick={() => player.toggleLyrics()}>Lyrics</button>
+        onclick={() => onlyrics()}>Lyrics</button>
     </div>
   </div>
 </div>
