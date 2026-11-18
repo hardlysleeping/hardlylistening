@@ -103,6 +103,38 @@ class TauriConfiguration(unittest.TestCase):
 class Independence(unittest.TestCase):
     """A player is a client: it does not need the host shell or the server's code."""
 
+    def test_the_ios_recipe_gives_the_product_the_keys_a_phone_needs(self):
+        """Two keys cannot live in the repo, so the recipe writes them and reads them back.
+
+        `tauri ios init`/`ios build` regenerate `Info.plist`, so `UIBackgroundModes: [audio]`
+        (without it iOS suspends the app at lock) and `NSAllowsLocalNetworking` (without it a
+        plain `http://` LAN server is refused in the WebView's own `<img>`/`<audio>` loads, and
+        from iOS 17 a direct IP address is refused by default) are written onto the built
+        product. A recipe that stops writing one would still produce an IPA, so the check is
+        that each key is written *and* guarded by a read-back that fails the build.
+        """
+        yaml = __import__('yaml')
+        recipe = yaml.safe_load((APP_DIR / 'codemagic.yaml').read_text())
+        workflows = recipe['workflows']
+        self.assertIn('player-ios-unsigned', workflows)
+        steps = {step['name']: step['script'] for step in workflows['player-ios-unsigned']['scripts']}
+        packaging = steps['Package the unsigned IPA']
+
+        for key, guard in (
+            ('UIBackgroundModes:0', 'the audio background mode'),
+            ('NSAppTransportSecurity:NSAllowsLocalNetworking', 'the local networking exception'),
+        ):
+            self.assertIn(f'Add :{key}', packaging, f'{key} is never written')
+            self.assertIn(f'Print :{key}', packaging, f'{key} is never read back')
+            self.assertIn(guard, packaging, f'{key} has no failing guard')
+        # The narrow key, not the wide one: arbitrary loads would open every public host.
+        self.assertNotIn('Add :NSAppTransportSecurity:NSAllowsArbitraryLoads', packaging,
+                         'arbitrary loads would open every public host, not just the LAN')
+        # The product, not the intermediate .app, is what reaches a phone.
+        self.assertIn('ipa-check', packaging)
+        self.assertIn('HardlyListeningPlayer-unsigned.ipa',
+                      workflows['player-ios-unsigned'].get('artifacts', [''])[0])
+
     def test_the_player_is_a_tree_of_its_own(self):
         self.assertFalse((APP_DIR / 'src-tauri').exists(), 'the core must not gain a host shell')
         self.assertTrue((TAURI / 'tauri.conf.json').is_file())

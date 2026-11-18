@@ -250,11 +250,18 @@ Compilation, `gen/apple`/`gen/android` generation, a real WebView, and the platf
 engine therefore need a machine with the WebView packages, or a macOS runner plus the Android
 SDK.
 
-One gap that only a real build will settle: iOS ATS needs an exception before a plain `http://`
-LAN server answers. The CORS gap this paragraph used to describe is closed — the `subsonic_*`
-commands send the request from Rust, so the server's origin policy stops mattering, and the
-secret never returns to the page. The one value that still crosses is a stream URL; see
-`docs/player/transport.md`.
+The local half of that gap is now written down and checked rather than assumed: the recipe in
+`codemagic.yaml` sets `NSAllowsLocalNetworking` on the built product and fails if the packaged
+IPA lost it (`NSAppTransportSecurity` → `NSAllowsLocalNetworking: true`). The narrow key is the
+right one — it covers unqualified names, `.local` and IP addresses and leaves every public host
+under ATS, where `NSAllowsArbitraryLoads` would not. It matters for the two loads the WebView
+makes itself, a cover in an `<img>` and a stream in an `<audio>`; the `subsonic_*` commands are
+unaffected either way, because ATS governs the URL Loading System and `reqwest` is not part of
+it. What no recipe can settle is the device run: whether a plain `http://` LAN server then
+answers belongs to HL-220's half, with the IPA installed. The CORS gap this section used to
+describe is closed for the other reason: the `subsonic_*` commands send the request from Rust,
+so the server's origin policy stops mattering, and the secret never returns to the page. The one
+value that still crosses is a stream URL; see `docs/player/transport.md`.
 
 ## Compatibility
 

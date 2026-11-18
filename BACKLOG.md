@@ -326,6 +326,9 @@ P1
       has no `xcodebuild`/`swiftc`, and `cargo check` stops at `glib-sys` — background audio, lock
       screen, Bluetooth and Car controls still need iOS hardware on a macOS runner.
       Offline downloads/local audio import remain outside the initial player scope pending a later decision.
+      The iOS recipe now declares the local-networking ATS exception on the product and verifies it
+      inside the packaged IPA, so a plain `http://` LAN server is not refused by the WebView's own
+      cover/stream loads; whether it answers on hardware is still this card's device half.
 
 ## Carded 2026-11-14 — the plan's own limitations, plus app validation
 

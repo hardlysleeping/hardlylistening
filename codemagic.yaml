@@ -168,6 +168,27 @@ workflows:
           echo "background mode: $MODE"
           [ "$MODE" = "audio" ] || { echo "the audio background mode did not land"; exit 1; }
 
+          # Local networking, for the two loads the WebView makes on its own: a cover in an
+          # `<img>` and a stream in an `<audio>`. Those go through the URL Loading System, which
+          # App Transport Security governs, so a plain `http://` LAN server is refused there
+          # unless the app says local networking is intended. From iOS 17 ATS also refuses a
+          # direct IP address by default, which is exactly how a player on a home network is
+          # addressed. The narrow key is the one to use: it covers unqualified names, `.local`
+          # and IP addresses and leaves every public host on ATS — `NSAllowsArbitraryLoads` would
+          # not, and the minimum here is iOS 13, so the older-OS fallback is not needed.
+          # (The `subsonic_*` commands are unaffected either way: reqwest is a lower-level API
+          # and ATS applies only to the URL Loading System.)
+          if /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity' "$PLIST" >/dev/null 2>&1; then
+            echo "NSAppTransportSecurity already present"
+          else
+            /usr/libexec/PlistBuddy -c 'Add :NSAppTransportSecurity dict' "$PLIST"
+          fi
+          /usr/libexec/PlistBuddy -c 'Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true' "$PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c 'Set :NSAppTransportSecurity:NSAllowsLocalNetworking true' "$PLIST"
+          LAN=$(/usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsLocalNetworking' "$PLIST")
+          echo "local networking: $LAN"
+          [ "$LAN" = "true" ] || { echo "the local networking exception did not land"; exit 1; }
+
           rm -rf "$CM_BUILD_DIR/build/ipa"
           mkdir -p "$CM_BUILD_DIR/build/ipa/Payload"
           cp -R "$APP" "$CM_BUILD_DIR/build/ipa/Payload/"
@@ -183,6 +204,9 @@ workflows:
           ZIPMODE=$(/usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes:0' "$CHECK/Info.plist")
           echo "background mode inside the IPA: $ZIPMODE"
           [ "$ZIPMODE" = "audio" ] || { echo "the packaged IPA lost the audio background mode"; exit 1; }
+          ZIPLAN=$(/usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsLocalNetworking' "$CHECK/Info.plist")
+          echo "local networking inside the IPA: $ZIPLAN"
+          [ "$ZIPLAN" = "true" ] || { echo "the packaged IPA lost the local networking exception"; exit 1; }
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CHECK/Info.plist"
     artifacts:
       - build/HardlyListeningPlayer-unsigned.ipa
