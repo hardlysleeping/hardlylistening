@@ -27,6 +27,15 @@ function stubEngine(): AudioEngine {
   };
 }
 
+/** A server that answers, for the tests that are about the order rather than the failure. */
+function okServer(): MusicServer {
+  return {
+    source: vi.fn(async (id: string) => ({ url: `http://stub/${id}` })),
+    cover: vi.fn(async () => null),
+    lyrics: vi.fn(async () => null),
+  } as unknown as MusicServer;
+}
+
 /** A server whose stream address cannot be resolved — a deleted file, or JSON where audio is. */
 function brokenServer(): MusicServer {
   return {
@@ -67,5 +76,37 @@ describe("a track that will not play", () => {
     player.engineEvents.error("the file is gone");
 
     expect(player.error).toBe("the file is gone");
+  });
+});
+
+describe("editing the queue", () => {
+  const [a, b, c, d] = ["a", "b", "c", "d"].map((id) => ({ id, title: id.toUpperCase(), duration: 100 }));
+
+  it("drops one queued song without moving the playhead", async () => {
+    /* The row's `×` calls this. `upNext` is an offset from the playhead into a second list
+       (`#order`), so removing from the wrong one, or forgetting the index shift, would play the
+       wrong song next — a queue that lies about what is coming. */
+    const { player } = store(okServer());
+    await player.playQueue([a!, b!, c!, d!], 1);
+
+    expect(player.track?.id).toBe("b");
+    expect(player.upNext.map((song) => song.id)).toEqual(["c", "d"]);
+
+    player.removeUpNext(0);
+
+    expect(player.upNext.map((song) => song.id)).toEqual(["d"]);
+    expect(player.queue.map((song) => song.id)).toEqual(["a", "b", "d"]);
+    expect(player.track?.id).toBe("b");
+  });
+
+  it("keeps one song queued twice as two entries", async () => {
+    // "Queue next" on a song that is already up next is allowed; the queue is an order, not a set.
+    // The list has to draw both, which is why it cannot be keyed by the song's id.
+    const { player } = store(okServer());
+    await player.playQueue([a!, b!], 0);
+    player.enqueue([b!], { next: true });
+    player.enqueue([b!], { next: true });
+
+    expect(player.upNext.map((song) => song.id)).toEqual(["b", "b", "b"]);
   });
 });

@@ -26,7 +26,9 @@
 </script>
 
 <div class="songtable">
-  {#each songs as song, index (song.id)}
+  <!-- No key on the song id: a playlist is allowed to list the same song twice, and a keyed
+       each with duplicate keys drops the extra rows rather than drawing them. -->
+  {#each songs as song, index}
     {@const on = song.id === currentId}
     <div
       class="songrow"

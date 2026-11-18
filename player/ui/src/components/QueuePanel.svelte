@@ -6,6 +6,12 @@
    * gone is the "recently played" drawer, which is a host listening history, and the drag handle,
    * because a reorder that is not wired is a control that lies.
    *
+   * The host's per-row Remove panel is also gone: it is revealed by a horizontal swipe, and this
+   * client carries no swipe controller, so the 92 px red panel stayed parked just inside each
+   * row's clipped edge — a red sliver at the right of every queued song, reading as an error on
+   * rows that were fine. Removal is now a `×` of its own, which is a control a mouse and a thumb
+   * can both reach, and it calls the same `removeUpNext(position)`.
+   *
    * `in-full` is the class the host adds when it moves this panel into the column; here the panel
    * has no other home, so it is always on. That class is what drops the floating card's border,
    * radius and shadow and lets the page, not an overlay, make room for it.
@@ -69,7 +75,10 @@
     {/if}
 
     <div id="playback-items">
-      {#each upNext as song, position (song.id)}
+      <!-- Keyed by position, not by song: a queue may legitimately hold the same song twice
+           ("queue next" on a song that is already up next), and a keyed each with duplicate
+           keys silently drops the extra rows — the count said four while two were drawn. -->
+      {#each upNext as song, position}
         <div
           class="pq-row"
           data-id={song.id}
@@ -87,14 +96,14 @@
           <div class="pq-body">
             <span class="pq-name">{song.title}<small>{song.artist ?? ""}</small></span>
             <button
-              class="pq-remove"
+              class="pq-drop"
               type="button"
-              tabindex="-1"
+              title="Remove from the queue"
               aria-label="Remove {song.title} from the queue"
               onclick={(event) => {
                 event.stopPropagation();
                 remove(position);
-              }}>Remove</button>
+              }}>×</button>
           </div>
         </div>
       {:else}
@@ -104,3 +113,32 @@
     <p id="playback-status" role="status" aria-live="polite">{status}</p>
   </details>
 </aside>
+
+<style>
+  /* The host styles `#playback-items .pq-remove` as a 92 px panel that slides in from the right
+     edge. This component draws its own button instead, so the host rule has nothing to apply to
+     and every queued row keeps its own small target at the end. */
+  .pq-drop {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: var(--dim);
+    font: inherit;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pq-drop:hover,
+  .pq-drop:focus-visible {
+    color: var(--text);
+    background: var(--panel2);
+  }
+</style>

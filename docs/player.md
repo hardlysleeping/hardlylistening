@@ -263,6 +263,18 @@ machine that is gone — stayed there for good and failed on every tap. Each row
 second removes the record, its keychain entry and its native binding, and five seconds or Escape
 puts the `×` back. `Session.forget()` already did all of that; nothing had ever called it.
 
+**The queue holds what will play, and it may hold one song twice.** Two defects lived there. The
+host reveals its per-row Remove panel with a horizontal swipe; this client carries no swipe
+controller, so the 92 px red panel stayed parked just inside each row's clipped edge and every
+queued song wore a red sliver — the error colour on rows that were fine. The row now ends in a
+`×` of its own, a 32 px target that a thumb can hit, calling the same `removeUpNext(position)`;
+before it, "Clear queue" was the only removal that worked. The list was also keyed by the song's
+id, which is not unique in a queue: queueing a song that was already up next queued it twice, the
+heading counted four while two rows were drawn, and the two invisible songs still played. The
+same key sat on `TrackList`, where a playlist is allowed to name one song twice. Both lists are
+keyed by position now. Walked at 1200×860 and 390×844 with a duplicated queue and a playlist
+containing one song twice.
+
 ## What is unverified, and why
 
 The host is Bazzite (immutable), with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`
