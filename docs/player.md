@@ -252,6 +252,15 @@ tap, does the thing on the second, and returns to the address after five seconds
 The record and its keychain secret survive, which is why the connect screen can offer the
 account straight back — a mis-tap costs one tap, not a lost library.
 
+**And it takes the queue with it.** The library walls were let go on sign-out; the player was
+not. A queue belongs to the server that issued its ids, so after signing out of one server and
+in to another the compact player still held the old song, and the red "This track could not be
+played" from that old session sat over a library that had just loaded perfectly — a verdict on
+the new server that it had done nothing to earn. `Session.signOut()` now calls
+`PlayerStore.detach()`, which stops the engine, hands it no source, and clears the queue, the
+playhead, the cover, the words, the star and the failure line. Walked at 390×844: play a track
+that the stub refuses, sign out, reconnect — the shell comes back clean.
+
 **The connect screen remembers.** Every record outlives a sign-out, so the card lists the saved
 servers as rows (label and address, one tap to reconnect, no password — the keychain still has
 it) and prefills the address and username of the newest one for the case where the secret is

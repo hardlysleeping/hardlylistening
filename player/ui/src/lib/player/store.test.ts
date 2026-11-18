@@ -110,3 +110,24 @@ describe("editing the queue", () => {
     expect(player.upNext.map((song) => song.id)).toEqual(["b", "b", "b"]);
   });
 });
+
+describe("signing out", () => {
+  it("leaves no queue, no song, and nothing to explain", async () => {
+    /* Song ids are names the *server* issued, so a queue outlives its meaning the moment the
+       account ends. It also kept the failure line: signing out of one server and in to another
+       showed "This track could not be played" over a library that had just loaded fine. */
+    const { player, engine } = store(brokenServer());
+    await player.playQueue([SONG], 0);
+    expect(player.error).toBe("This track could not be played");
+
+    player.detach();
+
+    expect(player.track).toBeNull();
+    expect(player.queue).toEqual([]);
+    expect(player.upNext).toEqual([]);
+    expect(player.index).toBe(-1);
+    expect(player.error).toBeNull();
+    expect(engine.pause).toHaveBeenCalled();
+    expect(engine.setSource).toHaveBeenLastCalledWith(null);
+  });
+});

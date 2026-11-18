@@ -119,6 +119,38 @@ export class PlayerStore {
     this.#server = server;
   }
 
+  /**
+   * The account is gone: nothing queued, nothing playing, nothing to explain.
+   *
+   * A queue belongs to the server it came from — a song id only means something to the server that
+   * gave it out — so carrying one across a sign-out would leave the next connection holding ids it
+   * has never heard of. The error line belongs to that account for the same reason: after signing
+   * out of one server and in to another, "This track could not be played" read as a verdict on the
+   * new one, over a library that had just loaded perfectly.
+   *
+   * The engine is stopped as well as emptied, because a signed-out server's audio must not keep
+   * sounding and a native queue must not keep its ids.
+   */
+  detach(): void {
+    this.#engine.pause();
+    this.#engine.setSource(null);
+    this.#server = null;
+    this.#order = [];
+    this.queue = [];
+    this.index = -1;
+    this.track = null;
+    this.playing = false;
+    this.loading = false;
+    this.position = 0;
+    this.duration = 0;
+    this.cover = null;
+    this.lyrics = null;
+    this.lyricsOpen = false;
+    this.liked = false;
+    this.error = null;
+    this.#pushQueue();
+  }
+
   /** The song that plays next, for Up Next and for prefetch. */
   get upcoming(): Song[] {
     if (this.index < 0) return this.queue.slice(0, 5);

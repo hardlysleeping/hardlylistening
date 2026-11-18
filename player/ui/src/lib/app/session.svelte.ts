@@ -307,8 +307,10 @@ export class Session {
     if (this.activeId) await this.#unbind(this.activeId);
     this.#client = null;
     // The walls belong to the account that was just signed out; leaving them up would show one
-    // person's library to the next.
+    // person's library to the next. The queue and the last playback failure belong to it too: a
+    // song id is only a name on the server that issued it.
     this.#library?.detach();
+    this.#player.detach();
     this.server = null;
     this.activeId = null;
     this.status = "idle";
