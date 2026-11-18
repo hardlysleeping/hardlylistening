@@ -77,16 +77,17 @@
   <form id="connect-form" novalidate onsubmit={submit}>
     <label for="server">Server address</label>
     <input id="server" name="server" type="text" inputmode="url" autocomplete="url"
-      spellcheck="false" autocapitalize="off" placeholder="https://music.example.com" required
-      bind:value={server}>
+      spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="next"
+      placeholder="https://music.example.com" required bind:value={server}>
 
     <label for="username">Username</label>
     <input id="username" name="username" type="text" autocomplete="username"
-      spellcheck="false" autocapitalize="off" required bind:value={username}>
+      spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="next" required
+      bind:value={username}>
 
     <label for="password">Password</label>
-    <input id="password" name="password" type="password" autocomplete="current-password" required
-      bind:value={password}>
+    <input id="password" name="password" type="password" autocomplete="current-password"
+      enterkeyhint="go" required bind:value={password}>
 
     <button type="submit" id="connect-go" class="primary" disabled={busy}>
       {busy ? "Connecting…" : "Connect"}

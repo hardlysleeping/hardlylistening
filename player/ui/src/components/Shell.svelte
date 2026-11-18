@@ -122,7 +122,9 @@
       <button type="button" class:on={tab === "favorites"} onclick={() => open("favorites")}>Favourites</button>
     </nav>
     <form class="ps-search" onsubmit={submitSearch}>
-      <input type="search" placeholder="Search" aria-label="Search" bind:value={query} />
+      <input type="search" placeholder="Search" aria-label="Search" autocomplete="off"
+        autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
+        bind:value={query} />
     </form>
     <button
       type="button"
