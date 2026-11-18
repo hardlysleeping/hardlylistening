@@ -254,6 +254,16 @@ the 62% the fullscreen player's subtitle has always used, so both names keep roo
 truncate. Measured at 390×844 with a 130-character artist: two 88 px halves and a 12 px
 separator, where the second half used to be 0.
 
+**The words follow the clock.** OpenSubsonic times lyrics in milliseconds (`line.start`,
+`offset`); every clock in this app — `audio.currentTime`, the engine's `time` event, the
+scrubber — is in seconds. The two were compared as they arrived, so a line starting at four
+seconds read as four thousand: the highlight sat on the first line of every song and never
+moved, which is the one thing a synced reading exists to do. The conversion now happens at the
+boundary, in `SubsonicClient.lyrics`, and nowhere else. Measured in the app's engine at
+390×844 (10.8 s into a 180 s track → the third line, 90 s → the fourth) and walked in the
+built binary by scrubbing: 0:06 highlights the line that starts at 0:04, 1:30 the last one,
+with the reading scrolling to follow.
+
 **A control the engine cannot honour is not drawn.** The reading's tools row carried a
 Fullscreen button; on a desktop WebView it takes the window, which is why it is there. iOS can
 put a `<video>` fullscreen and nothing else, and WKWebView follows Safari there, so on the phone

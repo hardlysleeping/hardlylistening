@@ -312,19 +312,26 @@ export class SubsonicClient implements MusicServer {
     const first = rows[0];
     if (!first) return null;
 
+    /* OpenSubsonic times lyrics in milliseconds (`line.start`, `offset`); every clock this app
+       reads — `audio.currentTime`, the engine's `time` event, the scrubber — is in seconds. The
+       conversion belongs here, at the boundary, so nothing downstream has to remember which of
+       the two numbers it is holding. Left undone, a line at 2 s reads as 2000 s and the highlight
+       never leaves the first line of the song. */
     const lines = list<Bag>(first["line"])
       .map((line) => {
         const value = text(line["value"]);
-        const start = Number(line["start"]);
+        const start = Number(line["start"]) / 1000;
         return Number.isFinite(start) ? { start, value } : { value };
       })
       .filter((line) => line.value !== "");
+
+    const offset = Number(first["offset"]) / 1000;
 
     return {
       artist: text(first["artist"]) || undefined,
       title: text(first["title"]) || undefined,
       synced: first["synced"] === true,
-      offset: Number(first["offset"]) || undefined,
+      offset: Number.isFinite(offset) && offset !== 0 ? offset : undefined,
       line: lines,
     };
   }

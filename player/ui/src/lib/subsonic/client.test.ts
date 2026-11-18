@@ -275,10 +275,12 @@ describe("lyrics", () => {
               artist: "Artist",
               title: "Song",
               synced: true,
+              offset: -100,
               line: [
+                // Milliseconds, as the spec says: 4500 ms is the line four and a half seconds in.
                 { start: 0, value: "first" },
-                { start: 4.5, value: "second" },
-                { start: 9, value: "" },
+                { start: 4500, value: "second" },
+                { start: 9000, value: "" },
                 { value: "untimed" },
               ],
             },
@@ -293,12 +295,14 @@ describe("lyrics", () => {
     expect(transport.calls.at(-1)).toEqual({ endpoint: "getLyricsBySongId", params: { id: "s-1" } });
     expect(lyrics?.artist).toBe("Artist");
     expect(lyrics?.synced).toBe(true);
-    // The empty line is not a line; the untimed one is kept without a time.
+    // The empty line is not a line; the untimed one is kept without a time. Times are seconds
+    // because every clock in this app is; the server's milliseconds stop at this boundary.
     expect(lyrics?.line).toEqual([
       { start: 0, value: "first" },
       { start: 4.5, value: "second" },
       { value: "untimed" },
     ]);
+    expect(lyrics?.offset).toBe(-0.1);
   });
 
   it("answers null rather than an empty overlay when the server sends none", async () => {
