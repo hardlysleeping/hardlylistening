@@ -404,8 +404,12 @@ export class PlayerStore {
     this.position = 0;
     this.duration = song.duration ?? 0;
     this.liked = Boolean(song.starred);
-    // A new track has new words; the old ones must not be read against the new clock.
+    // A new track has new words; the old ones must not be read against the new clock, and the
+    // reading closes with them. The host hides its overlay on `loadstart` for the same reason:
+    // left open over a track the server has nothing for, it is an empty panel with a close
+    // button and no explanation — words that belong to the song before, or none at all.
     this.lyrics = null;
+    this.lyricsOpen = false;
 
     const server = this.#server;
     if (!server) return;

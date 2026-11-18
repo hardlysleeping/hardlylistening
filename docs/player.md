@@ -254,6 +254,14 @@ the 62% the fullscreen player's subtitle has always used, so both names keep roo
 truncate. Measured at 390×844 with a 130-character artist: two 88 px halves and a 12 px
 separator, where the second half used to be 0.
 
+**The reading never outlives its words.** Skipping tracks with the words open left the overlay
+in place while the store cleared them, so a track the server had nothing for showed an empty
+panel over the disc — no lines, no status, only a close button, and no way to tell that from a
+server that was slow. The host hides its overlay on `loadstart` for the same reason: the
+reading belongs to the track. `#present` now closes it with the words, and the pill dims
+because there is nothing to read until this track's own answer arrives. Measured in the app's
+engine at 390×844 (`on` → `` on a skip to a words-less track) and walked in the built binary.
+
 **The words follow the clock.** OpenSubsonic times lyrics in milliseconds (`line.start`,
 `offset`); every clock in this app — `audio.currentTime`, the engine's `time` event, the
 scrubber — is in seconds. The two were compared as they arrived, so a line starting at four

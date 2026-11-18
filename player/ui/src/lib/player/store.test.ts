@@ -221,6 +221,22 @@ describe("words", () => {
     expect(player.lyrics?.line?.[0]?.value).toBe("words for the one playing");
   });
 
+  it("closes when the next track has no words of its own", async () => {
+    /* The host hides its overlay on `loadstart`, and for the same reason: the reading belongs
+       to the track. Left open across a skip it is an empty panel covering the disc — no lines,
+       no status, just a close button — because the words were cleared with the old song. */
+    const { player } = store(okServer());
+    await player.playQueue([SONG], 0);
+    player.lyrics = { synced: true, line: [{ start: 0, value: "words" }] };
+    player.toggleLyrics();
+    expect(player.lyricsOpen).toBe(true);
+
+    await player.playQueue([{ ...SONG, id: "song-2", title: "Next" }], 0);
+
+    expect(player.lyricsOpen).toBe(false);
+    expect(player.lyrics).toBeNull();
+  });
+
   it("opens only when there is something to read", () => {
     const { player } = store(okServer());
 
