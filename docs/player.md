@@ -217,6 +217,12 @@ control:
 * **A load that failed.** `albumsDone` is set on failure too, so the "Show more" button vanishes
   and there would be nothing left to press. The failure carries its own **Try again**, which
   reloads the open tab.
+* **A stream that failed.** `player.error` was set by three paths — the engine's own error event
+  ("This track could not be played"), the native engine, the failed star in `toggleLike` — and
+  nothing drew it, so the sign of a dead stream was a Play button that did nothing. The line is
+  now drawn where the person is looking: above the content in `Shell.svelte`, and under the title
+  in `FullPlayer.svelte` for the case where the player is the whole screen. It is absent, and
+  costs no pixel, when there is nothing to say.
 * **A failure sentence.** The Rust transport now classifies its own error
   (`subsonic.rs::transport_reason`) instead of printing `reqwest`'s `Display`, because that
   `Display` ends in the request URL and Subsonic puts the credential in the query string (`u`

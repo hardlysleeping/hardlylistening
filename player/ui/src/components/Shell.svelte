@@ -144,6 +144,10 @@
       <button type="button" class="ps-more" onclick={retry}>Try again</button>
     {/if}
 
+    {#if player.error}
+      <p class="ps-error" role="status">{player.error}</p>
+    {/if}
+
     {#if detail}
       <button type="button" class="ps-back" onclick={() => library.closeDetail()}>← Back</button>
 

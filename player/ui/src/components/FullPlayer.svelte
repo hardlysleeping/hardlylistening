@@ -182,6 +182,11 @@
       <div class="pf-text" bind:this={textBlock} style={headTravel ? `transform:translateY(-${headTravel}px)` : ""}>
         <div class="pf-title" id="pftitle">{title}</div>
         <div class="pf-sub" id="pfsub"><Subtitle {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} /></div>
+        <!-- A stream that fails used to fail silently: the engine reported it, the store kept
+             it, and nothing drew it, so the only sign was a play button that did nothing. -->
+        {#if player.error}
+          <p class="pf-error" id="pferror" role="status">{player.error}</p>
+        {/if}
       </div>
     </div>
 
@@ -274,3 +279,14 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Under the title, and only when there is something to say: the visual baselines are captured
+     without one, so this adds no pixel to the surfaces they pin. */
+  .pf-error {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--danger, #ff7a7a);
+  }
+</style>
