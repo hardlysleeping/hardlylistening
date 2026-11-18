@@ -75,14 +75,31 @@
    * `library-row.css` gives `.songrow` the host's eight columns — index, cover, title,
    * artist, album, duration, download pair, mark — because the host row manages a file. This row
    * has five cells, so inheriting that template auto-placed them into the wrong cells: the queue
-   * button landed where the cover goes and the title started one column too far right. Naming
-   * the columns is the whole fix; the row's type, padding and borders still come from the host.
+   * button landed where the cover goes and the title started one column too far right.
+   *
+   * Naming the columns is not enough on its own. The host's player list re-places the same cells
+   * by *area* (`44px 1fr auto`, "art st more") because its row carries a cover and a "more" menu,
+   * and switches the index and the duration off. This row has neither, so the areas are switched
+   * off here and those two cells are switched back on — otherwise every list of songs drew with an
+   * empty cover-sized hole at its left, no index, and no duration. The row's type, padding and
+   * borders still come from the host.
    */
   .songtable .songrow {
     grid-template-columns: 32px minmax(0, 2.2fr) minmax(0, 1.3fr) 72px 34px;
+    grid-template-areas: none;
+  }
+
+  .songtable .songrow .st,
+  .songtable .songrow .sartist {
+    grid-area: auto;
+  }
+
+  .songtable .songrow .idx {
+    display: block;
   }
 
   .songtable .songrow .sdur {
+    display: block;
     grid-column: 4;
     grid-row: 1;
   }

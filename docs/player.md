@@ -272,6 +272,18 @@ machine that is gone — stayed there for good and failed on every tap. Each row
 second removes the record, its keychain entry and its native binding, and five seconds or Escape
 puts the `×` back. `Session.forget()` already did all of that; nothing had ever called it.
 
+**A list of songs draws its own cells.** The host row is a file manager's row — cover, title,
+artist, album, duration, download pair, mark — and the player's row has five cells instead:
+index, title, artist, duration, and the queue button. Naming the columns was not enough. The
+host's *player* list re-places the same cells by area (`44px 1fr auto`, `"art st more"`) because
+its row carries a cover and a "more" menu, and it switches the index and the duration off, so
+every list of songs in the player drew with an empty cover-sized hole at its left and neither an
+index nor a duration: a row that read as a thumbnail that had failed to load. The component now
+clears the areas and switches those two cells back on. On a phone the artist column goes, because
+the title and the duration are what a row is for, and the queue button keeps its 30 px target.
+Measured in the app's own engine at 390×844 and 1200×860, then walked in the built binary: index,
+title, artist (desktop), duration and `+` in that order, with no dead space.
+
 **The queue holds what will play, and it may hold one song twice.** Two defects lived there. The
 host reveals its per-row Remove panel with a horizontal swipe; this client carries no swipe
 controller, so the 92 px red panel stayed parked just inside each row's clipped edge and every
