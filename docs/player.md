@@ -199,10 +199,13 @@ A player is asked what it is by the states that are not the happy path. `Shell.s
 `Connect.svelte` answer three of them in words rather than in blanks, and one of them is a
 control:
 
-* **An empty library.** Each wall says what is missing — "This server has no albums yet", no
-  artists, no playlists, "Nothing is starred on this server yet", "No results." for a search
-  that matched nothing. A failure is not an empty library, so the message is suppressed while
-  `library.error` is set; otherwise a dead connection would read as a server with no music.
+* **An empty library, and an empty thing inside it.** Each wall says what is missing — "This
+  server has no albums yet", no artists, no playlists, "Nothing is starred on this server yet",
+  "No results." for a search that matched nothing — and so does each detail view: "This album has
+  no songs on this server", "This artist has no albums here", "This playlist is empty". A Play
+  button over nothing is disabled rather than inert, because a button that looks live and does
+  nothing is the worse answer. A failure is not an empty library, so the message is suppressed
+  while `library.error` is set; otherwise a dead connection would read as a server with no music.
 * **A load that failed.** `albumsDone` is set on failure too, so the "Show more" button vanishes
   and there would be nothing left to press. The failure carries its own **Try again**, which
   reloads the open tab.
@@ -233,22 +236,25 @@ gone.
 
 ## What is unverified, and why
 
-This machine is Bazzite (immutable) with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`
-development packages and no `cargo-tauri`**, so the Rust crate and the Tauri configuration
-have not been compiled, and no window has been opened. `cargo check` stops at `glib-sys`. What
-is proven here is what can be proven without them:
+The host is Bazzite (immutable), with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`
+development packages and no `cargo-tauri`**, so nothing is built on the host itself. Everything
+that can be built is built inside the `huibuild` distrobox, which has those packages:
 
-* the JSON files parse and describe the shapes Tauri 2 reads;
-* `rustfmt --check` accepts the `.rs` files, and the two pure modules (`subsonic_url.rs`,
-  `native_queue.rs`) are compiled and exercised in throwaway crates;
-* the front end builds (`vite build`), type-checks (`svelte-check`), and its unit tests pass;
-* the build's surfaces are graded against the app's stored screenshots by `tools/parity.cjs`;
-* the built tree is audited file by file by `tests/test_player_store_safe.py`.
+* `cargo build --release --features tauri/custom-protocol` links the container's WebKit, and
+  the window opens under Xvfb on X11 with `GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1
+  WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1`. Every surface in this
+  document has been walked that way against a stub OpenSubsonic server, at 1200×860 and at
+  390×844;
+* `cargo test --release` — 35 cases, several of them socket-level, including a stub that answers
+  `/rest/*` — and `rustfmt --check` accept the Rust tree;
+* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 135 vitest cases;
+* the built tree is audited file by file by `tests/test_player_store_safe.py` (9 tests).
 
-`subsonic.rs` and `native_audio.rs` — the command layers — have **never been compiled**.
-Compilation, `gen/apple`/`gen/android` generation, a real WebView, and the platform audio
-engine therefore need a machine with the WebView packages, or a macOS runner plus the Android
-SDK.
+What no Linux build settles is the device: `gen/apple`/`gen/android` generation, a real WKWebView,
+the platform keychain, App Transport Security, and the platform audio engine — `native_audio.rs`
+compiles, but `PLATFORM_PLAYER_PRESENT` is `false`, so playback runs through the WebView's
+`<audio>` element. The iOS product is built unsigned on a macOS runner from `codemagic.yaml`;
+installing it needs a signature this repository does not carry.
 
 The local half of that gap is now written down and checked rather than assumed: the recipe in
 `codemagic.yaml` sets `NSAllowsLocalNetworking` on the built product and fails if the packaged

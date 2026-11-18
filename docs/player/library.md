@@ -174,13 +174,19 @@ the failed session is not retried on a timer.
 
 ## What is still unproven
 
-* **CORS.** The player's WebView origin is the asset protocol, not the server's, so the server
-  must answer `Access-Control-Allow-Origin` for `/rest/*` — the same gap `docs/player.md` records
-  for the connect screen's ping. `tauri-plugin-http` (PLAYER-002) is the fallback.
-* **A real window.** This machine has no WebKitGTK development packages, so no window has been
-  opened here: the mapping, the error codes, the token URLs and the page write are exercised
-  under node with `fetch` and the DOM stubbed. `document.write` into a live realm is the piece
-  only a real build can confirm.
+* **CORS, for the two loads the page still makes itself.** Every `/rest/` call goes through
+  Rust (`subsonic_*`), so the server's origin policy does not apply to the mapping, the error
+  codes, the token URLs or the page write. What the page still fetches directly is a cover in an
+  `<img>` and a stream in an `<audio>`; those carry no `Origin`-based checks in practice — enough
+  for the copies on this server and for Navidrome — but a server that answers `getCoverArt` with
+  a redirect to somewhere that refuses the WebView's origin would show the drawn fallback.
+* **A real window.** Not on this host: Bazzite is immutable and ships no WebKitGTK development
+  packages, so the crate is compiled in the `huibuild` distrobox, which has `webkit2gtk-4.1`,
+  `gtk+-3.0` and `libsoup-3.0`, and the window is opened there under Xvfb on X11 with
+  `GDK_BACKEND=x11 LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1
+  WEBKIT_DISABLE_DMABUF_RENDERER=1`. Every surface in this document has been walked that way
+  against a stub OpenSubsonic server, including the empty states and both window widths; what a
+  walk cannot settle is the device (the audio engine, ATS and the platform keychain).
 * **Playlist writes depend on the server.** This server answers `createPlaylist`/`updatePlaylist`
   with "unsupported" (see `sdk/subsonic.py`), and the bridge surfaces that as an error: creating
   or extending a playlist works only on a server that implements them.

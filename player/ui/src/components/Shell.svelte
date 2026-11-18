@@ -160,22 +160,27 @@
             <button
               type="button"
               class="ps-play"
+              disabled={!album.song?.length}
               onclick={() => {
                 const songs = album.song ?? [];
                 if (songs.length) playList(songs, 0);
               }}>Play album</button>
           </div>
         </section>
-        <TrackList
-          songs={album.song ?? []}
-          currentId={player.track?.id ?? null}
-          playing={player.playing}
-          onplay={(index) => playList(album.song ?? [], index)}
-          onqueue={(index) => {
-            const song = album.song?.[index];
-            if (song) player.enqueue([song], { next: true });
-          }}
-        />
+        {#if album.song?.length}
+          <TrackList
+            songs={album.song}
+            currentId={player.track?.id ?? null}
+            playing={player.playing}
+            onplay={(index) => playList(album.song ?? [], index)}
+            onqueue={(index) => {
+              const song = album.song?.[index];
+              if (song) player.enqueue([song], { next: true });
+            }}
+          />
+        {:else}
+          <p class="ps-dim">This album has no songs on this server.</p>
+        {/if}
       {:else if library.artist}
         {@const artist = library.artist}
         <section class="ps-detail">
@@ -184,11 +189,15 @@
             <p class="ps-dim">{artist.albumCount ?? artist.album?.length ?? 0} albums</p>
           </div>
         </section>
-        <div class="songgrid">
-          {#each artist.album ?? [] as album (album.id)}
-            <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
-          {/each}
-        </div>
+        {#if artist.album?.length}
+          <div class="songgrid">
+            {#each artist.album as album (album.id)}
+              <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
+            {/each}
+          </div>
+        {:else}
+          <p class="ps-dim">This artist has no albums here.</p>
+        {/if}
       {:else if library.playlist}
         {@const playlist = library.playlist}
         <section class="ps-detail">
@@ -198,22 +207,27 @@
             <button
               type="button"
               class="ps-play"
+              disabled={!playlist.entry?.length}
               onclick={() => {
                 const songs = playlist.entry ?? [];
                 if (songs.length) playList(songs, 0);
               }}>Play playlist</button>
           </div>
         </section>
-        <TrackList
-          songs={playlist.entry ?? []}
-          currentId={player.track?.id ?? null}
-          playing={player.playing}
-          onplay={(index) => playList(playlist.entry ?? [], index)}
-          onqueue={(index) => {
-            const song = playlist.entry?.[index];
-            if (song) player.enqueue([song], { next: true });
-          }}
-        />
+        {#if playlist.entry?.length}
+          <TrackList
+            songs={playlist.entry}
+            currentId={player.track?.id ?? null}
+            playing={player.playing}
+            onplay={(index) => playList(playlist.entry ?? [], index)}
+            onqueue={(index) => {
+              const song = playlist.entry?.[index];
+              if (song) player.enqueue([song], { next: true });
+            }}
+          />
+        {:else}
+          <p class="ps-dim">This playlist is empty.</p>
+        {/if}
       {/if}
     {:else if tab === "albums"}
       <div class="songgrid">
@@ -482,6 +496,13 @@
     border-radius: 999px;
     padding: 9px 20px;
     cursor: pointer;
+  }
+
+  /* An album with nothing in it has a Play button that would do nothing, so it says so by
+     looking inert rather than by promising a queue. */
+  .ps-play:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   .ps-rows {
