@@ -203,11 +203,17 @@ control:
 
 * **An empty library, and an empty thing inside it.** Each wall says what is missing — "This
   server has no albums yet", no artists, no playlists, "Nothing is starred on this server yet",
-  "No results." for a search that matched nothing — and so does each detail view: "This album has
-  no songs on this server", "This artist has no albums here", "This playlist is empty". A Play
-  button over nothing is disabled rather than inert, because a button that looks live and does
-  nothing is the worse answer. A failure is not an empty library, so the message is suppressed
-  while `library.error` is set; otherwise a dead connection would read as a server with no music.
+  "No results for "zzz"." for a search that matched nothing — and so does each detail view: "This
+  album has no songs on this server", "This artist has no albums here", "This playlist is
+  empty". A Play button over nothing is disabled rather than inert, because a button that looks
+  live and does nothing is the worse answer. A failure is not an empty library, so the message is
+  suppressed while `library.error` is set; otherwise a dead connection would read as a server with
+  no music.
+* **A search says what it searched for.** The box can be edited after a search without running it
+  again, so the term is not read back off the input: `search()` records it (`lastQuery`, trimmed)
+  and the results carry a heading — "Results for <term>", the term in its own case, because it is
+  what somebody typed and not a section label. An empty result names it too, so "nothing matched"
+  and "the search never ran" stop looking the same.
 * **A load that failed.** `albumsDone` is set on failure too, so the "Show more" button vanishes
   and there would be nothing left to press. The failure carries its own **Try again**, which
   reloads the open tab.

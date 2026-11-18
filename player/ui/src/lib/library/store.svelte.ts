@@ -35,6 +35,9 @@ export class Library {
   playlist = $state<Playlist | null>(null);
 
   results = $state<SearchResults>({ artists: [], albums: [], songs: [] });
+  /** The term those results answer. The box can be edited after a search without re-running it,
+   * so the screen names what it is showing rather than echoing what is being typed. */
+  lastQuery = $state("");
   starred = $state<SearchResults>({ artists: [], albums: [], songs: [] });
 
   #server: MusicServer | null = null;
@@ -68,6 +71,8 @@ export class Library {
     this.album = null;
     this.artist = null;
     this.playlist = null;
+    this.lastQuery = "";
+    this.results = { artists: [], albums: [], songs: [] };
     this.error = null;
   }
 
@@ -205,6 +210,7 @@ export class Library {
   async search(query: string): Promise<void> {
     if (!this.#server) return;
     this.error = null;
+    this.lastQuery = query.trim();
     try {
       this.results = await this.#server.search(query.trim(), {
         artistCount: 20,

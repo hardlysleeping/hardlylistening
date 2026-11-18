@@ -151,6 +151,8 @@ describe("the library loads lazily", () => {
     expect(server.search).not.toHaveBeenCalled();
     await library.search("  nevermind  ");
     expect(server.search).toHaveBeenCalledWith("nevermind", { artistCount: 20, albumCount: 20, songCount: 50 });
+    // The screen names the term these results answer, not whatever is in the box now.
+    expect(library.lastQuery).toBe("nevermind");
   });
 
   it("reports a failed page without wedging the list", async () => {

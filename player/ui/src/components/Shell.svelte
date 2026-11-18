@@ -302,6 +302,9 @@
         <p class="ps-dim">Nothing is starred on this server yet.</p>
       {/if}
     {:else if tab === "search"}
+      {#if library.lastQuery && (library.results.artists.length || library.results.albums.length || library.results.songs.length)}
+        <h3 class="ps-h3">Results for <span class="ps-term">{library.lastQuery}</span></h3>
+      {/if}
       {#if library.results.artists.length}
         <h3 class="ps-h3">Artists</h3>
         <div class="ps-rows">
@@ -330,8 +333,10 @@
           onplay={(index) => playList(library.results.songs, index)}
         />
       {/if}
-      {#if !library.results.artists.length && !library.results.albums.length && !library.results.songs.length}
-        <p class="ps-dim">No results.</p>
+      {#if !library.results.artists.length && !library.results.albums.length && !library.results.songs.length && !library.error}
+        <p class="ps-dim">
+          {library.lastQuery ? `No results for “${library.lastQuery}”.` : "No results."}
+        </p>
       {/if}
     {/if}
   </main>
@@ -533,6 +538,13 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--dim);
+  }
+
+  /* The term is what somebody typed, not a section label: it keeps its own case. */
+  .ps-h3 .ps-term {
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text);
   }
 
   /* The host sizes this grid from its density control (`--song-cols`: 2 on a phone, 4 on a
