@@ -246,6 +246,14 @@ column while the count keeps its own; the saved-server label wraps (`overflow-wr
 and the `×` stays where the thumb expects it. Walked at 390×844 with a 130-character artist and a
 server address carrying a long path.
 
+The bar's second line had the same problem in a nastier form. `#player .psub .psub-a` is
+`flex: 0 0 auto; max-width: 100%`, so a long artist took the whole line, the separator stayed
+where it was, and the release link was squeezed to zero width — a line that ended in a floating
+"·", plus a link that Tab could still reach while nothing was there to see. The artist now caps at
+the 62% the fullscreen player's subtitle has always used, so both names keep room and both
+truncate. Measured at 390×844 with a 130-character artist: two 88 px halves and a 12 px
+separator, where the second half used to be 0.
+
 **Signing out asks.** The server chip in the header is the only control that is not a
 destination, and one tap used to end the session. It now becomes "Sign out?" (red) on the first
 tap, does the thing on the second, and returns to the address after five seconds or on Escape.

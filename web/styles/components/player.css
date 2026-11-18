@@ -56,7 +56,11 @@ border-top:1px solid var(--line);backdrop-filter:blur(10px)}
 #player .psub{display:flex;align-items:baseline;min-width:0;white-space:nowrap;overflow:hidden;
 color:var(--dim);font-size:11.5px;margin-top:2px}
 
-#player .psub .psub-a{flex:0 0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+/* The artist may take the line, but not all of it: at `flex:0 0 auto` a long artist name
+   filled the row on its own, the separator stayed, and the release link was pushed to zero
+   width — a dangling "·" at the end of the line, and a link that could still be reached with
+   Tab while being invisible. The cap is the one the fullscreen player already uses. */
+#player .psub .psub-a{flex:0 1 auto;min-width:0;max-width:62%;overflow:hidden;text-overflow:ellipsis;
 color:inherit;text-decoration:none;cursor:pointer}
 
 #player .psub .psub-a:hover{color:var(--text);text-decoration:underline}
