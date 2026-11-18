@@ -31,6 +31,47 @@
   let tab = $state<Tab>("albums");
   let query = $state("");
 
+  /* Signing out is one tap away from somebody browsing their library — the server chip is the
+     only control in the header that is not a destination. So it asks: the first tap turns the
+     chip into "Sign out?", the second does it, and ignoring it puts the chip back. The record
+     and its keychain secret survive, which is why the connect screen can offer the account
+     again; this just stops a mis-tap from looking like a lost library. */
+  let confirming = $state(false);
+  let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function signOutTap(): void {
+    if (!confirming) {
+      confirming = true;
+      if (confirmTimer) clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => (confirming = false), 5000);
+      return;
+    }
+    if (confirmTimer) clearTimeout(confirmTimer);
+    confirmTimer = null;
+    confirming = false;
+    onsignout();
+  }
+
+  function signOutKey(event: KeyboardEvent): void {
+    if (event.key !== "Escape" || !confirming) return;
+    event.preventDefault();
+    if (confirmTimer) clearTimeout(confirmTimer);
+    confirmTimer = null;
+    confirming = false;
+  }
+
+  /* A load that failed is not the same as a library with nothing in it, and the wall cannot tell
+     the difference by itself: `albumsDone` is set on failure too, so "Show more" disappears and
+     nothing is left to press. This is the one control that asks again. */
+  function retry(): void {
+    library.error = null;
+    if (tab === "albums") void library.loadAlbums({ reset: true });
+    if (tab === "artists") void library.loadArtists();
+    if (tab === "playlists") void library.loadPlaylists();
+    if (tab === "favorites") void library.loadStarred();
+    if (tab === "search" && query.trim()) void library.search(query);
+  }
+
   const detail = $derived(library.album ?? library.artist ?? library.playlist);
 
   function open(next: Tab): void {
@@ -83,14 +124,22 @@
     <form class="ps-search" onsubmit={submitSearch}>
       <input type="search" placeholder="Search" aria-label="Search" bind:value={query} />
     </form>
-    <button type="button" class="ps-server" title={serverLabel} onclick={() => onsignout()}>
-      {serverLabel}
+    <button
+      type="button"
+      class="ps-server"
+      class:confirming
+      title={confirming ? "Tap again to sign out" : serverLabel}
+      aria-label={confirming ? `Sign out of ${serverLabel}` : `Signed in to ${serverLabel}. Sign out`}
+      onkeydown={signOutKey}
+      onclick={signOutTap}>
+      {confirming ? "Sign out?" : serverLabel}
     </button>
   </header>
 
   <main class="ps-main">
     {#if library.error}
       <p class="ps-error" role="status">{library.error}</p>
+      <button type="button" class="ps-more" onclick={retry}>Try again</button>
     {/if}
 
     {#if detail}
@@ -174,6 +223,8 @@
         <p class="ps-dim">Loading…</p>
       {:else if !library.albumsDone}
         <button type="button" class="ps-more" onclick={() => void library.loadAlbums()}>Show more</button>
+      {:else if library.albums.length === 0 && !library.error}
+        <p class="ps-dim">This server has no albums yet.</p>
       {/if}
     {:else if tab === "artists"}
       <div class="ps-rows">
@@ -184,6 +235,11 @@
           </button>
         {/each}
       </div>
+      {#if library.loadingArtists}
+        <p class="ps-dim">Loading…</p>
+      {:else if library.artists.length === 0 && !library.error}
+        <p class="ps-dim">This server has no artists yet.</p>
+      {/if}
     {:else if tab === "playlists"}
       <div class="ps-rows">
         {#each library.playlists as playlist (playlist.id)}
@@ -193,6 +249,11 @@
           </button>
         {/each}
       </div>
+      {#if library.loadingPlaylists}
+        <p class="ps-dim">Loading…</p>
+      {:else if library.playlists.length === 0 && !library.error}
+        <p class="ps-dim">This server has no playlists yet.</p>
+      {/if}
     {:else if tab === "favorites"}
       {#if library.starred.songs.length}
         <TrackList
@@ -201,10 +262,41 @@
           playing={player.playing}
           onplay={(index) => playList(library.starred.songs, index)}
         />
-      {:else}
+      {/if}
+      {#if library.starred.albums.length}
+        <h3 class="ps-h3">Albums</h3>
+        <div class="songgrid">
+          {#each library.starred.albums as album (album.id)}
+            <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
+          {/each}
+        </div>
+      {/if}
+      {#if library.starred.artists.length}
+        <h3 class="ps-h3">Artists</h3>
+        <div class="ps-rows">
+          {#each library.starred.artists as artist (artist.id)}
+            <button type="button" class="ps-row" onclick={() => void library.openArtist(artist.id)}>
+              <span>{artist.name}</span>
+              <span class="ps-dim">{artist.albumCount ?? ""}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+      {#if !library.starred.songs.length && !library.starred.albums.length && !library.starred.artists.length && !library.error}
         <p class="ps-dim">Nothing is starred on this server yet.</p>
       {/if}
     {:else if tab === "search"}
+      {#if library.results.artists.length}
+        <h3 class="ps-h3">Artists</h3>
+        <div class="ps-rows">
+          {#each library.results.artists as artist (artist.id)}
+            <button type="button" class="ps-row" onclick={() => void library.openArtist(artist.id)}>
+              <span>{artist.name}</span>
+              <span class="ps-dim">{artist.albumCount ?? ""}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
       {#if library.results.albums.length}
         <h3 class="ps-h3">Albums</h3>
         <div class="songgrid">
@@ -222,7 +314,7 @@
           onplay={(index) => playList(library.results.songs, index)}
         />
       {/if}
-      {#if !library.results.albums.length && !library.results.songs.length}
+      {#if !library.results.artists.length && !library.results.albums.length && !library.results.songs.length}
         <p class="ps-dim">No results.</p>
       {/if}
     {/if}
@@ -309,6 +401,13 @@
     padding: 7px 12px;
     font-size: 12px;
     cursor: pointer;
+  }
+
+  /* The second tap is the one that signs out, so it has to look different from the first. */
+  .ps-server.confirming {
+    border-color: var(--danger, #ff7a7a);
+    color: var(--danger, #ff7a7a);
+    max-width: none;
   }
 
   .ps-main {
@@ -411,6 +510,19 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--dim);
+  }
+
+  /* The host sizes this grid from its density control (`--song-cols`: 2 on a phone, 4 on a
+     desktop). The player has no such control, so it takes the same defaults — without them the
+     grid falls back to 4 columns at any width, which at 390 px leaves each title as "N…". */
+  .ps-main .songgrid {
+    --song-cols: 2;
+  }
+
+  @media (min-width: 761px) {
+    .ps-main .songgrid {
+      --song-cols: 4;
+    }
   }
 
   @media (max-width: 700px) {

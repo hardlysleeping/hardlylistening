@@ -48,6 +48,15 @@ An account is public data: it says nothing a person's own window does not alread
   fails later, somewhere that explains nothing.
 * `added` is the first time that pair was added; signing in again keeps it.
 
+Because the record holds no secret, a record outlives a sign-out: `signOut()` unbinds the native
+transport, detaches the library and clears the active id, and the record stays. The connect
+screen therefore lists the saved servers as rows and reconnects to one with `activate(id)` and
+no typing — the keychain still holds the secret. It also prefills its form from the newest
+record, for the case where the keychain does *not* have it (a re-signed build, a platform with no
+backend): `activate` answers "That account's password is gone. Enter it again to reconnect"
+rather than failing silently. Switching between two saved servers was walked against the stub —
+two rows, a tap on either lands on that server's library.
+
 `list()` and `serialise()` return copies of these fields and nothing else. `render()` is the
 text the UI shows, built from the same record, and `restore()` reads a saved list through an
 allow-list — a `password` key that found its way into a config file is dropped and *named* in

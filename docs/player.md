@@ -193,6 +193,44 @@ password crosses to the server as Subsonic's plain `p=` parameter, so the addres
 `https://`; token auth (`t`/`s`, md5) is supported by the client but not used for the bind.
 `docs/player/accounts.md` and `docs/player/transport.md` are the two documents for this.
 
+## A screen that has nothing to show
+
+A player is asked what it is by the states that are not the happy path. `Shell.svelte` and
+`Connect.svelte` answer three of them in words rather than in blanks, and one of them is a
+control:
+
+* **An empty library.** Each wall says what is missing — "This server has no albums yet", no
+  artists, no playlists, "Nothing is starred on this server yet", "No results." for a search
+  that matched nothing. A failure is not an empty library, so the message is suppressed while
+  `library.error` is set; otherwise a dead connection would read as a server with no music.
+* **A load that failed.** `albumsDone` is set on failure too, so the "Show more" button vanishes
+  and there would be nothing left to press. The failure carries its own **Try again**, which
+  reloads the open tab.
+* **A failure sentence.** The Rust transport now classifies its own error
+  (`subsonic.rs::transport_reason`) instead of printing `reqwest`'s `Display`, because that
+  `Display` ends in the request URL and Subsonic puts the credential in the query string (`u`
+  plus `p`, or a salted `t`/`s`). What a person sees is "Could not reach <address> — the
+  connection was refused" (or timed out / cut short / redirected); the address stays because it
+  is the part they can check. `a_failure_sentence_never_repeats_the_url_the_credential_travels_in`
+  builds the real URL, makes the real failing request and asserts the sentence carries no
+  password, no query and none of `u=`, `p=`, `t=`, `s=`.
+
+The album grid is sized from the host's density variable (`--song-cols`, 2 on a phone, 4 on a
+desktop). The player has no density control, so it takes those defaults explicitly; without them
+the grid fell back to 4 columns at any width and a 390 px window showed every title as "N…".
+Its phone layout was walked in a 390×844 window, not resized after the fact.
+
+**Signing out asks.** The server chip in the header is the only control that is not a
+destination, and one tap used to end the session. It now becomes "Sign out?" (red) on the first
+tap, does the thing on the second, and returns to the address after five seconds or on Escape.
+The record and its keychain secret survive, which is why the connect screen can offer the
+account straight back — a mis-tap costs one tap, not a lost library.
+
+**The connect screen remembers.** Every record outlives a sign-out, so the card lists the saved
+servers as rows (label and address, one tap to reconnect, no password — the keychain still has
+it) and prefills the address and username of the newest one for the case where the secret is
+gone.
+
 ## What is unverified, and why
 
 This machine is Bazzite (immutable) with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`

@@ -97,6 +97,26 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
+/// What a failed request is worth saying to the person who sees the screen.
+///
+/// `reqwest`'s own `Display` ends in `for url (…)`, and that URL carries the credential: Subsonic
+/// puts `u` and either `p` (the password itself) or a salted `t` in the query string. A failure
+/// sentence is shown on the library screen and pasted into a bug report, so the URL must not be in
+/// it. Classifying the error keeps something a person can act on and drops everything else.
+fn transport_reason(error: &reqwest::Error) -> &'static str {
+    if error.is_timeout() {
+        "the server did not answer in time"
+    } else if error.is_connect() {
+        "the connection was refused"
+    } else if error.is_decode() || error.is_body() {
+        "the answer was cut short"
+    } else if error.is_redirect() {
+        "the server redirected too many times"
+    } else {
+        "the request could not be sent"
+    }
+}
+
 /// One request, resolved to the parsed JSON body.
 async fn envelope(
     registry: &Registry,
@@ -128,7 +148,11 @@ async fn envelope(
         .send()
         .await
         .map_err(|error| {
-            Failure::transport(format!("Could not reach {} — {error}", bound.origin))
+            Failure::transport(format!(
+                "Could not reach {} — {}",
+                bound.origin,
+                transport_reason(&error)
+            ))
         })?;
 
     let status = response.status();
@@ -308,7 +332,11 @@ async fn public_document(
         .send()
         .await
         .map_err(|error| {
-            Failure::transport(format!("Could not reach {} — {error}", bound.origin))
+            Failure::transport(format!(
+                "Could not reach {} — {}",
+                bound.origin,
+                transport_reason(&error)
+            ))
         })?;
 
     let status = response.status();
@@ -454,6 +482,39 @@ mod tests {
 
         assert_eq!(failure.kind, "json");
         served.join().expect("the stub");
+    }
+
+    #[test]
+    fn a_failure_sentence_never_repeats_the_url_the_credential_travels_in() {
+        /* The password form puts the secret in the query string, so any message built from the
+        request URL would print it. This builds the real URL, makes the real failing request and
+        checks the sentence the screen would show. */
+        let origin = {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
+            let served = listener.local_addr().expect("an address");
+            drop(listener); // nothing is listening now: the connection is refused
+            format!("http://{served}")
+        };
+        let bound = Bound::new(&origin, "alex", "password").expect("a normal address");
+        let url = address::request_url(&bound, "hunter2", "abcdef", "ping", &[]);
+
+        let error = runtime()
+            .block_on(async { client().get(&url).send().await })
+            .expect_err("nothing is listening");
+        let said = format!(
+            "Could not reach {} — {}",
+            bound.origin,
+            transport_reason(&error)
+        );
+
+        assert!(!said.contains("hunter2"), "{said}");
+        assert!(!said.contains(&url), "{said}");
+        assert!(!said.contains('?'), "{said} carries a query");
+        for key in ["u=", "p=", "t=", "s="] {
+            assert!(!said.contains(key), "{said} carries {key}");
+        }
+        // The address stays: it is the part a person can check.
+        assert!(said.contains(&origin), "{said}");
     }
 
     #[test]

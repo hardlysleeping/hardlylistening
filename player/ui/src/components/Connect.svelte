@@ -19,9 +19,26 @@
 
   let { session }: Props = $props();
 
+  /* A record outlives a sign-out: the address, the username and the keychain's secret are still
+     there, so the screen offers them back rather than asking a person to retype their server.
+     The form is prefilled from the newest one for the same reason — after a sign-out the only
+     thing missing is usually the password. Read once, not per render: this is a starting value. */
+  const saved = $derived(session.records);
+
   let server = $state("");
   let username = $state("");
   let password = $state("");
+  let primed = false;
+
+  $effect(() => {
+    if (primed) return;
+    primed = true;
+    const records = session.records;
+    const newest = records.length ? records[records.length - 1] : undefined;
+    if (!newest) return;
+    if (!server) server = newest.server;
+    if (!username) username = newest.username;
+  });
 
   const busy = $derived(session.status === "connecting");
   const message = $derived(session.error ?? "");
@@ -39,6 +56,23 @@
   <h1>Connect your server</h1>
   <p>This player asks a Subsonic or OpenSubsonic server for your music. Your library stays
     on that server: nothing is downloaded here, and no second catalogue is kept.</p>
+
+  {#if saved.length}
+    <div class="saved">
+      <p class="saved-title">Saved servers</p>
+      {#each saved as account (account.id)}
+        <button
+          type="button"
+          class="saved-row"
+          disabled={busy}
+          onclick={() => void session.activate(account.id)}>
+          <span class="saved-name">{account.label}</span>
+          <span class="saved-server">{account.server}</span>
+        </button>
+      {/each}
+    </div>
+    <p class="saved-or">Or connect another</p>
+  {/if}
 
   <form id="connect-form" novalidate onsubmit={submit}>
     <label for="server">Server address</label>
@@ -158,6 +192,66 @@
 
   .msg.ok {
     color: var(--ok);
+  }
+
+  /* The saved servers are a list of buttons, not a menu: one tap is the whole interaction, and
+     each row says both what it is called and where it points. */
+  .saved {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 0;
+  }
+
+  .saved-title {
+    margin: 0 0 2px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .saved-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 10px 12px;
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .saved-row:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+
+  .saved-row:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .saved-name {
+    font-size: 13.5px;
+  }
+
+  .saved-server {
+    font-size: 11.5px;
+    color: var(--dim);
+    overflow-wrap: anywhere;
+  }
+
+  .saved-or {
+    margin: 14px 0 0;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
   }
 
   .fine {
