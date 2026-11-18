@@ -116,6 +116,24 @@ describe("a session with native networking", () => {
     };
   });
 
+  it("says which store the secret is really in, not the one it hoped for", async () => {
+    /* A machine with no Secret Service is the case this pins: the shell's `mode` says
+       "keychain" because a native build usually has one, and only the probe (and a real write)
+       knows better. The screen prints this, so it must be the measured answer. */
+    const store = fakeVault();
+    const measured = { ...store.vault, probe: async () => "memory" as const };
+    const putMemory = vi.fn(async () => "memory" as const);
+    const { invoke } = fakeInvoke(() => OK);
+    const session = new Session(new PlayerStore(engine), {
+      vault: { ...measured, put: putMemory },
+      invoke,
+    });
+
+    await vi.waitFor(() => expect(session.vaultMode).toBe("memory"));
+    expect(await session.connect(SIGN_IN)).toBe(true);
+    expect(session.vaultMode).toBe("memory");
+  });
+
   it("binds the account and never reads the secret back", async () => {
     const store = fakeVault();
     const { invoke, calls } = fakeInvoke(() => OK);

@@ -187,7 +187,9 @@ refused rather than guessed (`http` versus `https` is the person's choice).
 
 **Credentials go to the OS keychain** (`src-tauri/src/accounts.rs`: Keychain, Credential
 Manager, Secret Service). A platform with no keychain backend keeps the secret in memory and
-says so, rather than writing a password to disk. The page holds an account's public record —
+says so, rather than writing a password to disk — and the screen follows the store it has:
+`accounts_mode` is asked at startup and `accounts_put` answers with the mode the write really
+used, so the fine print under Connect names the keychain only when a keychain answered. The page holds an account's public record —
 id, address, username, label — and asks Rust for the secret when a request needs it. The
 password crosses to the server as Subsonic's plain `p=` parameter, so the address should be
 `https://`; token auth (`t`/`s`, md5) is supported by the client but not used for the bind.

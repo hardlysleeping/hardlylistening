@@ -124,6 +124,7 @@ export class Session {
     this.#library = options.library ?? null;
     this.vaultMode = this.#vault.mode;
     this.#read();
+    void this.#measureVault();
   }
 
   /** One client, every subscriber: the player and the browsing store are bound together or not
@@ -177,8 +178,9 @@ export class Session {
       (record) => record.server === target.origin && record.username === username,
     );
     const id = existing?.id ?? crypto.randomUUID();
-    await this.#vault.put(id, input.password);
-    this.vaultMode = this.#vault.mode;
+    // `put` answers with the store it actually used, which is the measured answer: on a machine
+    // with no Secret Service the entry lives in this process and the screen has to say so.
+    this.vaultMode = await this.#vault.put(id, input.password);
 
     const native = this.#nativeFor(id, target.origin, username);
 
@@ -312,6 +314,16 @@ export class Session {
     this.status = "idle";
     this.error = null;
     this.#write();
+  }
+
+  /** Ask the shell what its secret store really is, once, at startup. */
+  async #measureVault(): Promise<void> {
+    if (!this.#vault.probe) return;
+    try {
+      this.vaultMode = await this.#vault.probe();
+    } catch {
+      /* A store that cannot answer is the one `mode` already described. */
+    }
   }
 
   /* ---- transports ------------------------------------------------------------------------ */

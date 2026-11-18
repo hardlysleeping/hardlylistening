@@ -96,9 +96,13 @@
 
   <div id="connect-msg" class="msg {kind}" role="status" aria-live="polite">{message}</div>
 
-  <p class="fine">The server address and username are kept as a plain record; the password goes
-    to the system keychain, and only there. A machine with no keychain keeps it in memory for
-    this session and says so, rather than writing a secret to disk.</p>
+  <p class="fine">The server address and username are kept as a plain record.
+    {#if session.vaultMode === "keychain"}
+      The password goes to the system keychain, and only there.
+    {:else}
+      This machine has no keychain this build can reach, so the password is kept in memory for
+      this session only — it is never written to disk.
+    {/if}</p>
 </main>
 </div>
 

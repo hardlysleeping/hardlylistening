@@ -16,6 +16,12 @@ export type VaultMode = "keychain" | "memory";
 
 export interface Vault {
   readonly mode: VaultMode;
+  /** What the shell's store actually is, asked rather than assumed. Optional: a vault that
+   * cannot be probed (a fake in a test, a browser) keeps `mode`'s answer. The native vault
+   * reports `keychain` in `mode` before anything is stored, and only the Rust probe knows
+   * whether a Secret Service is really there — which is the difference between "your password
+   * is in the keychain" and "it is gone when you close this window". */
+  probe?: () => Promise<VaultMode>;
   put(accountId: string, secret: string): Promise<VaultMode>;
   get(accountId: string): Promise<string | null>;
   forget(accountId: string): Promise<void>;
@@ -38,6 +44,14 @@ export function openVault(): Vault {
     get mode(): VaultMode {
       return "keychain";
     },
+    async probe() {
+      try {
+        const mode = await invoke("accounts_mode");
+        return mode === "keychain" ? "keychain" : "memory";
+      } catch {
+        return "memory";
+      }
+    },
     async put(accountId, secret) {
       const mode = await invoke("accounts_put", { account: accountId, secret });
       return mode === "keychain" ? "keychain" : "memory";
@@ -57,6 +71,9 @@ export function memoryVault(): Vault {
   const cells = new Map<string, string>();
   return {
     mode: "memory",
+    async probe() {
+      return "memory";
+    },
     async put(accountId, secret) {
       cells.set(accountId, secret);
       return "memory";

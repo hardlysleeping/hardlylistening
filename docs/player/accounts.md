@@ -223,33 +223,38 @@ config path or a small `accounts_config` command beside the four above; that is 
 card leaves to the shell's own storage card, and it is why the list is written by
 `serialise()`/`restore()` rather than by the model itself.
 
-## What is unverified, and why
+## What is verified, and what is still a claim
 
-This machine is Bazzite (immutable) with no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`
-development packages and no `cargo-tauri`, so **the crate has never been compiled**, `keyring`
-was never resolved, and no keychain was ever opened. What is proven here:
+The host is Bazzite (immutable) with no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`
+development packages and no `cargo-tauri`, so nothing is built on the host itself. It is built
+and run in the `huibuild` distrobox, which has those packages, against a stub server.
 
-* `rustfmt --check` accepts `accounts.rs` — it parses, and nothing more.
+Measured there:
+
+* **The crate links.** `cargo build --release --features tauri/custom-protocol` resolves
+  `keyring = "3"` with `default-features = false` and `apple-native`, `windows-native`,
+  `sync-secret-service` exactly as written — no `crypto-*` feature was needed for the session
+  collection, and `rustfmt --check` accepts `accounts.rs`.
+* **Both stores, by running them.** With the container's normal D-Bus (it shares the host bus)
+  the connect screen prints "The password goes to the system keychain, and only there." With
+  `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-bus` the same build prints "This machine has
+  no keychain this build can reach, so the password is kept in memory for this session only — it
+  is never written to disk." That sentence is not a guess about the platform: `accounts_mode`
+  asks `Vault::mode()`, and `accounts_put` answers with the mode the write actually used, so the
+  screen follows the store rather than the hope.
 * The session rules run under vitest against a stubbed vault
-  (`player/ui/src/lib/app/session.test.ts`, 6 tests: transport choice, the failed sign-in that
-  keeps a saved secret, a bind that never reads the secret back, the token→password rebind).
+  (`player/ui/src/lib/app/session.test.ts`, 7 tests: transport choice, the failed sign-in that
+  keeps a saved secret, a bind that never reads the secret back, the token→password rebind, and
+  the store the screen reports).
 * The commands the page names are the commands the Rust module declares.
 
-Settled by a build on a real machine, in order of likelihood to bite:
+Still claims until a device proves them:
 
-1. **The keyring feature line.** `default-features = false` plus the three platform features is
-   what keyring 3 documents, but the exact set for `sync-secret-service` (and whether a
-   `crypto-*` feature is required for the encrypted session collection) has to be read off the
-   resolved version, not guessed from here.
-2. **Linux without a Secret Service.** The probe is a write, a read and a delete, so a locked
-   or absent keyring should land on memory — but no run has watched it do that, and a
-   `dbus`-less container is the case to try first.
-3. **iOS and Android.** `apple-native` is assumed to cover iOS; Android has no backend in
+1. **The in-memory branch keeps the password for the session.** It is exercised as a store, but
+   what a person experiences after a restart — sign in again — is only inferable.
+2. **iOS and Android.** `apple-native` is assumed to cover iOS; Android has no backend in
    `keyring`, so it must fall back to memory. Both are claims about a crate that has not been
-   compiled for either target.
-4. **Re-signing.** A macOS/iOS build that changes its code signature loses the Keychain's trust
+   compiled for either target, and the fallback on a phone is what the screen would say.
+3. **Re-signing.** A macOS/iOS build that changes its code signature loses the Keychain's trust
    in the entry, which shows up as an empty read, not an error. The `get` path treats that as
    "nothing stored", which is the right behaviour and an untested one.
-
-Until a build proves otherwise, the honest statement is that a player on this machine has a
-model for accounts that is fully exercised and a store for their secrets that has never run.
