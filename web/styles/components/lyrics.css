@@ -63,7 +63,13 @@
 #lyrics-overlay.karaoke #lyrics-body p.current,#lyrics-overlay.karaoke #lyrics-body p.next{display:block;font-size:clamp(20px,6vw,34px)}
 #lyrics-overlay:fullscreen{position:fixed;inset:0;width:100vw;height:100dvh;background:#0000}
 #lyrics-overlay:fullscreen #lyrics-body{max-height:75dvh}
-#pllyrics.lyrics-ready,#pflyrics.lyrics-ready{color:var(--accent);border-color:var(--accent)}
+/* The ready state has to be spelled with the same weight as the rule that draws the button.
+   `#player-full .pf-lyrics #pflyrics` carries two ids and a class, so the one-id
+   `#pflyrics.lyrics-ready` beside it never won: a track with words and a track without looked
+   the same until the disabled attribute dimmed the second, and the accent that says "this one
+   has something to read" was never seen. */
+#pllyrics.lyrics-ready,
+#player-full .pf-lyrics #pflyrics.lyrics-ready{color:var(--accent);border-color:var(--accent)}
 /* A track with no lyrics still shows the button, dimmed rather than missing: a control that
    appears and disappears as tracks change reads as a broken row, and the dim state is what
    says "this one has none". */

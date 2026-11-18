@@ -13,6 +13,7 @@
    * than present-and-dead. The status line says what is being shown.
    */
   import type { Lyrics } from "../lib/subsonic";
+  import { supportsElementFullscreen } from "../lib/ui/fullscreen";
   import { tick } from "svelte";
 
   interface Props {
@@ -49,10 +50,30 @@
     void tick().then(() => node.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   });
 
+  /* iOS can fullscreen a `<video>` and nothing else, so on a phone the control is not drawn at
+     all — the overlay is already the whole window there, and a button that cannot move anything
+     reads as the one way to enlarge the words. */
+  const canFullscreen = supportsElementFullscreen(
+    typeof Element === "undefined" ? undefined : Element.prototype,
+  );
+
   function fullscreen(): void {
-    if (!overlay) return;
-    if (document.fullscreenElement === overlay) void document.exitFullscreen?.().catch(() => {});
-    else void overlay.requestFullscreen?.().catch(() => {});
+    const el = overlay as
+      | (HTMLDivElement & { webkitRequestFullscreen?: () => void })
+      | undefined;
+    if (!el) return;
+    const doc = document as Document & {
+      webkitExitFullscreen?: () => void;
+      webkitFullscreenElement?: Element | null;
+    };
+    const active = doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+    if (active === el) {
+      if (typeof doc.exitFullscreen === "function") void doc.exitFullscreen().catch(() => {});
+      else doc.webkitExitFullscreen?.();
+      return;
+    }
+    if (typeof el.requestFullscreen === "function") void el.requestFullscreen().catch(() => {});
+    else el.webkitRequestFullscreen?.();
   }
 </script>
 
@@ -65,7 +86,9 @@
 >
   <div class="lyrics-tools">
     <span id="lyrics-status" role="status">{status}</span>
-    <button id="lyrics-fullscreen" type="button" onclick={fullscreen}>Fullscreen</button>
+    {#if canFullscreen}
+      <button id="lyrics-fullscreen" type="button" onclick={fullscreen}>Fullscreen</button>
+    {/if}
     <button id="lyrics-close" aria-label="Hide lyrics" onclick={() => onclose()}>×</button>
   </div>
   <div id="lyrics-body" bind:this={body}>

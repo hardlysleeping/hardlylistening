@@ -254,6 +254,23 @@ the 62% the fullscreen player's subtitle has always used, so both names keep roo
 truncate. Measured at 390×844 with a 130-character artist: two 88 px halves and a 12 px
 separator, where the second half used to be 0.
 
+**A control the engine cannot honour is not drawn.** The reading's tools row carried a
+Fullscreen button; on a desktop WebView it takes the window, which is why it is there. iOS can
+put a `<video>` fullscreen and nothing else, and WKWebView follows Safari there, so on the phone
+— the surface this player exists for — it was a button that could not move anything, in a
+fullscreen view that was already fullscreen. `supportsElementFullscreen()` decides, accepting the
+web-prefixed spelling iPadOS has carried from 12 onwards, and the button is only drawn when the
+answer is yes. Its four cases are unit-tested, because a missing button is not something a
+screenshot of a working engine can show.
+
+**"Has words" now looks like it.** `#player-full .pf-lyrics #pflyrics` carries two ids and a
+class, so the one-id `#pflyrics.lyrics-ready` beside it in `lyrics.css` never won: the accent that
+says "this track has something to read" was never painted, and the only difference between a
+track with words and one without was the dimming of the disabled state. The ready rule is now
+spelled with the same weight. Measured at 1200×860: `rgb(88, 211, 168)` when the server answered
+with words, and the disabled track still reads dim (`opacity: .45`), because the disabled rule
+comes later at equal weight.
+
 **The queue and the words are one square.** The queue slot is drawn over the disc column and
 the lyrics overlay inside it, and nothing stopped both from being open: the queue's own rows
 printed straight through the second line of the song ("A starred song Alex Ross" across it), and
