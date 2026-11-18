@@ -532,6 +532,20 @@
     background: var(--panel);
   }
 
+  /* The host's base sheet sets `white-space: nowrap` on every button, which is right for a chip
+     and wrong for a row whose label is whatever the server called the artist: a long name ran
+     past the card and pushed the album count off the edge. The name truncates and keeps its
+     column; the count keeps its own. */
+  .ps-row > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ps-row > span:last-child {
+    flex: 0 0 auto;
+  }
+
   .ps-h3 {
     margin: 8px 0 0;
     font-size: 13px;

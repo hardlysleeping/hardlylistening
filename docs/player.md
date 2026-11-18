@@ -231,6 +231,15 @@ desktop). The player has no density control, so it takes those defaults explicit
 the grid fell back to 4 columns at any width and a 390 px window showed every title as "N…".
 Its phone layout was walked in a 390×844 window, not resized after the fact.
 
+**Names come from the server, and the host's base sheet assumes they are short.** `base.css` sets
+`white-space: nowrap` on every `button`, which is right for a chip and wrong for an artist row:
+a long name ran past the card and pushed the album count off the edge, and on the connect screen
+an address with a long path (no spaces, so no break opportunity) set the width of the whole card
+and made the screen scroll sideways. The row's name now truncates with an ellipsis and keeps its
+column while the count keeps its own; the saved-server label wraps (`overflow-wrap: anywhere`)
+and the `×` stays where the thumb expects it. Walked at 390×844 with a 130-character artist and a
+server address carrying a long path.
+
 **Signing out asks.** The server chip in the header is the only control that is not a
 destination, and one tap used to end the session. It now becomes "Sign out?" (red) on the first
 tap, does the thing on the second, and returns to the address after five seconds or on Escape.

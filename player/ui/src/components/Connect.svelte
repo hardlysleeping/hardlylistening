@@ -286,6 +286,13 @@
     cursor: pointer;
   }
 
+  /* Same base rule as above, one screen over: a button does not wrap its text, and a server
+     address is long by nature. The label and the address wrap inside their own row instead of
+     running under the ×. */
+  .saved-open {
+    white-space: normal;
+  }
+
   .saved-open:hover:not(:disabled) {
     border-color: var(--accent);
   }
@@ -327,6 +334,9 @@
 
   .saved-name {
     font-size: 13.5px;
+    /* An address has no spaces, so it has no break opportunity of its own: without this a long
+       one sets the width of the whole card and the screen scrolls sideways. */
+    overflow-wrap: anywhere;
   }
 
   .saved-server {
