@@ -27,11 +27,21 @@ const fill=a=>vm.runInContext(`fillAccount(${JSON.stringify(a)})`,context);
  assert.deepEqual(body,{new_password:'another good one',confirm_password:'another good one',email:'m@example.com'});
 
  // A password member must confirm the current one, and the login address is not editable here.
- fill({email:'m@example.com',has_password:true,auth_method:'password',google:true,apple:false});
+ // Google has a control of its own (connect/disconnect); the "connected accounts" line exists for
+ // the identities that are only a label, which today means Apple. So it is Apple that fills it,
+ // and a member with neither sees no line at all.
+ fill({email:'m@example.com',has_password:true,auth_method:'password',google:true,apple:true});
  assert.equal(nodes['#account-current'].hidden,false);
  assert.equal(nodes['#account-emailnew'].hidden,true);
  assert.equal(nodes['#account-providers'].hidden,false);
- assert.equal(nodes['#account-provider-list'].textContent,'Google');
+ assert.equal(nodes['#account-provider-list'].textContent,'Apple');
+ assert.equal(nodes['#account-google'].hidden,false);
+ assert(nodes['#account-google-state'].textContent,'Connected.');
+ assert.equal(nodes['#account-google-connect'].hidden,true);
+ assert.equal(nodes['#account-google-disconnect'].hidden,false);
+ fill({email:'m@example.com',has_password:true,auth_method:'password',google:false,apple:false});
+ assert.equal(nodes['#account-providers'].hidden,true);
+ assert.equal(nodes['#account-google-connect'].hidden,false);
  nodes['#account-current'].value='correct horse battery';
  nodes['#account-new'].value='another good one';
  nodes['#account-confirm'].value='another good one';
