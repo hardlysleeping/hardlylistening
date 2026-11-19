@@ -196,7 +196,7 @@
         {#if artist.album?.length}
           <div class="songgrid">
             {#each artist.album as album (album.id)}
-              <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
+              <AlbumCard {library} {album} playing={player.track?.albumId === album.id} onopen={() => void openAlbum(album.id)} />
             {/each}
           </div>
         {:else}
@@ -236,7 +236,7 @@
     {:else if tab === "albums"}
       <div class="songgrid">
         {#each library.albums as album (album.id)}
-          <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
+          <AlbumCard {library} {album} playing={player.track?.albumId === album.id} onopen={() => void openAlbum(album.id)} />
         {/each}
       </div>
       {#if library.loadingAlbums}
@@ -287,7 +287,7 @@
         <h3 class="ps-h3">Albums</h3>
         <div class="songgrid">
           {#each library.starred.albums as album (album.id)}
-            <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
+            <AlbumCard {library} {album} playing={player.track?.albumId === album.id} onopen={() => void openAlbum(album.id)} />
           {/each}
         </div>
       {/if}
@@ -324,7 +324,7 @@
         <h3 class="ps-h3">Albums</h3>
         <div class="songgrid">
           {#each library.results.albums as album (album.id)}
-            <AlbumCard {library} {album} onopen={() => void openAlbum(album.id)} />
+            <AlbumCard {library} {album} playing={player.track?.albumId === album.id} onopen={() => void openAlbum(album.id)} />
           {/each}
         </div>
       {/if}

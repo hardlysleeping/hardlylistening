@@ -98,6 +98,27 @@
     display: block;
   }
 
+  /* The playing indicator belongs in the index cell.
+   *
+   * `.nowbars` is the host's chip for a cover tile: absolute, 24 px square, dark background and
+   * an accent border. This row is not a tile, and its `.songrow` is positioned, so the chip
+   * anchored to the row's bottom-right corner and landed on the queue button — the row read as
+   * a covered `+` with an empty index column. The host's own list row puts the bars straight into
+   * `.idx` as an inline glyph; this makes the same placement hold here. */
+  .songtable .songrow .idx .nowbars {
+    position: static;
+    width: auto;
+    height: auto;
+    display: inline-block;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: inherit;
+    font-size: 10px;
+    line-height: 1;
+  }
+
   .songtable .songrow .sdur {
     display: block;
     grid-column: 4;

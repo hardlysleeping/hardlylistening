@@ -345,6 +345,19 @@ the title and the duration are what a row is for, and the queue button keeps its
 Measured in the app's own engine at 390×844 and 1200×860, then walked in the built binary: index,
 title, artist (desktop), duration and `+` in that order, with no dead space.
 
+**And the list says which song that is.** The host marks a playing tile with a chip on its cover
+— `.nowbars`, absolute, 24 px, a dark plate with an accent border — and a list row with bars
+inline in its index cell. The player had one mark and put it in the wrong place: `TrackList`
+carried the tile chip inside `.idx`, and `.songrow` is positioned, so it anchored to the row's
+bottom-right corner and landed on the queue `+`, which then read as a covered button while the
+index column sat empty. The row now draws the glyph statically inside `.idx`, the same placement
+the host's own list row uses. Measured at 390×844: the index cell at x=51 holds the bars and the
+`+` at x=322 is unobstructed. The album wall had no mark at all, so the docked bar named a song
+and no tile owned it; `AlbumCard` gained the host's `playing` state and its corner chip, wired at
+all four call sites from `player.track?.albumId === album.id`, with a scoped 10 px glyph because
+the card's 34 px type overflowed the 24 px box. Measured: exactly one `.acard.playing` with a
+24×24 chip on a 62-card albums wall and on a 31-card artist wall.
+
 **The queue holds what will play, and it may hold one song twice.** Two defects lived there. The
 host reveals its per-row Remove panel with a horizontal swipe; this client carries no swipe
 controller, so the 92 px red panel stayed parked just inside each row's clipped edge and every
