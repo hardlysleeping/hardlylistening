@@ -736,45 +736,78 @@
   </form>
 </dialog>
 
-<dialog id="dlg-profile" aria-label="My profile"><form onsubmit="saveProfile(event)"><h2>My profile</h2>
-<label for="profile-name">Display name</label><input id="profile-name" required maxlength="100">
-<label for="profile-icon">Profile icon</label><select id="profile-icon"><option value="music">♫ Music</option><option value="headphones">🎧 Headphones</option><option value="star">★ Star</option><option value="sun">☀ Sun</option><option value="moon">☾ Moon</option></select>
-<p id="profile-status" role="status"></p><button type="submit">Save profile</button><button type="button" onclick="$('#dlg-profile').close()">Close</button>
-<button type="button" onclick="openListening()">Player connections</button></form>
-<section id="account-block" aria-label="Account">
-  <h2>Account</h2>
-  <p id="account-method" class="hint"></p>
-  <label for="account-email">Email</label>
-  <input id="account-email" readonly autocomplete="off" placeholder="not set">
-  <label for="account-current" id="account-current-label" hidden>Current password</label>
-  <input id="account-current" type="password" autocomplete="current-password" hidden>
-  <label for="account-emailnew" id="account-emailnew-label" hidden>Email for password sign-in</label>
-  <input id="account-emailnew" type="email" autocomplete="email" spellcheck="false" hidden>
-  <label for="account-new">New password</label>
-  <input id="account-new" type="password" autocomplete="new-password" minlength="10">
-  <label for="account-confirm">Confirm new password</label>
-  <input id="account-confirm" type="password" autocomplete="new-password" minlength="10">
-  <button type="button" id="account-save">Change password</button>
-  <p id="account-status" role="status" class="hint"></p>
-  <div id="account-google">
-    <label>Google</label>
-    <p id="account-google-state" class="hint">Not connected.</p>
-    <button type="button" id="account-google-connect">Connect Google</button>
-    <button type="button" id="account-google-disconnect" hidden>Disconnect Google</button>
-  </div>
-  <div id="account-providers" hidden>
-    <label>Connected accounts</label>
-    <p id="account-provider-list" class="hint"></p>
-  </div>
-  <label>Invite a friend</label>
-  <p id="invite-state" class="hint">You can invite one person.</p>
-  <div id="invite-link-row" hidden>
-    <input id="invite-url" readonly autocomplete="off">
-    <button type="button" id="invite-copy">Copy</button>
-    <button type="button" id="invite-revoke">Revoke</button>
-  </div>
-  <button type="button" id="invite-make">Generate signup link</button>
-</section>
+<dialog id="dlg-profile" aria-label="My profile">
+  <form onsubmit="saveProfile(event)">
+    <div class="dlg-head"><b>My profile</b><button type="button" onclick="$('#dlg-profile').close()">Close</button></div>
+    <div class="dlg-body">
+      <section class="profsec">
+        <h3>Profile</h3>
+        <div class="field">
+          <label for="profile-name">Display name</label>
+          <input id="profile-name" required maxlength="100">
+        </div>
+        <div class="field">
+          <label for="profile-icon">Profile icon</label>
+          <select id="profile-icon"><option value="music">♫ Music</option><option value="headphones">🎧 Headphones</option><option value="star">★ Star</option><option value="sun">☀ Sun</option><option value="moon">☾ Moon</option></select>
+        </div>
+        <p id="profile-status" role="status" class="hint"></p>
+      </section>
+      <section id="account-block" class="profsec" aria-labelledby="prof-account">
+        <h3 id="prof-account">Account</h3>
+        <p id="account-method" class="hint"></p>
+        <div class="field">
+          <label for="account-email">Email</label>
+          <input id="account-email" readonly autocomplete="off" placeholder="not set">
+        </div>
+        <div class="field">
+          <label for="account-current" id="account-current-label" hidden>Current password</label>
+          <input id="account-current" type="password" autocomplete="current-password" hidden>
+        </div>
+        <div class="field">
+          <label for="account-emailnew" id="account-emailnew-label" hidden>Email for password sign-in</label>
+          <input id="account-emailnew" type="email" autocomplete="email" spellcheck="false" hidden>
+        </div>
+        <div class="field">
+          <label for="account-new">New password</label>
+          <input id="account-new" type="password" autocomplete="new-password" minlength="10">
+        </div>
+        <div class="field">
+          <label for="account-confirm">Confirm new password</label>
+          <input id="account-confirm" type="password" autocomplete="new-password" minlength="10">
+        </div>
+        <div class="prof-actions"><button type="button" id="account-save">Change password</button></div>
+        <p id="account-status" role="status" class="hint"></p>
+        <div id="account-google" class="profrow">
+          <div class="field">
+            <span class="fieldlabel">Google</span>
+            <p id="account-google-state" class="hint">Not connected.</p>
+          </div>
+          <div class="prof-btns">
+            <button type="button" id="account-google-connect">Connect Google</button>
+            <button type="button" id="account-google-disconnect" hidden>Disconnect Google</button>
+          </div>
+        </div>
+        <div id="account-providers" class="field" hidden>
+          <span class="fieldlabel">Connected accounts</span>
+          <p id="account-provider-list" class="hint"></p>
+        </div>
+        <div class="field">
+          <span class="fieldlabel">Invite a friend</span>
+          <p id="invite-state" class="hint">You can invite one person.</p>
+          <div id="invite-link-row" class="prof-invite" hidden>
+            <input id="invite-url" readonly autocomplete="off">
+            <button type="button" id="invite-copy">Copy</button>
+            <button type="button" id="invite-revoke">Revoke</button>
+          </div>
+          <div class="prof-actions"><button type="button" id="invite-make">Generate signup link</button></div>
+        </div>
+      </section>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" onclick="openListening()">Player connections</button>
+      <button type="submit" class="primary">Save profile</button>
+    </div>
+  </form>
 </dialog>
 <dialog id="dlg-listening" onclose="clearListeningSecret()" oncancel="clearListeningSecret()">
   <h2>Player connections</h2>

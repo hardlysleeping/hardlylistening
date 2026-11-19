@@ -14,8 +14,10 @@ const FIELDS = ["profile-name", "profile-icon", "account-email", "account-curren
 const measure = (FIELDS) => {
   const dlg = document.getElementById("dlg-profile");
   const d = dlg.getBoundingClientRect();
-  const head = dlg.querySelector(".prof-head");
-  if (!head) throw new Error("the dialog has no sticky .prof-head header");
+  const head = dlg.querySelector(".dlg-head");
+  // The app's own dialog header, the one Settings, Deleted songs and Player connections use:
+  // same box, same Close in the same place, rather than a second spelling for the profile.
+  if (!head) throw new Error("the dialog has no sticky .dlg-head header");
   const close = head.querySelector("button");
   if (!close) throw new Error("the sticky header has no Close control");
   const c = close.getBoundingClientRect();

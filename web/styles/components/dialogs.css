@@ -270,3 +270,90 @@ dialog#dlg-lyrics-edit{width:min(560px,calc(100vw - 20px))}
 #fix-restore:empty{display:none}
 
 #fix-restore{margin-top:2px}
+
+/* ---- My profile / Account dialog -------------------------------------------
+   This dialog shipped with no layout of its own: the title, every label, field and
+   button were flat siblings inside one form, so on a phone the labels sat beside or
+   above their fields at random widths, wrapped mid-word, and "Save profile" and
+   "Close" ended up wherever the flow put them — the same defect the Player
+   connections dialog had. It now uses the head/body/foot the Settings dialog uses:
+   one column, label above its field, one section per subject, and a header stuck to
+   the top of the scroll so Close is reachable wherever the reader is. */
+#dlg-profile{width:min(560px,calc(100vw - 16px));max-height:calc(100dvh - 24px)}
+
+#dlg-profile form{display:grid;min-width:0}
+
+#dlg-profile .dlg-head{position:sticky;top:0;z-index:2;background:var(--panel);
+  border-radius:20px 20px 0 0}
+
+#dlg-profile .dlg-head b{font-size:15px;letter-spacing:-.01em}
+
+#dlg-profile .dlg-head button{flex:0 0 auto}
+
+#dlg-profile .dlg-body{gap:18px;min-width:0}
+
+#dlg-profile .profsec{display:grid;gap:10px;min-width:0}
+
+#dlg-profile .profsec > h3{margin:0;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--dim);font-weight:600}
+
+#dlg-profile .profsec + .profsec{border-top:1px solid var(--line);padding-top:16px}
+
+/* `hidden` has to win. The rows below are grids (so the invite URL and its buttons can line
+   up), and a display rule in a stylesheet beats the browser's own `[hidden]{display:none}` —
+   which left an empty invite row, an empty Google row and an empty "Connected accounts"
+   label on screen whenever those controls were meant to be absent. */
+#dlg-profile [hidden]{display:none}
+
+/* A field whose control is hidden goes with it, rather than leaving a label on its own and
+   the grid's gap either side of a zero-height box. */
+#dlg-profile .field:has(> [hidden]){display:none}
+
+#dlg-profile .field{min-width:0}
+
+#dlg-profile .field > input,#dlg-profile .field > select{width:100%;box-sizing:border-box}
+
+#dlg-profile .field > p{margin:0}
+
+/* Status lines are empty most of the time ("", "Profile saved." only after a save). An empty
+   paragraph inside a grid still costs the gap on both sides, so it leaves twenty pixels of
+   nothing between two sections. */
+#dlg-profile .dlg-body p:empty{display:none}
+
+/* A label that names a group rather than a control: same type as a field's own label,
+   without pretending to be attached to the field below it. */
+#dlg-profile .fieldlabel{font-size:12.5px;color:var(--dim)}
+
+#dlg-profile .profrow{display:grid;gap:8px;min-width:0}
+
+#dlg-profile .prof-btns,#dlg-profile .prof-actions{display:flex;flex-wrap:wrap;gap:8px}
+
+#dlg-profile .prof-actions > button{min-height:34px}
+
+/* The invite link is a long URL; it gets its own line so it cannot push Copy and Revoke
+   past the dialog's edge, and it shrinks rather than stretching the row. */
+#dlg-profile .prof-invite{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;
+  align-items:center;min-width:0}
+
+#dlg-profile .prof-invite > input{width:100%;min-width:0;box-sizing:border-box}
+
+#dlg-profile .dlg-foot{align-items:center}
+
+#dlg-profile .dlg-foot > button[type="button"]{margin-right:auto}
+
+@media(max-width:520px){
+  /* The phone's tab bar is fixed to the bottom of the screen. A centred modal would run
+     under it, so this one is centred in the space above it instead — and it scrolls inside
+     that space, which keeps the sticky header (and Close) where the thumb already is. */
+  #dlg-profile{width:calc(100vw - 12px);position:fixed;inset:0 0 calc(var(--nav-h,48px) + var(--safe-b,0px)) 0;
+    margin:auto;max-height:calc(100dvh - var(--nav-h,48px) - var(--safe-b,0px) - 12px)}
+  #dlg-profile .dlg-head{padding:12px 14px}
+  #dlg-profile .dlg-body{padding:12px 14px;gap:16px}
+  /* On a phone the URL takes the whole row and the two buttons split the next one evenly:
+     a stretched Copy beside a narrow Revoke read as one big button and one afterthought. */
+  #dlg-profile .prof-invite{grid-template-columns:1fr 1fr}
+  #dlg-profile .prof-invite > input{grid-column:1 / -1}
+  #dlg-profile .dlg-foot{flex-wrap:wrap;padding:12px 14px}
+  #dlg-profile .dlg-foot > button{flex:1 1 auto}
+  #dlg-profile .dlg-foot > button[type="button"]{margin-right:0}
+}

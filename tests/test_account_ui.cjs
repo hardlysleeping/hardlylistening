@@ -3,7 +3,8 @@ const html=fs.readFileSync('web/index.html','utf8');
 const source=html.slice(html.indexOf('const AUTH_METHOD_LABEL'),html.indexOf('function inviteExpiry'));
 const ids=['#account-email','#account-method','#account-current','#account-current-label','#account-emailnew',
   '#account-emailnew-label','#account-providers','#account-provider-list','#account-status',
-  '#account-new','#account-confirm'];
+  '#account-new','#account-confirm','#account-google','#account-google-state',
+  '#account-google-connect','#account-google-disconnect'];
 const nodes={};ids.forEach(id=>nodes[id]={value:'',textContent:'',hidden:false});
 let body=null;
 const context=vm.createContext({
