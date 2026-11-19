@@ -381,6 +381,18 @@ The order is shifted first and the new positions spliced in after; a store case 
 playing). Walked at 390×844 against the stub: queueing track 3 from the album drew Up next
 `track 3, track 2, track 3`, and Next played track 3.
 
+**The fullscreen player takes the keyboard with it.** It declares `role="dialog"
+aria-modal="true"`, and behaved as though the declaration were decoration: opening it left focus on
+the docked bar's artwork, Tab walked the bar's thirteen controls — and everything else focusable on
+the page behind the surface — before the close button came into reach, and closing dropped focus
+onto the document body, so a keyboard or screen-reader user lost their place in the library
+entirely. The covered surface is marked `inert` while the player is up, through a
+`display: contents` wrapper that adds no box of its own (the tab row still measures 40 px high, so
+nothing about the layout moves), and the dialog takes focus on open and hands it back to the
+control that opened it on close. Measured at 390×844: open → `#player-full`; sixteen Tab presses,
+every one of them inside the dialog; close → the bar's artwork; and the Playlists tab answers the
+pointer again afterwards.
+
 **Escape closes the queue, as it does on the host page.** The host binds the key in
 `web/js/playback-queue.js`, a module this client does not carry, so the panel could be opened
 from the keyboard (`#qgrip`, the docked bar's queue button) and then only dismissed with the

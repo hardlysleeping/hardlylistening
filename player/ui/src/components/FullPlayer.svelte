@@ -79,6 +79,29 @@
   let slotBottom = $state<string | null>(null);
   let headTravel = $state(0);
 
+  /* A surface that declares `aria-modal` has to behave like a modal. Nothing moved focus onto it
+   * when it opened, so the keyboard stayed on the docked bar behind an opaque screen and Tab had
+   * to walk the bar's thirteen controls before the close button came into reach; closing dropped
+   * focus to the document body, losing the reader's place entirely. The page marks the rest of the
+   * app `inert` while this is open, so Tab cannot leave; this puts the focus in and gives it back.
+   * `preventScroll` keeps the sheet's own placement from jumping on the focus call. */
+  let returnTo: HTMLElement | null = null;
+
+  $effect(() => {
+    if (!open) return;
+    returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    full?.focus({ preventScroll: true });
+    return () => {
+      /* Handing focus back has to wait for the `inert` to come off the shell, or the browser
+       * refuses it and the reader lands on the body — the state this replaced. */
+      const target = returnTo;
+      returnTo = null;
+      void tick().then(() => {
+        if (target?.isConnected) target.focus({ preventScroll: true });
+      });
+    };
+  });
+
   const snap = (value: number) => Math.round(value * 64) / 64;
 
   function placeSheet(): void {
@@ -147,6 +170,7 @@
   role="dialog"
   aria-modal="true"
   aria-label="Now playing"
+  tabindex="-1"
   bind:this={full}
 >
   <button class="pf-tab" id="pfclose" type="button" aria-label="Close fullscreen player" title="Close" onclick={() => void close()}>⌄</button>

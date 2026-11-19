@@ -143,13 +143,15 @@
     saveSlot={params.get("save") === "1"}
   />
 {:else if preview === "fullscreen" || preview === "queue" || preview === "lyrics"}
-  <CompactPlayer
-    {player}
-    onqueue={() => (queueOpen = true)}
-    onopen={() => (fullscreen = true)}
-    onlyrics={toggleLyrics}
-    saveSlot={params.get("save") === "1"}
-  />
+  <div class="app-surface" inert={fullscreen}>
+    <CompactPlayer
+      {player}
+      onqueue={() => (queueOpen = true)}
+      onopen={() => (fullscreen = true)}
+      onlyrics={toggleLyrics}
+      saveSlot={params.get("save") === "1"}
+    />
+  </div>
   <FullPlayer
     {player}
     open={fullscreen}
@@ -165,18 +167,23 @@
 {:else if !ready}
   <Connect {session} />
 {:else}
-  <Shell
-    {library}
-    {player}
-    serverLabel={session.active?.label ?? "Server"}
-    onsignout={() => void session.signOut()}
-  />
-  <CompactPlayer
-    {player}
-    onqueue={openQueue}
-    onopen={() => (fullscreen = true)}
-    onlyrics={toggleLyrics}
-  />
+  <!-- The dialog covers this surface, so it also takes the keyboard out of it: `inert` is what
+       makes `aria-modal` true rather than decorative. `display: contents` keeps the wrapper from
+       adding a box, so nothing about the layout moves. -->
+  <div class="app-surface" inert={fullscreen}>
+    <Shell
+      {library}
+      {player}
+      serverLabel={session.active?.label ?? "Server"}
+      onsignout={() => void session.signOut()}
+    />
+    <CompactPlayer
+      {player}
+      onqueue={openQueue}
+      onopen={() => (fullscreen = true)}
+      onlyrics={toggleLyrics}
+    />
+  </div>
   <FullPlayer
     {player}
     open={fullscreen}
@@ -190,3 +197,12 @@
     onlyrics={toggleLyrics}
   />
 {/if}
+
+<style>
+  /* The covered surface. `display: contents` is the point: the wrapper takes part in none of the
+     page's boxes, so the shell and the docked bar keep the positions they had, while `inert`
+     still applies to everything inside it. */
+  .app-surface {
+    display: contents;
+  }
+</style>
