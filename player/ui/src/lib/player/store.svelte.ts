@@ -192,10 +192,15 @@ export class PlayerStore {
     if (options.next) {
       const insertAt = this.index < 0 ? this.queue.length : this.#order[this.index]! + 1;
       this.queue.splice(insertAt, 0, ...songs);
+      /* Shift by *position*, not by membership. Every entry at or after the insertion point moves
+       * up, including one that happens to land on a number the new songs also take — asking
+       * `added.includes(at)` cannot tell a new entry from an old one at the same number, so the
+       * entry that was going to play next kept its old index, played the inserted song a second
+       * time, and disappeared from the queue. */
+      const shifted = this.#order.map((at) => (at >= insertAt ? at + songs.length : at));
       const added = songs.map((_, i) => insertAt + i);
-      this.#order.splice(this.index + 1, 0, ...added);
-      // Every index after the insertion point shifted.
-      this.#order = this.#order.map((at) => (at >= insertAt && !added.includes(at) ? at + songs.length : at));
+      shifted.splice(this.index < 0 ? 0 : this.index + 1, 0, ...added);
+      this.#order = shifted;
     } else {
       const base = this.queue.length;
       this.queue.push(...songs);

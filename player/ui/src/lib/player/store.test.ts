@@ -109,6 +109,23 @@ describe("editing the queue", () => {
 
     expect(player.upNext.map((song) => song.id)).toEqual(["b", "b", "b"]);
   });
+
+  it("puts the new song in front of the next one instead of replacing it", async () => {
+    /* Found by walking the queue: with `a` playing, one `+` on a playlist row left Up Next
+       reading `x, x, c` — the song that was going to play next had vanished and the one just
+       added was listed twice, so the queue silently skipped `b` and played `x` again. The
+       reindex asked "is this entry new?" by comparing index *values*, and an old entry that
+       happened to land on the inserted number was not shifted. */
+    const { player } = store(okServer());
+    await player.playQueue([a!, b!, c!], 0);
+    const x = { id: "x", title: "X", duration: 100 };
+
+    player.enqueue([x], { next: true });
+
+    expect(player.queue.map((song) => song.id)).toEqual(["a", "x", "b", "c"]);
+    expect(player.upNext.map((song) => song.id)).toEqual(["x", "b", "c"]);
+    expect(player.track?.id).toBe("a");
+  });
 });
 
 describe("signing out", () => {

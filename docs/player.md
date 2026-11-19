@@ -370,6 +370,17 @@ same key sat on `TrackList`, where a playlist is allowed to name one song twice.
 keyed by position now. Walked at 1200×860 and 390×844 with a duplicated queue and a playlist
 containing one song twice.
 
+**"Queue next" puts the song in front of the next one, not in its place.** The store keeps the
+play order as a second list of queue positions, and the insert shifted every entry at or after
+the insertion point — but it decided which entries were its own by comparing their values, so an
+old entry that landed on one of the new numbers kept the old position. With `a` playing and the
+queue `a b c`, one `+` left the order reading `a x x c`: the song that was going to play next was
+no longer in the list, the added song was drawn twice, and the press after it played `x` again.
+The order is shifted first and the new positions spliced in after; a store case pins queue
+`a x b c` and up next `x b c` (the earlier one passed only because it queued the song already
+playing). Walked at 390×844 against the stub: queueing track 3 from the album drew Up next
+`track 3, track 2, track 3`, and Next played track 3.
+
 **Escape closes the queue, as it does on the host page.** The host binds the key in
 `web/js/playback-queue.js`, a module this client does not carry, so the panel could be opened
 from the keyboard (`#qgrip`, the docked bar's queue button) and then only dismissed with the
