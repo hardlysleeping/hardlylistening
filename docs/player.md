@@ -419,6 +419,28 @@ carried, so the player now says `default` — the record is a keyboard slider an
 it takes the pointer. The drag itself stays unported; `touch-action: none` on the shell is kept,
 because it is what stops a swipe across the record from scrolling the page behind it.
 
+**A name too long for its box scrolls, as it does on the host page.** The stylesheet half of this
+was already here — `.rolling`, the inline-flex wrapper, `--mq-dist` / `--mq-dur`, the
+`pl-title-mq` / `pf-title-mq` keyframes and the reduced-motion opt-out all come from the host's
+`player.css` — but nothing ever applied it, so every long name was simply cut: with the stub's
+long fixture at 390 px, the bar's title drew 187 px of a 964 px name, the fullscreen title 350 of
+1334, and the artist and release 89 / 170 of 753 / 932. `lib/ui/marquee.ts` is the host's
+`fitMarquee()`: measure the plain line, leave it alone when it fits, and otherwise set two copies
+(the second `aria-hidden`, so a screen reader still hears one name) inside the wrapper with the
+distance and travel it computes. The element holds no text of its own — the function writes it —
+because whether a line fits is a measurement, not a render, and that is the order the host paints
+in; a line set while its surface is `display:none` retries once on the next frame and is fitted
+again when the surface opens, which is what the fullscreen player passes as `active`.
+
+Measured at 390 px on the built bundle, long fixture: the bar's title 187 px box holding two
+copies (1951 px), `--mq-dist` 988 px, `--mq-dur` 23524 ms, transform advancing (−56 px after a
+second); the artist and release 777 px / 18.5 s each, with the row switched to
+`artist-only`/`flex-start` so the scrolling name starts at a visible edge; the fullscreen title
+1362 px / 32.4 s and its two names 960 px / 22.9 s. The short fixture is untouched — no wrapper,
+`scrollWidth` equal to `clientWidth`, ordinary ellipsis — so the baselines captured from it do not
+move. With `prefers-reduced-motion: reduce` the long line stays cut and still, which is the
+reader's setting honoured rather than ignored.
+
 **The artist · album line is two links, and both go somewhere.** They are the host's exact
 structure (`paintPlayerSub()`: an anchor, the ` · ` separator, then an anchor or a span), and in
 the player they had no handlers at all — two links that took focus, showed the pointer and did

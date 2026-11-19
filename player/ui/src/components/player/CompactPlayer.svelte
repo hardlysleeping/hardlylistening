@@ -14,6 +14,7 @@
   import { drawCompactWave, waveSurface, DEFAULT_WAVE_CONFIG } from "../../lib/player/wave";
   import type { PlayerStore } from "../../lib/player/store.svelte";
   import Subtitle from "../Subtitle.svelte";
+  import { fitMarquee, MARQUEE_BAR } from "../../lib/ui/marquee";
 
   interface Props {
     player: PlayerStore;
@@ -34,6 +35,7 @@
 
   let { player, onqueue, onopen, onlyrics, saveSlot = false, onartist, onalbum }: Props = $props();
 
+  let titleEl = $state<HTMLDivElement>();
   let canvas: HTMLCanvasElement | undefined = $state();
   let volumeButton: HTMLButtonElement | undefined = $state();
   let volumeMenu: HTMLDivElement | undefined = $state();
@@ -136,6 +138,13 @@
     };
   });
 
+  /* The bar's title is the host's marquee line: it scrolls in place when the track name is wider
+     than the box, and stays a plain one-line title when it is not. `fitMarquee` owns the text
+     because the decision is a measurement, not a render. */
+  $effect(() => {
+    fitMarquee(titleEl, title, MARQUEE_BAR);
+  });
+
   const repeatLabel = $derived(
     player.repeat === "one" ? "Repeat one" : player.repeat === "all" ? "Repeat queue" : "Repeat off",
   );
@@ -177,8 +186,8 @@
       }
     }}
   >
-    <div class="ptitle" id="pltitle">{title}</div>
-    <div class="psub" id="plsub"><Subtitle {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} {onartist} {onalbum} /></div>
+    <div class="ptitle" id="pltitle" bind:this={titleEl}></div>
+    <div class="psub" id="plsub"><Subtitle variant="bar" {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} {onartist} {onalbum} /></div>
   </div>
   <div class="pctrl">
     <div class="ptrans">

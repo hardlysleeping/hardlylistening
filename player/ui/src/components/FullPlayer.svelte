@@ -17,6 +17,7 @@
   import QueuePanel from "./QueuePanel.svelte";
   import Subtitle from "./Subtitle.svelte";
   import LyricsOverlay from "./LyricsOverlay.svelte";
+  import { fitMarquee, MARQUEE_FULL } from "../lib/ui/marquee";
 
   interface Props {
     player: PlayerStore;
@@ -80,6 +81,7 @@
   let landed = $state(false);
   let slotTop = $state<string | null>(null);
   let slotBottom = $state<string | null>(null);
+  let titleEl = $state<HTMLDivElement>();
   let headTravel = $state(0);
 
   /* A surface that declares `aria-modal` has to behave like a modal. Nothing moved focus onto it
@@ -121,6 +123,14 @@
     event.preventDefault();
     player.seekTo(Math.max(0, Math.min(duration, seconds)) / duration);
   }
+
+  /* The title is measured only while the surface is up: a shut player is `display:none`, and a
+     title set through it has no width to compare against. Opening re-runs this, which is the
+     moment the box first has a size. */
+  $effect(() => {
+    if (!open) return;
+    fitMarquee(titleEl, title, MARQUEE_FULL);
+  });
 
   const snap = (value: number) => Math.round(value * 64) / 64;
 
@@ -231,8 +241,10 @@
         />
       </div>
       <div class="pf-text" bind:this={textBlock} style={headTravel ? `transform:translateY(-${headTravel}px)` : ""}>
-        <div class="pf-title" id="pftitle">{title}</div>
+        <div class="pf-title" id="pftitle" bind:this={titleEl}></div>
         <div class="pf-sub" id="pfsub"><Subtitle
+          variant="full"
+          active={open}
           {artist}
           {album}
           artistId={player.track?.artistId}
