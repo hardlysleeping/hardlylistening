@@ -226,14 +226,13 @@
       scrubbing = true;
       scrubAt = progress;
     }}
-    onpointerup={(event) => {
+    onchange={(event) => {
+      // Same as the full player: the keyboard's arrow keys change a range input without any
+      // pointer event, so only `change` can honour them.
       player.seekTo(Number(event.currentTarget.value) / 1000);
       scrubbing = false;
     }}
     onpointercancel={() => {
-      scrubbing = false;
-    }}
-    onkeydown={() => {
       scrubbing = false;
     }}
   />

@@ -219,11 +219,10 @@
         seeking = true;
         seekAt = Number(event.currentTarget.value) / 1000;
       }}
-      onpointerup={(event) => {
+      onchange={(event) => {
+        // `change`, not `pointerup`: a range input changed from the keyboard (arrows, Home,
+        // End, Page Up) commits through `change` and never sees a pointer event at all.
         player.seekTo(Number(event.currentTarget.value) / 1000);
-        seeking = false;
-      }}
-      onkeydown={() => {
         seeking = false;
       }}
     />
