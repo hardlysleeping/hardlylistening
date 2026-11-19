@@ -99,6 +99,33 @@ describe("editing the queue", () => {
     expect(player.track?.id).toBe("b");
   });
 
+  it("keeps the playhead and the next song straight when the order is shuffled", async () => {
+    /* The plain queue's order is the queue's own numbering, so the index shift on removal looks
+       after itself. Under shuffle the order is a permutation: removing a song moves the queue
+       position of entries that sit *before* the playhead too, and the playhead is a position in
+       the order, not in the queue. Nothing exercised that branch. */
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const { player } = store(okServer());
+    await player.playQueue([a!, b!, c!, d!], 0);
+    player.toggleShuffle();
+    random.mockRestore();
+
+    // Fixed shuffle: a, then c, d, b.
+    expect(player.track?.id).toBe("a");
+    expect(player.upNext.map((song) => song.id)).toEqual(["c", "d", "b"]);
+
+    player.removeUpNext(1);
+
+    expect(player.queue.map((song) => song.id)).toEqual(["a", "b", "c"]);
+    expect(player.upNext.map((song) => song.id)).toEqual(["c", "b"]);
+    expect(player.track?.id).toBe("a");
+
+    // And the order the player now holds still says: next is c, the song that was after d.
+    await player.next();
+
+    expect(player.track?.id).toBe("c");
+  });
+
   it("keeps one song queued twice as two entries", async () => {
     // "Queue next" on a song that is already up next is allowed; the queue is an order, not a set.
     // The list has to draw both, which is why it cannot be keyed by the song's id.

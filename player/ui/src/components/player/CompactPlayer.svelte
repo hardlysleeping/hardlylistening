@@ -180,6 +180,11 @@
     tabindex="0"
     onclick={() => onopen()}
     onkeydown={(event) => {
+      /* The links under the title are children of this block, and they are the only way a
+         keyboard reaches the artist and the release from here. `preventDefault` on the keys they
+         own cancelled their activation and opened the fullscreen player instead — the one place
+         the link must not go. */
+      if (event.target !== event.currentTarget) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         onopen();

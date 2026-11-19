@@ -16,6 +16,7 @@
    * has no other home, so it is always on. That class is what drops the floating card's border,
    * radius and shadow and lets the page, not an overlay, make room for it.
    */
+  import { tick } from "svelte";
   import type { PlayerStore } from "../lib/player/store.svelte";
 
   interface Props {
@@ -36,8 +37,20 @@
   /** A sentence the list has to say. Empty means the paragraph is hidden, as in the host. */
   let status = $state("");
 
-  function remove(position: number): void {
+  async function remove(position: number): Promise<void> {
     player.removeUpNext(position);
+    await tick();
+    /* The row that held focus is gone with its button, and the browser then drops focus to
+       `body` — the next Tab starts again from the top of the page, outside the sheet. The host
+       refocuses the same control after a queue edit; here that is whichever button took the
+       removed row's place, or the one above it when the last row went, or the broom, or the
+       sheet's own close button when there is nothing left to remove. */
+    const drops = document.querySelectorAll<HTMLButtonElement>("#playback-items .pq-drop");
+    const next =
+      drops[Math.min(position, drops.length - 1)] ??
+      document.querySelector<HTMLElement>("#pqclear:not([disabled])") ??
+      document.querySelector<HTMLElement>("#playback-panel .pq-close");
+    next?.focus();
   }
 </script>
 
@@ -93,6 +106,11 @@
           aria-label="Play {song.title}"
           onclick={() => void player.playUpNext(position)}
           onkeydown={(event) => {
+            /* The row's own keys, not its children's. Enter and Space on the remove button are
+               that button's — and because this handler also called `preventDefault`, the browser
+               never got to activate it: one keystroke on the × played the song and left it in the
+               queue, which is the opposite of what the button says it does. */
+            if (event.target !== event.currentTarget) return;
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               void player.playUpNext(position);

@@ -38,6 +38,10 @@
       aria-label={song.title}
       onclick={() => onplay(index)}
       onkeydown={(event) => {
+        /* The row's keys, not the ones pressed on the `+` inside it: that is a real button, and
+           this handler's `preventDefault` cancelled the activation the browser was about to give
+           it, so Enter on "Queue next" played the song instead of queueing it. */
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onplay(index);

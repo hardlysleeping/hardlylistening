@@ -381,6 +381,37 @@ The order is shifted first and the new positions spliced in after; a store case 
 playing). Walked at 390×844 against the stub: queueing track 3 from the album drew Up next
 `track 3, track 2, track 3`, and Next played track 3.
 
+**The queue's remove button did the opposite of its label on a keyboard.** The row is a
+`role="button"` that plays its song on Enter or Space, and the `×` sits inside it, so the row's
+`keydown` handler saw every key pressed on the button — and because it also called
+`preventDefault` (which is what stops Space scrolling the page), the browser never got to activate
+the button at all. One keystroke on "Remove Album 1 track 3 from the queue" played track 3 and left
+it exactly where it was. The handler now ignores events that came from a child, so the row keeps
+its Enter/Space and the button keeps its own. Measured at 390×844 with three songs queued and track
+1 playing: Enter on the second row's `×` left Up next at one row with track 1 still playing
+(previously: Up next 0, playing track 3), Space the same, and Enter on the row itself still plays
+its song.
+
+Removing a row also took the focus with it: the button that had focus was inside the row that
+disappeared, so the browser dropped focus to `body` and the next Tab started again from the top of
+the page, outside the sheet. The host refocuses the same control after a queue edit; here that is
+whichever `×` took the removed row's place, the one above it when the last row went, and the
+sheet's own close button once nothing is left to remove. Measured: focus lands on the next `×`
+(390×844), and after emptying the queue on `.pq-close`, with the current track unchanged
+throughout.
+
+**The same capture, on the two other controls that sit inside a row.** The album list's `+`
+("Queue next") is a button inside the song row, and the docked bar's artist and release links are
+anchors inside the meta block that opens the fullscreen player — both rows claim Enter and Space
+and both called `preventDefault`, so a keyboard could not use either control: Enter on `+` played
+that song (with track 1 on, Up next went to 0 and the bar named track 3), and Enter on the artist
+link opened the fullscreen player instead of the artist. Both handlers now ignore events raised
+inside a child, which leaves the accessible path for each control where the host puts it. Measured
+at 390×844: Enter on row 3's `+` plays nothing new — track 1 keeps playing and Up next reads
+`track 3, track 2, track 3` — Enter on the bar's artist link opens the artist wall (31 cards, no
+rows), Enter on the release link opens the album's three songs, and Enter on the row itself still
+plays row 3.
+
 **The fullscreen player takes the keyboard with it.** It declares `role="dialog"
 aria-modal="true"`, and behaved as though the declaration were decoration: opening it left focus on
 the docked bar's artwork, Tab walked the bar's thirteen controls — and everything else focusable on
@@ -467,7 +498,7 @@ that can be built is built inside the `huibuild` distrobox, which has those pack
   390×844;
 * `cargo test --release` — 35 cases, several of them socket-level, including a stub that answers
   `/rest/*` — and `rustfmt --check` accept the Rust tree;
-* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 171 vitest cases;
+* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 172 vitest cases;
 * the built tree is audited file by file by `tests/test_player_store_safe.py` (9 tests).
 
 What no Linux build settles is the device: `gen/apple`/`gen/android` generation, a real WKWebView,
