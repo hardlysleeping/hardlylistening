@@ -13,7 +13,7 @@ The difference that matters is not where the sound comes from. It is that on a l
 | who advances | the store, on `ended` | the platform player, which reports `track` |
 | what the page states | one stream URL per track | ids and an order, once |
 | where a credential lives | in that URL | in Rust, and in the platform player's memory |
-| who holds the lock-screen session | the WebView's `navigator.mediaSession`, if any | the platform, by construction |
+| who holds the lock-screen session | the WebView's `navigator.mediaSession`, claimed by `media.ts` | the platform, by construction |
 
 The store follows this in four places (`player/ui/src/lib/player/store.svelte.ts`), and each has a
 test in `src/lib/player/native.test.ts`:
@@ -80,6 +80,53 @@ reads exactly those fields.
 - an index outside the order, an empty queue, a non-finite seek, a volume above 1, a direction
   that is not ±1: refused, by `checked_*`, which the commands call before anything else.
 
+## The lock screen, on the engine that is actually built
+
+`player/ui/src/lib/player/media.ts` is the half of a lock screen the shell cannot supply: a tag,
+a transport and a timeline, handed to `navigator.mediaSession`. It exists because the assembled
+web app had one (`web/js/playback.js`) and the first-class client — which shares the host's
+styles but not its scripts — had none, so a locked phone drew whatever the platform draws for an
+unclaimed session: nothing, or a bare ±10 s bar.
+
+`App.svelte` builds it once from the store's own state (`track`, `playing`, `position`,
+`duration`, `cover`) and publishes on a single `$effect`. That is deliberate: the session is a
+**picture of the player**, never a second player, so a press on a head unit takes the same path
+as a press on the docked bar. Clearing on `track === null` is the sign-out case — the last
+account's song must not stay on a lock screen a phone is no longer holding.
+
+What it claims, and what it refuses:
+
+| action | effect |
+|---|---|
+| `play` / `pause` | `player.toggle()`, and only when the intent differs — a platform that repeats a press does not start a track twice |
+| `nexttrack` / `previoustrack` | `player.next()` / `player.previous()`, which carry the three-second rule on the browser engine |
+| `seekto` | `player.seekTo(seekTime / duration)` — the store's only seek, so the lock screen timeline and the page cannot disagree |
+| `seekbackward` / `seekforward` | **cleared (`null`), never claimed** — the same rule the assembled app learned: claiming either replaces the skip pair with ±10 s |
+
+Two properties are taken from `docs/player/playback.md` because they were learned on a real drive
+rather than from a specification:
+
+- the tag is re-published **only** when the song or its artwork changes, and the transport is
+  re-claimed on every track change, because WebKit drops handlers when a session goes inactive;
+- the timeline is pushed at most once a second and never moves backwards without a jump larger
+  than `POSITION_JITTER_SECONDS` — a car's elapsed clock must not tick backwards because
+  `timeupdate` wobbled.
+
+Artwork is the cover route the client already uses (`<server>/rest/getCoverArt.view?...&t=…`), so
+it carries its own credential in the URL: iOS fetches media-session artwork **itself**, outside
+the page's session, and a cookie-gated route would answer that fetch with a login redirect, which
+a car draws as no image at all.
+
+Nothing here schedules a timer. A suspended page runs no callbacks, so every decision is taken
+when the store says something changed; a frozen and resumed page reports the truth instead of a
+queue of stale decisions. Keeping the audio alive is the shell's job (`UIBackgroundModes`,
+`AVAudioSession`) and is not something a script can promise.
+
+`PLATFORM_PLAYER_PRESENT = false` means the WebAudioEngine is the engine every build runs, so
+this is the whole of the lock-screen story today. A queue-owning engine must publish its own
+(`MPNowPlayingInfoCenter` / `MediaSessionService`, both already on the list below) — a page that
+is not running cannot keep a tag in step with a native playhead.
+
 ## What is compiled in, and what is not
 
 `PLATFORM_PLAYER_PRESENT` in `src-tauri/src/native_audio.rs` is **`false`**. So
@@ -118,11 +165,24 @@ before.
 
 Verified on this machine:
 
-- `player/ui`: 86 vitest tests, including 17 for this seam — the ids-and-order message, no URL in
-  any message, `track` updating state without starting anything, `skip` delegation, `playAt` from
-  Up Next, repeat without a re-push, `ended` stopping rather than advancing, shuffle re-pushing,
-  a queue edit re-pushing, the browser path unchanged, a queue handed over on an engine swap,
-  and the engine choice answering to `native_audio_available`.
+- `player/ui`: 167 vitest tests. 17 pin this seam — the ids-and-order message, no URL in any
+  message, `track` updating state without starting anything, `skip` delegation, `playAt` from Up
+  Next, repeat without a re-push, `ended` stopping rather than advancing, shuffle re-pushing, a
+  queue edit re-pushing, the browser path unchanged, a queue handed over on an engine swap, and
+  the engine choice answering to `native_audio_available`. 16 pin the media session
+  (`media.test.ts`): the claimed and refused actions, the tag and its artwork type, re-tagging
+  only on a change, re-claiming on a track change, the three playback states, the one-second
+  throttle, the high-water mark, a real backward seek, `seekto` → fraction, and inertness on a
+  platform with no session at all.
+- the media session was walked in **muted headless Chromium** against the silent-WAV scratch
+  server (`player/ui/dist` on a static server): a played row produced
+  `title/artist/album` equal to the page's own title line, artwork as `image/jpeg` at `512x512`,
+  `playbackState: playing`, a timeline at ~1 s intervals; a synthesised `nexttrack` moved both
+  the tag and `#pltitle`; `pause`/`play` reported `paused`/`playing`; `seekto {seekTime: 5}`
+  moved the timeline to 5.99 s. Run twice — once with a recording fake in place of
+  `navigator.mediaSession`, once against Chromium's **own** session object, which would throw on
+  an action name a platform does not accept. Nothing reached the speakers (`--mute-audio`, and
+  the fixture is 30 s of digital silence).
 - `svelte-check` 0/0, `vite build`, and the three-surface visual parity harness — the engine
   swap does not move a pixel.
 - `native_queue.rs`: 15 tests, compiled and run **standalone**; four rules mutation-checked

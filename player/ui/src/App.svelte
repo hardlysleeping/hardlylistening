@@ -11,6 +11,7 @@
   import { nativeInvoke, type Song } from "./lib/subsonic";
   import { nativeListen } from "./lib/player/native-engine";
   import { useNativeAudioIfPresent } from "./lib/player/select";
+  import { NowPlaying } from "./lib/player/media";
   import Connect from "./components/Connect.svelte";
   import Shell from "./components/Shell.svelte";
   import CompactPlayer from "./components/player/CompactPlayer.svelte";
@@ -31,6 +32,37 @@
   // A phone gets the platform's player, so playback survives the lock screen; a browser and a
   // desktop build get the WebView's. Asked once, and the answer decides — see `select.ts`.
   void useNativeAudioIfPresent(player, nativeInvoke(), nativeListen());
+
+  /* The other half of a lock screen: the tag it draws and the buttons it offers. Built from the
+     store's own state, so the session is a picture of the player and never a second player —
+     a press on a head unit takes the same path as a press on the docked bar. */
+  const nowPlaying = new NowPlaying({
+    source: () => ({
+      track: player.track,
+      playing: player.playing,
+      position: player.position,
+      duration: player.duration,
+      artwork: player.cover,
+    }),
+    target: {
+      play: () => {
+        if (!player.playing) void player.toggle();
+      },
+      pause: () => {
+        if (player.playing) void player.toggle();
+      },
+      next: () => void player.next(),
+      previous: () => void player.previous(),
+      seekTo: (fraction) => player.seekTo(fraction),
+    },
+  });
+
+  $effect(() => {
+    // A signed-out player has nothing to announce; leaving the last tag up would offer a song
+    // from an account the phone is no longer holding.
+    if (!player.track) nowPlaying.clear();
+    else nowPlaying.publish();
+  });
 
   let fullscreen = $state(preview === "fullscreen" || preview === "queue" || preview === "lyrics");
   let queueOpen = $state(preview === "queue");
