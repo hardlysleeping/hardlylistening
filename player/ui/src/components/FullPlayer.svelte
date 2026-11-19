@@ -30,9 +30,12 @@
      * overlay inside it, so whichever opens must close the other.
      */
     onlyrics: () => void;
+    /** The subtitle's two links open a screen; the host leaves this surface first. */
+    onartist?: (id: string, name: string) => void;
+    onalbum?: (id: string, name: string) => void;
   }
 
-  let { player, open, onclose, queueOpen, onqueue, onlyrics }: Props = $props();
+  let { player, open, onclose, queueOpen, onqueue, onlyrics, onartist, onalbum }: Props = $props();
 
   let seeking = $state(false);
   let seekAt = $state(0);
@@ -101,6 +104,23 @@
       });
     };
   });
+
+  /** The record's own keys, as the host binds them: a second a press, ten with Shift, and the
+   * two ends. Here it is a `role="slider"` with a focus ring, so a control that announced itself
+   * as a slider and then ignored every key was the worst of both. */
+  function discKeys(event: KeyboardEvent): void {
+    const duration = player.duration;
+    if (!duration) return;
+    const step = event.shiftKey ? 10 : 1;
+    let seconds: number | null = null;
+    if (event.key === "ArrowRight") seconds = player.position + step;
+    else if (event.key === "ArrowLeft") seconds = player.position - step;
+    else if (event.key === "Home") seconds = 0;
+    else if (event.key === "End") seconds = duration;
+    else return;
+    event.preventDefault();
+    player.seekTo(Math.max(0, Math.min(duration, seconds)) / duration);
+  }
 
   const snap = (value: number) => Math.round(value * 64) / 64;
 
@@ -185,6 +205,7 @@
             role="slider"
             tabindex="0"
             aria-label="Scrub playback position"
+            onkeydown={discKeys}
             aria-valuemin="0"
             aria-valuemax="1000"
             aria-valuenow={seekValue}
@@ -211,7 +232,22 @@
       </div>
       <div class="pf-text" bind:this={textBlock} style={headTravel ? `transform:translateY(-${headTravel}px)` : ""}>
         <div class="pf-title" id="pftitle">{title}</div>
-        <div class="pf-sub" id="pfsub"><Subtitle {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} /></div>
+        <div class="pf-sub" id="pfsub"><Subtitle
+          {artist}
+          {album}
+          artistId={player.track?.artistId}
+          albumId={player.track?.albumId}
+          onartist={(id, name) => {
+            /* The host's `openArtistFromPlayer` closes the fullscreen player first; navigating
+               underneath it looked like a tap that did nothing. */
+            onclose();
+            onartist?.(id, name);
+          }}
+          onalbum={(id, name) => {
+            onclose();
+            onalbum?.(id, name);
+          }}
+        /></div>
         <!-- A stream that fails used to fail silently: the engine reported it, the store kept
              it, and nothing drew it, so the only sign was a play button that did nothing. -->
         {#if player.error}
@@ -310,6 +346,15 @@
 </div>
 
 <style>
+  /* The host's record answers an angular drag; this client never carried that gesture, so the
+     `grab` cursor in `player.css` promised a control the pointer cannot move. The record is still
+     a keyboard slider (`Arrow`, `Shift+Arrow`, `Home`, `End`) and the seek bar under it takes the
+     pointer. `touch-action` stays as it is: it is the disc shell's, and it keeps a swipe on the
+     record from scrolling the page behind it. */
+  #player-full .pf-disc {
+    cursor: default;
+  }
+
   /* Under the title, and only when there is something to say: the visual baselines are captured
      without one, so this adds no pixel to the surfaces they pin. */
   .pf-error {

@@ -26,20 +26,11 @@
 
   let { player, open, onclose }: Props = $props();
 
-  /* The host closes this panel on Escape from a document-level listener in
-   * `web/js/playback-queue.js`; that module is not part of this client, so the key had no
-   * binding here and the queue could be opened from the keyboard but not dismissed from it.
-   * Same key, same result, and only while the panel is on screen — the × above takes the same
-   * path. */
-  $effect(() => {
-    if (!open) return;
-    const dismiss = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape") return;
-      onclose();
-    };
-    window.addEventListener("keydown", dismiss);
-    return () => window.removeEventListener("keydown", dismiss);
-  });
+  /* Escape closes this sheet from `App`, which holds both layers and peels one per press — the
+   * host's arrangement, where one document listener in `index.html` closes the queue first and the
+   * player second. A listener here as well made the key a race between two registrations: after
+   * `#qgrip` opened both surfaces, the sheet's listener ran first, so the player's read the queue
+   * as already shut and closed the player too. */
 
   const upNext = $derived(player.upNext);
   /** A sentence the list has to say. Empty means the paragraph is hidden, as in the host. */

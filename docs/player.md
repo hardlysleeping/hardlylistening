@@ -393,14 +393,44 @@ control that opened it on close. Measured at 390×844: open → `#player-full`; 
 every one of them inside the dialog; close → the bar's artwork; and the Playlists tab answers the
 pointer again afterwards.
 
-**Escape closes the queue, as it does on the host page.** The host binds the key in
-`web/js/playback-queue.js`, a module this client does not carry, so the panel could be opened
-from the keyboard (`#qgrip`, the docked bar's queue button) and then only dismissed with the
-mouse — the one control on that surface with no key of its own. `QueuePanel` now listens for
-Escape while it is open and takes the same path as its `×`. Measured at 390×844 on the built
-bundle: open → `#playback-panel.open`, `aria-expanded="true"`; Escape → both false with the
-fullscreen player still up; `×` reached the identical state; Escape with the queue already shut
-leaves the fullscreen player alone, which is also what the host does.
+**Escape peels one layer at a time, and one place decides it.** The host binds the key twice —
+`web/js/playback-queue.js` closes the sheet and the listener in `index.html` closes the player,
+and the registration order is what makes the queue the first layer. Porting that as two listeners
+reproduced the placement but not the order: the player's listener is registered when the player
+opens and the sheet's when the sheet opens, so the two ways in behaved differently. After
+`#pfqueue` (player already up) the player's listener ran first and stood down, which peeled one
+layer; after `#qgrip` (which opens both at once) the sheet's listener was registered first, so by
+the time the player's read the queue it was already shut, and one press closed both. `App` now
+holds the only listener, because it is the only place that holds both states, and it peels the
+sheet first and the player second exactly as the host intends. Measured at 390×844 on the built
+bundle, both ways in: sheet and player open → Escape → sheet shut, player up, `aria-expanded="false"`
+→ Escape → player gone with focus back on the bar's artwork; Escape with neither open changes
+nothing. The `×` and `#qgrip` still reach the same states.
+
+**The record answers the keys it advertises.** The disc
+is drawn as `role="slider"` with a focus ring, and had no key handler at all — a control that
+announces a value and then ignores `Arrow`, `Home` and `End`. It now takes the host's binding: one
+second a press, ten with Shift, and the two ends. Measured on the built bundle at 390×844, paused
+so the clock cannot drift between a key and the read: `ArrowRight` twice → 49 → 83 → 116 of 1000,
+`ArrowLeft` twice → 83 → 49, `End` → 1000 and the clock at 0:30.
+
+The record's `cursor: grab` promised the host's angular scratch drag, a gesture this client never
+carried, so the player now says `default` — the record is a keyboard slider and the seek bar under
+it takes the pointer. The drag itself stays unported; `touch-action: none` on the shell is kept,
+because it is what stops a swipe across the record from scrolling the page behind it.
+
+**The artist · album line is two links, and both go somewhere.** They are the host's exact
+structure (`paintPlayerSub()`: an anchor, the ` · ` separator, then an anchor or a span), and in
+the player they had no handlers at all — two links that took focus, showed the pointer and did
+nothing. Both surfaces now open the screen, and from the fullscreen player the host's rule
+applies: the surface closes first, because navigating underneath it looks like a tap that failed.
+Measured at 390×844: album from the player → dialog gone, album detail headed "Album 1" with its
+three rows; artist from the player → dialog gone, artist detail headed "Alex Ross" with its 31
+album cards; the same two from the docked bar → the same screens with the player never opening;
+Back → the list. An artist the server gives no id for renders as a `<span>`, the rule the album
+link already used, so a fixture that omitted `artistId` no longer produced a link with no
+destination — measured against a stub variant without ids: both surfaces a span for the artist,
+still an anchor for the album.
 
 ## What is unverified, and why
 
@@ -415,7 +445,7 @@ that can be built is built inside the `huibuild` distrobox, which has those pack
   390×844;
 * `cargo test --release` — 35 cases, several of them socket-level, including a stub that answers
   `/rest/*` — and `rustfmt --check` accept the Rust tree;
-* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 135 vitest cases;
+* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 171 vitest cases;
 * the built tree is audited file by file by `tests/test_player_store_safe.py` (9 tests).
 
 What no Linux build settles is the device: `gen/apple`/`gen/android` generation, a real WKWebView,

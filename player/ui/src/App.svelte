@@ -127,11 +127,42 @@
     queueOpen = false;
   }
 
+  /* The subtitle's links, from either surface. The host switches to the library tab and opens the
+     screen; here the shell draws whichever detail the library holds, so opening it is enough. */
+  function openArtist(id: string): void {
+    void library.openArtist(id);
+  }
+
+  function openAlbum(id: string): void {
+    void library.openAlbum(id);
+  }
+
   function toggleLyrics(): void {
     if (!fullscreen) fullscreen = true;
     queueOpen = false;
     player.toggleLyrics();
   }
+
+  /* Escape peels one layer at a time, as the host's single document listener does: the queue sheet
+     first, then the fullscreen player. It lives here because this is the only place that holds
+     both states. Two listeners sharing the key is a race decided by registration order — the
+     player's listener is registered when the player opens and the queue's when the sheet opens,
+     so pressing Escape after `#qgrip` opened both (queue's listener first) closed both in one
+     press, while the same key after `#pfqueue` peeled one layer. One reader, one decision. */
+  $effect(() => {
+    const escape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      if (queueOpen) {
+        queueOpen = false;
+        return;
+      }
+      if (!fullscreen) return;
+      fullscreen = false;
+      player.closeLyrics();
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  });
 </script>
 
 {#if preview === "compact"}
@@ -182,6 +213,8 @@
       onqueue={openQueue}
       onopen={() => (fullscreen = true)}
       onlyrics={toggleLyrics}
+      onartist={openArtist}
+      onalbum={openAlbum}
     />
   </div>
   <FullPlayer
@@ -195,6 +228,8 @@
     {queueOpen}
     onqueue={() => (queueOpen ? closeQueue() : openQueue())}
     onlyrics={toggleLyrics}
+    onartist={openArtist}
+    onalbum={openAlbum}
   />
 {/if}
 

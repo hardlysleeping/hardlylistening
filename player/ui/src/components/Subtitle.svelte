@@ -31,5 +31,5 @@
      invalid link target, which is exactly what it is — the element is here for its styling and
      its click, and the real destination is the artist/album screen, behind the callbacks. -->
 <!-- svelte-ignore a11y_invalid_attribute -->
-{#if artist}<a class="psub-a" href="#" title={`Open ${artist}`} onclick={(event) => { event.preventDefault(); event.stopPropagation(); if (artistId) onartist?.(artistId, artist); }}>{artist}</a>{/if}{#if album}<span class="psub-sep">{artist ? " · " : ""}</span><!-- svelte-ignore a11y_invalid_attribute -->
+{#if artistId}<a class="psub-a" href="#" title={`Open ${artist}`} onclick={(event) => { event.preventDefault(); event.stopPropagation(); onartist?.(artistId, artist); }}>{artist}</a>{:else}<span class="psub-a">{artist}</span>{/if}{#if album}<span class="psub-sep">{artist ? " · " : ""}</span><!-- svelte-ignore a11y_invalid_attribute -->
 {#if albumId}<a class="psub-b" href="#" title={`Open ${album}`} onclick={(event) => { event.preventDefault(); event.stopPropagation(); onalbum?.(albumId, album); }}>{album}</a>{:else}<span class="psub-b">{album}</span>{/if}{/if}

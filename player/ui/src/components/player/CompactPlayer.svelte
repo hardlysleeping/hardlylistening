@@ -27,9 +27,12 @@
      * carries only its own controls.
      */
     saveSlot?: boolean;
+    /** The artist · album line is two links on the host, and each opens a screen here too. */
+    onartist?: (id: string, name: string) => void;
+    onalbum?: (id: string, name: string) => void;
   }
 
-  let { player, onqueue, onopen, onlyrics, saveSlot = false }: Props = $props();
+  let { player, onqueue, onopen, onlyrics, saveSlot = false, onartist, onalbum }: Props = $props();
 
   let canvas: HTMLCanvasElement | undefined = $state();
   let volumeButton: HTMLButtonElement | undefined = $state();
@@ -175,7 +178,7 @@
     }}
   >
     <div class="ptitle" id="pltitle">{title}</div>
-    <div class="psub" id="plsub"><Subtitle {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} /></div>
+    <div class="psub" id="plsub"><Subtitle {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} {onartist} {onalbum} /></div>
   </div>
   <div class="pctrl">
     <div class="ptrans">
