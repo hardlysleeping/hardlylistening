@@ -231,6 +231,15 @@ control:
   is the part they can check. `a_failure_sentence_never_repeats_the_url_the_credential_travels_in`
   builds the real URL, makes the real failing request and asserts the sentence carries no
   password, no query and none of `u=`, `p=`, `t=`, `s=`.
+* **The web path's failure sentence.** The same line on the `fetch` transport printed the
+  engine's own phrase — `Could not reach http://127.0.0.1:9 — Failed to fetch` — which names a
+  browser internal, reads as a defect in this client, and is worded differently on each engine
+  ("NetworkError when attempting to fetch resource." on Firefox, "Load failed" on WebKit). Every
+  one of those phrases means the same checkable thing, and that is what the line now says:
+  *the request got no answer*. A sentence this list does not contain is left as the engine said
+  it, because then it is specific. `transport.test.ts` feeds all four engines' wording and
+  asserts none of them reaches the message, that a CORS sentence still does, and that the
+  address stays.
 
 The album grid is sized from the host's density variable (`--song-cols`, 2 on a phone, 4 on a
 desktop). The player has no density control, so it takes those defaults explicitly; without them
@@ -347,6 +356,15 @@ heading counted four while two rows were drawn, and the two invisible songs stil
 same key sat on `TrackList`, where a playlist is allowed to name one song twice. Both lists are
 keyed by position now. Walked at 1200×860 and 390×844 with a duplicated queue and a playlist
 containing one song twice.
+
+**Escape closes the queue, as it does on the host page.** The host binds the key in
+`web/js/playback-queue.js`, a module this client does not carry, so the panel could be opened
+from the keyboard (`#qgrip`, the docked bar's queue button) and then only dismissed with the
+mouse — the one control on that surface with no key of its own. `QueuePanel` now listens for
+Escape while it is open and takes the same path as its `×`. Measured at 390×844 on the built
+bundle: open → `#playback-panel.open`, `aria-expanded="true"`; Escape → both false with the
+fullscreen player still up; `×` reached the identical state; Escape with the queue already shut
+leaves the fullscreen player alone, which is also what the host does.
 
 ## What is unverified, and why
 

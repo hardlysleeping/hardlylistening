@@ -26,6 +26,21 @@
 
   let { player, open, onclose }: Props = $props();
 
+  /* The host closes this panel on Escape from a document-level listener in
+   * `web/js/playback-queue.js`; that module is not part of this client, so the key had no
+   * binding here and the queue could be opened from the keyboard but not dismissed from it.
+   * Same key, same result, and only while the panel is on screen — the × above takes the same
+   * path. */
+  $effect(() => {
+    if (!open) return;
+    const dismiss = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      onclose();
+    };
+    window.addEventListener("keydown", dismiss);
+    return () => window.removeEventListener("keydown", dismiss);
+  });
+
   const upNext = $derived(player.upNext);
   /** A sentence the list has to say. Empty means the paragraph is hidden, as in the host. */
   let status = $state("");

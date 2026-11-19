@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { NativeTransport, type InvokeLike } from "./transport";
+import { NativeTransport, WebTransport, type FetchLike, type InvokeLike } from "./transport";
 import { ClientError, SubsonicError, TransportError } from "./errors";
 
 /** Every argument a call was given, flattened to the strings it may contain. */
@@ -147,5 +147,52 @@ describe("the native transport", () => {
     for (const [, args] of calls) {
       expect(argumentStrings(args).some((value) => value.includes("/rest/") || value.includes("://"))).toBe(false);
     }
+  });
+});
+/* The web path's failure line, which is the only thing the connect screen has to say when a
+ * server is not there. The test is about the words: an engine's own phrase for "no answer" is
+ * not something a person can act on, and it is not this client's voice. */
+describe("a request that got no answer", () => {
+  const origin = "http://127.0.0.1:9";
+
+  function refusing(message: string): WebTransport {
+    const fetch: FetchLike = async () => {
+      throw new TypeError(message);
+    };
+    return new WebTransport({ origin, credentials: { username: "u", secret: "s", form: "password" }, fetch });
+  }
+
+  it("never repeats the engine's phrase for a network failure", async () => {
+    /* Chromium, Firefox, WebKit and the React Native polyfill each word it differently, and a
+     * player build is the same code on all four. */
+    const phrases = [
+      "Failed to fetch",
+      "NetworkError when attempting to fetch resource.",
+      "Load failed",
+      "fetch failed",
+      "Network request failed",
+    ];
+
+    for (const phrase of phrases) {
+      const error = await refusing(phrase).request({ endpoint: "ping" }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(TransportError);
+      const message = (error as TransportError).message;
+      expect(message).toBe(`Could not reach ${origin} — the request got no answer`);
+      expect(message).not.toContain(phrase);
+    }
+  });
+
+  it("keeps a failure that says something the person can use", async () => {
+    const error = await refusing("CORS header 'Access-Control-Allow-Origin' missing")
+      .request({ endpoint: "ping" })
+      .catch((caught: unknown) => caught);
+    expect((error as TransportError).message).toBe(
+      `Could not reach ${origin} — CORS header 'Access-Control-Allow-Origin' missing`,
+    );
+  });
+
+  it("still names the address, so a mistyped host reads as itself", async () => {
+    const error = await refusing("Failed to fetch").request({ endpoint: "ping" }).catch((caught: unknown) => caught);
+    expect((error as TransportError).message).toContain(origin);
   });
 });

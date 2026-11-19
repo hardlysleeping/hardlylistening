@@ -47,9 +47,27 @@ function text(value: unknown): string {
   return value == null ? "" : String(value);
 }
 
+/* A failed `fetch` arrives as a `TypeError` whose `message` is the engine's phrase for "the
+ * request got no answer": Chromium says "Failed to fetch", Firefox says "NetworkError when
+ * attempting to fetch resource.", WebKit says "Load failed", and React Native's polyfill says
+ * "Network request failed". Shown as-is those name an engine's internals, not the situation, and
+ * on the connect screen they read as a defect in this client. Every one of them means the same
+ * checkable fact, so that fact is what the person is told. A sentence this list does not contain
+ * is left alone: then the engine is saying something specific that is worth keeping. */
+const ENGINE_SPEECH = [
+  /^failed to fetch$/i,
+  /^networkerror\b/i,
+  /^load failed$/i,
+  /^fetch failed$/i,
+  /^network request failed$/i,
+];
+
+const NO_ANSWER = "the request got no answer";
+
 function reasonOf(error: unknown): string {
   const said = error instanceof Error ? text(error.message).trim() : "";
-  return said || "the request failed before an answer arrived";
+  if (!said) return NO_ANSWER;
+  return ENGINE_SPEECH.some((pattern) => pattern.test(said)) ? NO_ANSWER : said;
 }
 
 function cleanParams(params: Record<string, string | number | undefined>): Record<string, string> {
