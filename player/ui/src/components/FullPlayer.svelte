@@ -52,6 +52,12 @@
   }
 
   const shownPosition = $derived(seeking ? seekAt * player.duration : player.position);
+  /* What the value *is*, for both position controls. The scale under them is 0-1000 because a
+     range input wants integers and a fraction of a song has more decimal places than a slider
+     needs; that scale is the widget's business, not the listener's. Announced raw, the seek bar
+     said "76" and the disc "76" with a min and max of 0 and 1000 — a number in units nobody
+     chose, on a control whose whole job is to say where in the song you are. */
+  const valueText = $derived(`${clock(shownPosition)} of ${clock(player.duration)}`);
   const seekValue = $derived(
     seeking ? Math.round(seekAt * 1000) : Math.round(player.progress * 1000),
   );
@@ -219,6 +225,7 @@
             aria-valuemin="0"
             aria-valuemax="1000"
             aria-valuenow={seekValue}
+            aria-valuetext={valueText}
           >
             <span class="pf-grooves" aria-hidden="true"></span>
             <!-- The label is the big artwork; an empty one is hidden rather than left to paint
@@ -287,6 +294,7 @@
       max="1000"
       value={seekValue}
       aria-label="Seek"
+      aria-valuetext={valueText}
       oninput={(event) => {
         seeking = true;
         seekAt = Number(event.currentTarget.value) / 1000;

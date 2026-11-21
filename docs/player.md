@@ -612,6 +612,53 @@ row is its play button, its text, then `button "Remove Album 1 track 2 from the 
 the coordinates of the *text* still play the row and still open the player, because the stretched
 button is what a press lands on, and Tab from a row's play button reaches its `+` in one stop.
 
+**Three queue controls took the reader's place with them, and one announcement cannot be measured
+where it runs.** The full player is a dialog with the page behind it `inert`, so the tab order *is*
+the sheet. What happens to focus when the control under it leaves the document was never checked,
+and three paths dropped it to `body` — outside the sheet, so the next Tab restarted at the top of
+the page. Measured at 390×844 with real key presses, before → after:
+
+* a queue row's play button (Enter on "Play Album 1 track 2" while it is the first of two up-next
+  rows): `BODY` → the button that took the row's place, "Play Album 1 track 3". Pressing the last row
+  leaves nothing under the caret, and that falls back to the sheet's close button, as `remove()`
+  already did.
+* the broom (`#pqclear`): `BODY` → the sheet's close button. It empties the list and then disables
+  itself, and a disabled control cannot keep the caret.
+* the sheet's own close button, and Escape (which `App` owns): `BODY` → `#pfqueue`, the button that
+  opened the sheet. One effect on the `open` prop rather than one call per closing path, so every
+  way the sheet closes ends in the same place. It takes the caret back only when it was inside the
+  sheet or already lost, so a reader who had moved on to the seek bar and pressed Escape keeps their
+  place. Escape twice now reads `#pfqueue` → `#plartwrap`, the bar's art button that opened the
+  player.
+
+Chromium focuses a button on mousedown, so a pointer press takes the same hand-off; measured, it
+paints no ring, because `:focus-visible` stays false after a click. Safari does not focus a button on
+tap, so there the test is false and nothing moves.
+
+**Checked and not a defect:** a track change does not take focus. Enter on `#pfnext` left focus on
+`#pfnext` while the title moved from "Album 1 track 1" to "track 2"; Tab then reached `#pfrepeat`,
+ArrowRight on `#pfseek` stayed on it, and Enter on `#pflike` stayed on it with `aria-pressed` true.
+
+**Value text: declared, and not measurable on this engine.** The record is a `role="slider"` over
+0–1000 and the two seek bars are `<input type="range">` over the same span, so a reader was handed
+"76" between a min of 0 and a max of 1000 — a number in units nobody chose, on the controls whose
+whole job is to say where in the song you are. All four now carry `aria-valuetext` ("0:01 of 0:30",
+and "85%" on the volume fader), derived from the same `shownPosition` the visible clock prints, so
+the announcement and the clock cannot disagree; the docked bar's seek bar does the same from its own
+`scrubAt`/`progress`.
+
+The other half is the honest one. Headless Chromium 156 refuses `aria-valuetext` for sliders in the
+accessibility tree, measured three ways: a `role="slider"` div carrying both `aria-valuenow` and
+`aria-valuetext` reports `value: 54, type: "number"` with a `valuetext` property of `""`; the same
+div with only `aria-valuetext` reports `value: 500`, the midpoint of its min and max; an
+`<input type="range">` reports `valuetext: "54"`, its own number, ignoring the attribute. Playwright's
+`ariaSnapshot` agrees — `slider "Seek": "76"`. On Chromium the change is therefore declarative and
+alters nothing a screen reader hears. It is the right declaration for an engine that honours it, and
+the player's engine is WKWebView, where `aria-valuetext` is specified and honoured; there is no AX
+inspection path to WebKit in this checkout, so that half is **unverified** rather than claimed. The
+shape the measurement would otherwise suggest — dropping `aria-valuenow` so the text wins — is
+invalid on a range slider and was not taken.
+
 ## What is unverified, and why
 
 The host is Bazzite (immutable), with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`

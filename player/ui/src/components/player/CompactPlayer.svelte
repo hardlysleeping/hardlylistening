@@ -60,6 +60,11 @@
 
   const progress = $derived(player.progress);
   const seekValue = $derived(scrubbing ? Math.round(scrubAt * 1000) : Math.round(progress * 1000));
+  /* The same reading as the fullscreen player's two controls: 0-1000 is the widget's integer
+     scale, and "0:31 of 0:30" is the fact. */
+  const valueText = $derived(
+    `${clock((scrubbing ? scrubAt : progress) * player.duration)} of ${clock(player.duration)}`,
+  );
   const title = $derived(player.track?.title ?? "—");
   const artist = $derived(player.track?.artist ?? "");
   const album = $derived(player.track?.album ?? "");
@@ -230,6 +235,7 @@
     max="1000"
     value={seekValue}
     aria-label="Seek"
+    aria-valuetext={valueText}
     oninput={(event) => {
       scrubbing = true;
       scrubAt = Number(event.currentTarget.value) / 1000;
@@ -269,6 +275,7 @@
     value={Math.round(player.volume * 100)}
     title="Volume"
     aria-label="Volume"
+    aria-valuetext={`${Math.round(player.volume * 100)}%`}
     oninput={(event) => player.setVolume(Number(event.currentTarget.value) / 100)}
   />
 </div>

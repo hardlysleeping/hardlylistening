@@ -82,6 +82,40 @@
     next?.focus();
   }
 
+  /* The broom, from the keyboard: it empties the list and then disables itself, so a reader who
+     pressed it is left on a control that no longer takes focus — the browser moves them to `body`,
+     outside the sheet. Measured. Nothing is left to land on, so the hand-off goes to the sheet's
+     close button: the same place `remove()` ends up when the last row goes. */
+  async function clear(from: HTMLElement | null): Promise<void> {
+    const keyboard = from !== null && document.activeElement === from;
+    player.clearUpcoming();
+    status = "Queue cleared. Current audio is unchanged.";
+    if (!keyboard) return;
+    await tick();
+    document.querySelector<HTMLElement>("#playback-panel .pq-close")?.focus();
+  }
+
+  /* Closing the sheet hands focus back to the button that opened it. The panel is hidden with the
+     close button still holding the caret, and a hidden element cannot keep it, so the browser
+     drops it to `body` — measured, by both the close button and Escape, which `App` owns. One
+     effect rather than one call per path: every way the sheet closes ends here.
+
+     Only when the caret was in the sheet, or already lost: if the reader had moved on to the seek
+     bar and pressed Escape, moving them to the queue button would take their place away from them.
+     When the whole player is closing too, `#pfqueue` sits inside the `inert` shell and refuses the
+     call, which leaves the player's own hand-back to restore the original position untouched. */
+  let opened = $state(false);
+  $effect(() => {
+    const openNow = open;
+    const wasOpen = opened;
+    opened = openNow;
+    if (!wasOpen || openNow) return;
+    const caret = document.activeElement;
+    const inside = caret === null || caret === document.body || !!caret.closest?.("#playback-panel");
+    if (!inside) return;
+    document.querySelector<HTMLElement>("#pfqueue")?.focus({ preventScroll: true });
+  });
+
   /* Tap plays, × removes, Alt+arrow moves, and a pointer drag reorders — one gesture
    * implementation for mouse, pen and touch, ported from the host's `bindOrderDrag`.
    *
@@ -258,12 +292,31 @@
   });
 
   /** A row's click, unless the click is the tail of a drag that just ended. */
-  function play(position: number): void {
+  async function play(position: number, from: HTMLElement | null): Promise<void> {
     if (host?.dataset.justDragged === "1") {
       delete host.dataset.justDragged;
       return;
     }
-    void player.playUpNext(position);
+    /* A keyboard press is the case that needs a hand-off. The row plays, which takes it out of Up
+       next, so its button leaves the document and the browser drops focus to `body` — measured:
+       Enter on the second row left `document.activeElement` as BODY, outside the sheet and inside
+       the `inert` shell's shadow, so the next Tab restarted at the top of the page. The same
+       hand-off as `remove()` above: whichever button took the row's place, or the sheet's close
+       when nothing is left.
+
+       Chromium focuses a button on mousedown, so a pointer press arrives here with the same
+       `document.activeElement` and takes the same hand-off — measured, and it paints no ring
+       because `:focus-visible` stays false after a click. Safari does not focus a button on tap,
+       so there the test is false and nothing moves. */
+    const keyboard = from !== null && document.activeElement === from;
+    await player.playUpNext(position);
+    if (!keyboard) return;
+    await tick();
+    const plays = document.querySelectorAll<HTMLButtonElement>("#playback-items .pq-row .pq-play");
+    const next =
+      plays[Math.min(position, plays.length - 1)] ??
+      document.querySelector<HTMLElement>("#playback-panel .pq-close");
+    next?.focus();
   }
 </script>
 
@@ -289,8 +342,7 @@
         onclick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          player.clearUpcoming();
-          status = "Queue cleared. Current audio is unchanged.";
+          void clear(event.currentTarget as HTMLElement | null);
         }}
       ><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 3.5 11.2 11.8"/><path d="M6.6 14.6 12 20"/><path d="M11.2 11.8 6.6 14.6"/><path d="M6.6 14.6 3.4 20.8"/><path d="M9.3 16.2 7.6 21.4"/><path d="M11.4 17.6 11.8 22"/></svg></button>
       <button
@@ -331,7 +383,7 @@
               type="button"
               class="pq-play"
               aria-label="Play {song.title}{song.artist ? `, ${song.artist}` : ""}"
-              onclick={() => play(position)}
+              onclick={(event) => void play(position, event.currentTarget as HTMLElement | null)}
               onkeydown={(event) => {
                 if (!event.altKey) return;
                 const moves: Record<string, number> = {
