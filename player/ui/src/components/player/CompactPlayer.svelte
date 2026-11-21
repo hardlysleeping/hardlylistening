@@ -197,7 +197,7 @@
   <div class="pctrl">
     <div class="ptrans">
       <button class="iconbtn small" id="plrepeat" title={repeatLabel} aria-label="Repeat" class:on={player.repeat !== "off"} aria-pressed={player.repeat !== "off"} onclick={() => player.cycleRepeat()}>{@html player.repeat === "one" ? SVG.repeatOne(16) : SVG.repeat(16)}</button>
-      <button class="iconbtn small" id="plshuffle" title="Shuffle" aria-label="Shuffle" class:on={player.shuffle} onclick={() => player.toggleShuffle()}>{@html SVG.shuffle(16)}</button>
+      <button class="iconbtn small" id="plshuffle" title="Shuffle" aria-label="Shuffle" aria-pressed={player.shuffle} class:on={player.shuffle} onclick={() => player.toggleShuffle()}>{@html SVG.shuffle(16)}</button>
       <button class="iconbtn" id="plprev" title="Previous" aria-label="Previous" onclick={() => void player.previous()}>{@html SVG.prev(20)}</button>
       <button class="iconbtn big" id="plplay" title={player.playing ? "Pause" : "Play"} aria-label={player.playing ? "Pause" : "Play"} onclick={() => void player.toggle()}>{@html player.playing ? SVG.pause(14) : SVG.play(14)}</button>
       <button class="iconbtn" id="plnext" title="Next" aria-label="Next" onclick={() => void player.next()}>{@html SVG.next(20)}</button>

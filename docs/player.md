@@ -474,6 +474,26 @@ the play button says Play and the clock reads 0:00, the fullscreen player opens 
 track, Up next still reads 3 with the same three rows in the same order, and the saved copy
 records `index: 0`. Pressing Play then resolves the source and starts playing from there.
 
+**Shuffle and repeat come back too, as states.** The host page persists both and hands them to
+its module at boot precisely so that adopting `shuffle = true` does not reorder a queue the
+listener never touched. The player kept neither, so a shuffled session reloaded unshuffled with
+repeat off. `hl.player.modes.v1` now holds `{shuffle, repeat}`: the pair is written whenever
+either changes, and read in the constructor as state only — the order that plays is the order that
+was saved, so nothing is shuffled twice on the way in; the repeat mode is also handed to the
+engine, which owns the advance when it owns the queue. A stored `"repeat": "sometimes"` or
+`"shuffle": "yes"` is ignored rather than coerced.
+
+Found alongside: the two toggles disagreed with each other. Repeat carried `aria-pressed` and
+shuffle carried only the `.on` class, so a screen reader was told the state of one and asked to
+guess the other — in both surfaces. Shuffle now carries `aria-pressed` in the docked bar and in the
+fullscreen player.
+
+Measured at 390×844: track 1 playing, shuffle pressed, repeat walked off → queue → one; reload;
+sign in through the form; the shuffle button comes back pressed (`class="on"`, `aria-pressed="true"`,
+also in the fullscreen copy), repeat reads "Repeat one" with `aria-pressed="true"`, the saved order
+is still `[0, 1, 2]` and Up next is still tracks 2 and 3 with track 1 restored paused. Three store
+cases hold the adoption, the write, and the refusal of an unrecognised value.
+
 **The fullscreen player takes the keyboard with it.** It declares `role="dialog"
 aria-modal="true"`, and behaved as though the declaration were decoration: opening it left focus on
 the docked bar's artwork, Tab walked the bar's thirteen controls — and everything else focusable on
@@ -560,7 +580,7 @@ that can be built is built inside the `huibuild` distrobox, which has those pack
   390×844;
 * `cargo test --release` — 35 cases, several of them socket-level, including a stub that answers
   `/rest/*` — and `rustfmt --check` accept the Rust tree;
-* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 178 vitest cases;
+* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 181 vitest cases;
 * the built tree is audited file by file by `tests/test_player_store_safe.py` (9 tests).
 
 What no Linux build settles is the device: `gen/apple`/`gen/android` generation, a real WKWebView,

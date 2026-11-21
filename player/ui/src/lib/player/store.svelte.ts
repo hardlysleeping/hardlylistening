@@ -29,6 +29,11 @@ const VOLUME_KEY = "hl.player.volume";
  * a name on the server that gave it out; the record is cleared on sign-out for the same reason. */
 const QUEUE_KEY = "hl.player.queue.v1";
 
+/* Shuffle and repeat, as states rather than as actions. The host's page persists both and hands
+ * them in at boot for exactly this reason: adopting `shuffle = true` must not re-shuffle the
+ * queue that was restored, which is what calling `toggleShuffle()` would do. */
+const MODES_KEY = "hl.player.modes.v1";
+
 /** The fields painting needs, and nothing the server would have to be asked for. */
 function songRecord(song: Song): Song {
   return {
@@ -125,6 +130,31 @@ export class PlayerStore {
     const stored = Number(localStorage.getItem(VOLUME_KEY) ?? "0.85");
     this.volume = Number.isFinite(stored) ? Math.max(0, Math.min(1, stored)) : 0.85;
     this.#engine.setVolume(this.volume);
+
+    /* The modes come back as state only. The order that plays is the order that was saved, so a
+       restored queue is not shuffled a second time on the way in. */
+    try {
+      const raw = localStorage.getItem(MODES_KEY);
+      const modes = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+      if (modes) {
+        if (typeof modes.shuffle === "boolean") this.shuffle = modes.shuffle;
+        if (modes.repeat === "off" || modes.repeat === "all" || modes.repeat === "one") {
+          this.repeat = modes.repeat;
+          this.#engine.setRepeat?.(this.repeat);
+        }
+      }
+    } catch {
+      /* Corrupt or unavailable storage leaves the defaults; it never blocks the app. */
+    }
+  }
+
+  /** File the two modes, the way the volume and the queue are filed. */
+  #persistModes(): void {
+    try {
+      localStorage.setItem(MODES_KEY, JSON.stringify({ shuffle: this.shuffle, repeat: this.repeat }));
+    } catch {
+      /* A private window refuses storage; the modes still work for this session. */
+    }
   }
 
   /** The events a natively built engine reports into. One seam, whoever builds the engine. */
@@ -460,6 +490,7 @@ export class PlayerStore {
     this.repeat = this.repeat === "off" ? "all" : this.repeat === "all" ? "one" : "off";
     // Told, not re-pushed: replacing the order to change a mode would restart the track.
     this.#engine.setRepeat?.(this.repeat);
+    this.#persistModes();
   }
 
   toggleShuffle(): void {
@@ -473,6 +504,7 @@ export class PlayerStore {
     // playback resumes at the song the person is on. That restarts the track — the cost of
     // changing the order underneath a player that is holding it.
     this.#pushQueue();
+    this.#persistModes();
     if (this.#engine.ownsQueue && this.index >= 0 && this.queue.length) {
       this.#engine.playAt?.(this.index);
     }

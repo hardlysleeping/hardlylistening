@@ -303,7 +303,7 @@
       <span id="pfdur">{clock(player.duration)}</span>
     </div>
     <div class="pf-ctrl">
-      <button class="iconbtn small" id="pfshuffle" type="button" title="Shuffle" aria-label="Shuffle" class:on={player.shuffle} onclick={() => player.toggleShuffle()}>{@html SVG.shuffle(16)}</button>
+      <button class="iconbtn small" id="pfshuffle" type="button" title="Shuffle" aria-label="Shuffle" aria-pressed={player.shuffle} class:on={player.shuffle} onclick={() => player.toggleShuffle()}>{@html SVG.shuffle(16)}</button>
       <button class="iconbtn" id="pfprev" type="button" title="Previous" aria-label="Previous" onclick={() => void player.previous()}>{@html SVG.prev(20)}</button>
       <button class="iconbtn big" id="pfplay" type="button" title={player.playing ? "Pause" : "Play"} aria-label={player.playing ? "Pause" : "Play"} onclick={() => void player.toggle()}>{@html player.playing ? SVG.pause(26) : SVG.play(26)}</button>
       <button class="iconbtn" id="pfnext" type="button" title="Next" aria-label="Next" onclick={() => void player.next()}>{@html SVG.next(20)}</button>

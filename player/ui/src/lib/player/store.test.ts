@@ -23,6 +23,7 @@ function stubEngine(): AudioEngine {
     seekFraction: vi.fn(),
     setVolume: vi.fn(),
     setMuted: vi.fn(),
+    setRepeat: vi.fn(),
     destroy: vi.fn(),
   };
 }
@@ -448,5 +449,85 @@ describe("the queue comes back", () => {
 
     expect(player.queue).toEqual([]);
     expect(player.track).toBeNull();
+  });
+});
+
+describe("the modes come back", () => {
+  function sharedStorage(): Storage {
+    const map = new Map<string, string>();
+    return {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, String(value)),
+      removeItem: (key: string) => void map.delete(key),
+      clear: () => map.clear(),
+      key: (at: number) => [...map.keys()][at] ?? null,
+      get length() {
+        return map.size;
+      },
+    } as Storage;
+  }
+
+  function boot(server: MusicServer) {
+    const engine = stubEngine();
+    const player = new PlayerStore(engine);
+    player.attach(server, "http://one");
+    return { player, engine };
+  }
+
+  const songs: Song[] = [
+    { id: "a", title: "A", duration: 100 },
+    { id: "b", title: "B", duration: 120 },
+    { id: "c", title: "C", duration: 140 },
+    { id: "d", title: "D", duration: 160 },
+  ];
+
+  it("adopts shuffle and repeat as states, without shuffling the queue again", async () => {
+    /* The host hands its persisted modes to `attach` for exactly this reason: calling
+       `setShuffle(true)` at boot reorders a queue the listener never touched. The saved order
+       is the shuffled order, so adopting the flag must not touch it. */
+    (globalThis as unknown as { localStorage: unknown }).localStorage = sharedStorage();
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const first = boot(okServer());
+    await first.player.playQueue(songs, 0);
+    first.player.toggleShuffle();
+    first.player.cycleRepeat();
+    random.mockRestore();
+    const shuffledOrder = first.player.upNext.map((song) => song.id);
+    expect(shuffledOrder).toEqual(["c", "d", "b"]);
+
+    const second = boot(okServer());
+
+    expect(second.player.shuffle).toBe(true);
+    expect(second.player.repeat).toBe("all");
+    // Same order as it was left: the queue was not shuffled a second time on the way in.
+    expect(second.player.upNext.map((song) => song.id)).toEqual(shuffledOrder);
+    // The engine is told the mode, because it owns the advance when it has the queue.
+    expect(second.engine.setRepeat).toHaveBeenCalledWith("all");
+  });
+
+  it("files both modes when they change", () => {
+    const storage = sharedStorage();
+    (globalThis as unknown as { localStorage: unknown }).localStorage = storage;
+    const { player } = boot(okServer());
+
+    player.toggleShuffle();
+    player.cycleRepeat();
+    player.cycleRepeat();
+
+    expect(JSON.parse(storage.getItem("hl.player.modes.v1") ?? "null")).toEqual({
+      shuffle: true,
+      repeat: "one",
+    });
+  });
+
+  it("ignores a stored mode it does not recognise", () => {
+    const storage = sharedStorage();
+    (globalThis as unknown as { localStorage: unknown }).localStorage = storage;
+    storage.setItem("hl.player.modes.v1", JSON.stringify({ shuffle: "yes", repeat: "sometimes" }));
+
+    const { player } = boot(okServer());
+
+    expect(player.shuffle).toBe(false);
+    expect(player.repeat).toBe("off");
   });
 });
