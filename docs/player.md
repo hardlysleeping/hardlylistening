@@ -432,6 +432,25 @@ song the move put there. The status line says "Queue order updated.", which is t
 and a removal says "Removed from queue. Current audio is unchanged." Store cases pin the move under
 both an ordinary and a shuffled order: the queue array is untouched and `next` plays the moved song.
 
+**The same reorder from a thumb, and the trap under mixing DOM moves with Svelte.** The keys are
+the host's path for anyone without a pointer; a phone has no Alt key, so on its own that path means
+the queue cannot be reordered on the device this client is for. The host's `bindOrderDrag` is
+ported: a grip on a wide row arms at once, a row body arms after 3 px of vertical movement on a
+mouse and after a 280 ms hold on touch, the drag is tracked on the window because a release below
+the last row lands outside the list, and `pointercancel` puts the row back without writing an
+order. The click that trails a drop is swallowed so the gesture cannot also play the row it
+started on, and a stale flag is cleared at the next press so it cannot eat a later tap.
+
+The defect that port cost is worth naming, because it looked like a store bug: the list is an
+unkeyed `each`, so a block belongs to the node it was created on. Moving nodes by hand during the
+gesture and then committing the new order made Svelte write the new data into the blocks in their
+*old* physical order — the status line said "Queue order updated." over a list that had not moved.
+The drop now hands the DOM back to its original order first and writes the order through
+`flushSync`, so the repaint is one step. Measured after that: mouse drag down one place and back,
+the grip drags without the 3 px slop, a plain click still plays, touch hold-and-drag moves a row,
+a cancelled touch drag restores the order and writes nothing, a quick swipe does not reorder, and
+a quick tap still plays.
+
 **The queue survives a reload, and it comes back paused.** The saved copy is
 `hl.player.queue.v1`: the song fields a row needs to be painted, the order, and the playhead,
 filed under the address of the server that issued the ids — a song id is only a name on the

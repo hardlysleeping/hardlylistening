@@ -12,17 +12,20 @@
    * rows that were fine. Removal is now a `×` of its own, which is a control a mouse and a thumb
    * can both reach, and it calls the same `removeUpNext(position)`.
    *
-   * Reordering is the host's keyboard gesture and nothing else: Alt with Up/Down moves a row one
-   * place, Alt with Home/End sends it to either end (`queueHost`'s own keydown in
-   * `web/js/playback-queue.js`). The pointer grip is not ported, for the same reason the swipe is
-   * not: a drag nobody bound is a control that lies, and the keys are the path that has to work
-   * on a phone being read by VoiceOver as well.
+   * Reordering has two paths, as it does on the host. Alt with Up/Down moves a row one place and
+   * Alt with Home/End sends it to either end (`queueHost`'s own keydown in
+   * `web/js/playback-queue.js`) — the path that works without a pointer, and the only one
+   * VoiceOver can drive. The other is the pointer: the host's `bindOrderDrag`, where a grip on a
+   * wide row drags at once and a phone row is the target itself, lifted by a 280 ms hold. That
+   * second path is not decoration here. Without it the queue cannot be reordered on a phone at
+   * all, because a touch screen has no Alt key — the reason the host never relied on the keys
+   * alone. A cancelled gesture puts the row back; only a released drag writes an order.
    *
    * `in-full` is the class the host adds when it moves this panel into the column; here the panel
    * has no other home, so it is always on. That class is what drops the floating card's border,
    * radius and shadow and lets the page, not an overlay, make room for it.
    */
-  import { tick } from "svelte";
+  import { flushSync, tick } from "svelte";
   import type { PlayerStore } from "../lib/player/store.svelte";
 
   interface Props {
@@ -42,6 +45,7 @@
   const upNext = $derived(player.upNext);
   /** A sentence the list has to say. Empty means the paragraph is hidden, as in the host. */
   let status = $state("");
+  let host = $state<HTMLElement | null>(null);
 
   /* Alt+Up/Down/Home/End, as the host's queue row reads them. Positions are offsets into Up
      next, so the playhead is never crossed and the current audio is never touched. */
@@ -49,7 +53,11 @@
     const count = player.upNext.length;
     const target = Math.max(0, Math.min(count - 1, to));
     if (target === position) return;
-    player.moveUpNext(position, target);
+    /* Applied together with the paint. The list is an unkeyed `each`, so a block belongs to the
+       node it was created on; a drag that moved a node by hand has to be handed back *before*
+       the order changes, or the new data lands in the old physical order and the list looks
+       unmoved (measured: the status said "Queue order updated." over an unchanged list). */
+    flushSync(() => player.moveUpNext(position, target));
     status = "Queue order updated.";
     await tick();
     /* Rows are patched by position, so without this the focus stays on the slot the song left
@@ -72,6 +80,188 @@
       document.querySelector<HTMLElement>("#pqclear:not([disabled])") ??
       document.querySelector<HTMLElement>("#playback-panel .pq-close");
     next?.focus();
+  }
+
+  /* Tap plays, × removes, Alt+arrow moves, and a pointer drag reorders — one gesture
+   * implementation for mouse, pen and touch, ported from the host's `bindOrderDrag`.
+   *
+   * A grip arms at once; a row body arms on a mouse after 3 px of vertical movement and on touch
+   * after a 280 ms hold, so a tap still plays and a swipe still scrolls. The drag is tracked on
+   * the window because a release below the last row lands outside the list. Cancel restores the
+   * DOM order and writes nothing: a reorder that was abandoned is not an edit.
+   *
+   * `from`/`to` are positions in Up next, which is what the rows are — the store's `moveUpNext`
+   * takes the same two numbers the keyboard path passes. */
+  function rows(): HTMLElement[] {
+    return host ? [...host.querySelectorAll<HTMLElement>(".pq-row")] : [];
+  }
+
+  $effect(() => {
+    const el = host;
+    if (!el) return;
+
+    let drag: {
+      row: HTMLElement;
+      pointer: number;
+      x: number;
+      y: number;
+      moved: boolean;
+      from: number;
+      to: number;
+      after: Element | null;
+    } | null = null;
+    let hold: ReturnType<typeof setTimeout> | null = null;
+    let armed = false;
+
+    const release = (): void => {
+      if (hold !== null) clearTimeout(hold);
+      hold = null;
+    };
+
+    const lift = (row: HTMLElement, pointer: number): void => {
+      row.classList.add("pq-lift");
+      el.dataset.dragging = "1";
+      try {
+        row.setPointerCapture?.(pointer);
+      } catch {
+        /* A synthetic pointer has no capture; the window listeners still track it. */
+      }
+    };
+
+    const onMove = (event: PointerEvent): void => {
+      if (!drag || drag.pointer !== event.pointerId) return;
+      if (!armed) {
+        // Past the slop before the hold landed: that was a scroll, not a lift.
+        if (Math.abs(event.clientY - drag.y) > 8 || Math.abs(event.clientX - drag.x) > 8) {
+          release();
+          drag = null;
+        }
+        return;
+      }
+      event.preventDefault();
+      const dx = Math.abs(event.clientX - drag.x);
+      const dy = Math.abs(event.clientY - drag.y);
+      // Vertical movement is what makes a mouse drag; sideways is the page's own scrolling.
+      if (!drag.moved && dy > 3 && dy >= dx) {
+        drag.moved = true;
+        if (!drag.row.classList.contains("pq-lift")) lift(drag.row, drag.pointer);
+      }
+      /* Before the first row whose middle is below the finger: one idempotent answer for every
+         position. Hit-testing here would return the lifted row itself, which sits under the
+         finger, and swapping on each move slides a row several places. */
+      const others = rows().filter((node) => node !== drag?.row);
+      const next = others.find((node) => {
+        const box = node.getBoundingClientRect();
+        return event.clientY < box.top + box.height / 2;
+      });
+      const last = el.lastElementChild;
+      if (last !== drag.row || next) el.insertBefore(drag.row, next ?? null);
+
+      const box = el.getBoundingClientRect();
+      if (event.clientY < box.top + 32) el.scrollTop -= 14;
+      else if (event.clientY > box.bottom - 32) el.scrollTop += 14;
+    };
+
+    const finish = (event: PointerEvent, cancelled: boolean): void => {
+      release();
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      if (!drag || event.pointerId !== drag.pointer) return;
+      const { row, from, after, moved, to } = drag;
+      row.classList.remove("pq-lift");
+      delete el.dataset.dragging;
+      drag = null;
+      armed = false;
+      if (!moved) return;
+      /* Hand the DOM back to the order the blocks were made in, cancelled or not. A drop then
+         writes the order, which repaints this same list in its new sequence; a cancel writes
+         nothing and there is nothing left to undo. */
+      if (after && after.parentElement === el) el.insertBefore(row, after);
+      else el.appendChild(row);
+      if (cancelled) return;
+      // The click that trails a drop belongs to the gesture, not to the row's play action.
+      el.dataset.justDragged = "1";
+      void move(from, to);
+    };
+
+    /* Where the row ended up, read before the DOM is handed back. */
+    function landed(): number {
+      return drag ? rows().indexOf(drag.row) : -1;
+    }
+
+    const onUp = (event: PointerEvent): void => {
+      if (drag && event.pointerId === drag.pointer) drag.to = landed();
+      finish(event, false);
+    };
+    const onCancel = (event: PointerEvent): void => finish(event, true);
+
+    const onDown = (event: PointerEvent): void => {
+      if (event.button > 0) return;
+      const grip = (event.target as Element | null)?.closest(".pq-handle") ?? null;
+      // A press on the × is the ×'s, and on the grip is a drag, not a play.
+      if (!grip && (event.target as Element | null)?.closest("button,input")) return;
+      const row = (grip ?? (event.target as Element | null))?.closest<HTMLElement>(".pq-row");
+      if (!row || row.parentElement !== el) return;
+      // A stale flag would swallow the next genuine tap after a drop that produced no click.
+      delete el.dataset.justDragged;
+      drag = {
+        row,
+        pointer: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        from: rows().indexOf(row),
+        to: rows().indexOf(row),
+        after: row.nextElementSibling,
+      };
+      armed = Boolean(grip) || event.pointerType !== "touch";
+      if (grip) lift(row, event.pointerId);
+      else if (!armed) {
+        hold = setTimeout(() => {
+          if (!drag) return;
+          armed = true;
+          lift(drag.row, drag.pointer);
+          navigator.vibrate?.(8);
+        }, 280);
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onCancel);
+    };
+
+    /* `touch-action: pan-y` is latched when the finger lands, so the browser would scroll the
+       list and cancel the pointer mid-drag. Blocking it only while a row is lifted leaves
+       ordinary scrolling untouched. */
+    const onTouchMove = (event: TouchEvent): void => {
+      if (el.dataset.dragging === "1" && event.cancelable) event.preventDefault();
+    };
+    // A long press belongs to the lift, not to the browser's copy/share sheet.
+    const onContextMenu = (event: Event): void => {
+      if ((event.target as Element | null)?.closest(".pq-row")) event.preventDefault();
+    };
+
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("contextmenu", onContextMenu);
+    return () => {
+      release();
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("contextmenu", onContextMenu);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+  });
+
+  /** A row's click, unless the click is the tail of a drag that just ended. */
+  function play(position: number): void {
+    if (host?.dataset.justDragged === "1") {
+      delete host.dataset.justDragged;
+      return;
+    }
+    void player.playUpNext(position);
   }
 </script>
 
@@ -114,7 +304,7 @@
       </div>
     {/if}
 
-    <div id="playback-items">
+    <div id="playback-items" bind:this={host}>
       <!-- Keyed by position, not by song: a queue may legitimately hold the same song twice
            ("queue next" on a song that is already up next), and a keyed each with duplicate
            keys silently drops the extra rows — the count said four while two were drawn. -->
@@ -124,8 +314,8 @@
           data-id={song.id}
           tabindex="0"
           role="button"
-          aria-label="Play {song.title}, Alt+Up or Alt+Down to reorder"
-          onclick={() => void player.playUpNext(position)}
+          aria-label="Play {song.title}, Alt+Up or Alt+Down to reorder, or hold to drag"
+          onclick={() => play(position)}
           onkeydown={(event) => {
             /* The row's own keys, not its children's. Enter and Space on the remove button are
                that button's — and because this handler also called `preventDefault`, the browser
@@ -152,6 +342,17 @@
           }}
         >
           <div class="pq-body">
+            <!-- The host's grip, hidden below 600 px by the host's own stylesheet: there the row
+                 is the target and a hold lifts it. Kept out of the tab order because it is a
+                 pointer handle with no activation of its own, and a control that does nothing
+                 when pressed is the thing this file keeps refusing to ship. -->
+            <button
+              class="pq-handle"
+              type="button"
+              tabindex="-1"
+              aria-hidden="true"
+              title="Drag to reorder"
+            >⠿</button>
             <span class="pq-name">{song.title}<small>{song.artist ?? ""}</small></span>
             <button
               class="pq-drop"
