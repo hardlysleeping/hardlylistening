@@ -342,3 +342,111 @@ describe("words", () => {
     expect(player.lyricsOpen).toBe(false);
   });
 });
+
+describe("the queue comes back", () => {
+  /** Storage that survives the two stores in a case, the way a page reload does. */
+  function sharedStorage(): Storage {
+    const map = new Map<string, string>();
+    return {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, String(value)),
+      removeItem: (key: string) => void map.delete(key),
+      clear: () => map.clear(),
+      key: (at: number) => [...map.keys()][at] ?? null,
+      get length() {
+        return map.size;
+      },
+    } as Storage;
+  }
+
+  function boot(server: MusicServer, origin: string) {
+    const engine = stubEngine();
+    const player = new PlayerStore(engine);
+    player.attach(server, origin);
+    return { player, engine };
+  }
+
+  const songs: Song[] = [
+    { id: "a", title: "A", duration: 100 },
+    { id: "b", title: "B", duration: 120 },
+    { id: "c", title: "C", duration: 140 },
+  ];
+
+  it("returns the list and the playhead, paused, without asking for audio", async () => {
+    /* The player's queue lives inside the fullscreen player, which only exists once there is a
+       track, so a restored list without a playhead would be a queue nobody could reach. The
+       track comes back too — and stays silent until the person presses play. */
+    (globalThis as unknown as { localStorage: unknown }).localStorage = sharedStorage();
+    const first = boot(okServer(), "http://one");
+    await first.player.playQueue(songs, 1);
+
+    const server = okServer();
+    const second = boot(server, "http://one");
+
+    expect(second.player.queue.map((song) => song.id)).toEqual(["a", "b", "c"]);
+    expect(second.player.upNext.map((song) => song.id)).toEqual(["c"]);
+    expect(second.player.track?.id).toBe("b");
+    expect(second.player.playing).toBe(false);
+    expect(second.player.position).toBe(0);
+    // Restoring is not playing: the server was never asked for bytes and the engine never started.
+    expect(server.source).not.toHaveBeenCalled();
+    expect(second.engine.setSource).not.toHaveBeenCalled();
+    expect(second.engine.play).not.toHaveBeenCalled();
+
+    // The first press is the one that resolves the source, because there is none yet.
+    await second.player.toggle();
+    expect(server.source).toHaveBeenCalledWith("b");
+    expect(second.engine.setSource).toHaveBeenCalledWith("http://stub/b");
+    expect(second.engine.play).toHaveBeenCalled();
+    // `playing` itself follows the engine's event, which a stub never raises.
+  });
+
+  it("does not adopt a queue that belongs to another server", async () => {
+    /* A song id is only a name on the server that issued it. Adopting another server's ids
+       would either play the wrong song or draw rows for tracks that do not exist. */
+    (globalThis as unknown as { localStorage: unknown }).localStorage = sharedStorage();
+    const first = boot(okServer(), "http://one");
+    await first.player.playQueue(songs, 1);
+
+    const other = boot(okServer(), "http://two");
+
+    expect(other.player.queue).toEqual([]);
+    expect(other.player.track).toBeNull();
+    expect(other.player.index).toBe(-1);
+  });
+
+  it("leaves an empty saved queue behind when the account is signed out", async () => {
+    // Signing out empties the queue for this session; the saved copy has to agree, or the next
+    // sign-in resurrects a list the person cleared by leaving.
+    (globalThis as unknown as { localStorage: unknown }).localStorage = sharedStorage();
+    const first = boot(okServer(), "http://one");
+    await first.player.playQueue(songs, 0);
+    first.player.detach();
+
+    const again = boot(okServer(), "http://one");
+
+    expect(again.player.queue).toEqual([]);
+    expect(again.player.track).toBeNull();
+  });
+
+  it("ignores a saved order that is not the queue", async () => {
+    /* A permutation with a hole, a repeat, or an index past the end is a queue that plays the
+       wrong song. Dropped rather than repaired — there is nothing to repair it from. */
+    const storage = sharedStorage();
+    (globalThis as unknown as { localStorage: unknown }).localStorage = storage;
+    storage.setItem(
+      "hl.player.queue.v1",
+      JSON.stringify({
+        server: "http://one",
+        queue: songs,
+        order: [0, 0, 1],
+        index: 0,
+      }),
+    );
+
+    const { player } = boot(okServer(), "http://one");
+
+    expect(player.queue).toEqual([]);
+    expect(player.track).toBeNull();
+  });
+});

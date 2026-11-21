@@ -432,6 +432,29 @@ song the move put there. The status line says "Queue order updated.", which is t
 and a removal says "Removed from queue. Current audio is unchanged." Store cases pin the move under
 both an ordinary and a shuffled order: the queue array is untouched and `next` plays the moved song.
 
+**The queue survives a reload, and it comes back paused.** The saved copy is
+`hl.player.queue.v1`: the song fields a row needs to be painted, the order, and the playhead,
+filed under the address of the server that issued the ids — a song id is only a name on the
+server that gave it out. Signing out writes an empty queue under that same address, so leaving
+does not resurrect a list the person cleared. Nothing in the restore asks for bytes: no source is
+resolved, the engine is not told to play, and `playing` stays false; only the first press is what
+calls `server.source()` and starts it. That is a deliberate difference from the host page, whose
+spec stores ids only (`docs/playback-queue-ui.md`) and restores a list with no current song: the
+host has a queue drawer that stands on its own, while this client's queue lives inside the
+fullscreen player, which only exists once there is a track — a restored list with no playhead
+would be a queue nobody could reach. So the track comes back too, at 0:00 with its metadata
+length on the clock, until playback replaces that with the engine's own reading.
+
+An order that does not describe its queue exactly — a hole, a repeat, an index past the end — is
+dropped rather than repaired, because a permutation that is not a permutation plays the wrong
+song. A saved queue from another server is ignored for the same reason.
+
+Measured at 390×844 against the stub: track 1 playing with Up next `Album 2 track 1, Album 1
+track 2, Album 1 track 3`; reload; sign in through the form; the bar still names track 1 while
+the play button says Play and the clock reads 0:00, the fullscreen player opens on a paused
+track, Up next still reads 3 with the same three rows in the same order, and the saved copy
+records `index: 0`. Pressing Play then resolves the source and starts playing from there.
+
 **The fullscreen player takes the keyboard with it.** It declares `role="dialog"
 aria-modal="true"`, and behaved as though the declaration were decoration: opening it left focus on
 the docked bar's artwork, Tab walked the bar's thirteen controls — and everything else focusable on
@@ -518,7 +541,7 @@ that can be built is built inside the `huibuild` distrobox, which has those pack
   390×844;
 * `cargo test --release` — 35 cases, several of them socket-level, including a stub that answers
   `/rest/*` — and `rustfmt --check` accept the Rust tree;
-* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 174 vitest cases;
+* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 178 vitest cases;
 * the built tree is audited file by file by `tests/test_player_store_safe.py` (9 tests).
 
 What no Linux build settles is the device: `gen/apple`/`gen/android` generation, a real WKWebView,

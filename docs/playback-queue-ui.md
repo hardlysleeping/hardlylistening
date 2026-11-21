@@ -9,6 +9,17 @@
 - The editor uses the implemented `/api/playlists` contract. Membership writes include the last read `expected_track_ids`; 409 is surfaced without an automatic retry. Successful mutations are read back from the exact playlist endpoint before reporting saved.
 - Party is a normal navigation link to `/party`; the dedicated party page and guest routes remain separate.
 
+## The standalone player's copy
+
+The bullets above describe the host page's queue. The Tauri/Svelte client in `player/ui` keeps its
+own record under `hl.player.queue.v1`, and it differs on purpose in two ways: it stores the song
+fields each row needs to be painted rather than ids alone (the client may have no library loaded
+when it restores), and it restores the playhead as well as the list. The second difference is
+structural — this client's queue sheet lives inside the fullscreen player, which only exists once
+there is a track, so an ids-only restore would be a queue with no surface. It still never sets a
+source or starts playback, it is scoped to the server that issued the ids, and signing out writes
+an empty queue. Details and measurements are in `docs/player.md`.
+
 ## Verification
 
 Run with `NODE_PATH` pointing at a `node_modules` directory that has Playwright installed:

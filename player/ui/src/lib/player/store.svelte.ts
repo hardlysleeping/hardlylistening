@@ -25,6 +25,33 @@ export type RepeatMode = "off" | "all" | "one";
 
 const VOLUME_KEY = "hl.player.volume";
 
+/* The queue, as it was left. Scoped to the server that issued the ids, because a song id is only
+ * a name on the server that gave it out; the record is cleared on sign-out for the same reason. */
+const QUEUE_KEY = "hl.player.queue.v1";
+
+/** The fields painting needs, and nothing the server would have to be asked for. */
+function songRecord(song: Song): Song {
+  return {
+    id: song.id,
+    title: song.title,
+    album: song.album,
+    albumId: song.albumId,
+    artist: song.artist,
+    artistId: song.artistId,
+    coverArt: song.coverArt,
+    duration: song.duration,
+  };
+}
+
+/** A saved entry is a song if it has the two fields a row cannot be drawn without. */
+function asSong(value: unknown): Song | null {
+  if (!value || typeof value !== "object") return null;
+  const song = value as Record<string, unknown>;
+  if (typeof song.id !== "string" || !song.id) return null;
+  if (typeof song.title !== "string") return null;
+  return song as unknown as Song;
+}
+
 function shuffled(count: number, first: number): number[] {
   const order = Array.from({ length: count }, (_, i) => i);
   for (let i = order.length - 1; i > 0; i--) {
@@ -63,6 +90,10 @@ export class PlayerStore {
   #engine: AudioEngine;
   #events: EngineEvents;
   #server: MusicServer | null = null;
+  /** The address of the server the queue came from; the saved copy is filed under it. */
+  #origin = "";
+  /** Whether the playing song's bytes were ever asked for. A restored queue has none yet. */
+  #loaded = false;
   /* Reactive, because it is state: `upNext` and `upcoming` are readings of this list, and every
      edit used to change it *alongside* the queue, so a view was re-drawn by the queue's change
      rather than by the order's. The first edit that touches only the order — moving a row — was
@@ -119,8 +150,61 @@ export class PlayerStore {
     }
   }
 
-  attach(server: MusicServer): void {
+  attach(server: MusicServer, origin = ""): void {
     this.#server = server;
+    this.#origin = origin;
+    this.restoreQueue();
+  }
+
+  /**
+   * Put back the queue the last session left, if it belongs to this server.
+   *
+   * Nothing about this starts audio: no source is resolved, the engine is not told to play, and
+   * `playing` stays false. What it does restore is the playhead, which is a deliberate difference
+   * from the host page's restore: the host has a queue drawer that stands on its own, so it can
+   * bring back a list with no current song. This client's queue lives inside the fullscreen
+   * player, which only exists once there is a track — a restored list with no playhead would be a
+   * queue nobody could reach. So the track comes back too, paused, and pressing play starts it.
+   *
+   * A saved order that does not describe the saved queue exactly is dropped rather than repaired:
+   * a permutation with a hole in it is a queue that plays the wrong song.
+   */
+  restoreQueue(): void {
+    if (!this.#origin || this.queue.length) return;
+    let saved: Record<string, unknown> | null = null;
+    try {
+      const raw = localStorage.getItem(QUEUE_KEY);
+      saved = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    } catch {
+      return;
+    }
+    if (!saved || saved.server !== this.#origin) return;
+    if (!Array.isArray(saved.queue)) return;
+    const songs = saved.queue.map(asSong);
+    if (songs.length === 0 || songs.some((song) => song === null)) return;
+    const queue = songs as Song[];
+    const order = Array.isArray(saved.order) ? saved.order : [];
+    if (order.length !== queue.length) return;
+    if (order.some((at) => typeof at !== "number" || !Number.isInteger(at) || at < 0 || at >= queue.length)) return;
+    const seen = new Set(order as number[]);
+    if (seen.size !== queue.length) return;
+    const index = typeof saved.index === "number" && Number.isInteger(saved.index) ? saved.index : -1;
+    if (index < -1 || index >= queue.length) return;
+
+    this.queue = queue;
+    this.#order = order as number[];
+    this.index = index;
+    this.#loaded = false;
+    this.playing = false;
+    const song = index >= 0 ? queue[this.#order[index]!] : undefined;
+    if (song) {
+      this.#present(song);
+      /* The bar draws a clock from these, and a restored track never asked the server for its
+         length — the metadata it was queued with already says it. */
+      this.duration = song.duration ?? 0;
+      this.position = 0;
+    }
+    this.#pushQueue();
   }
 
   /**
@@ -139,6 +223,7 @@ export class PlayerStore {
     this.#engine.pause();
     this.#engine.setSource(null);
     this.#server = null;
+    this.#loaded = false;
     this.#order = [];
     this.queue = [];
     this.index = -1;
@@ -276,8 +361,17 @@ export class PlayerStore {
 
   async toggle(): Promise<void> {
     if (!this.track) return;
-    if (this.playing) this.#engine.pause();
-    else this.#engine.play();
+    if (this.playing) {
+      this.#engine.pause();
+      return;
+    }
+    // A restored queue brings a track back with no source: the first press is the one that asks
+    // the server for the bytes, not a `play()` on an engine that has never been given any.
+    if (!this.#loaded) {
+      await this.#start(this.index);
+      return;
+    }
+    this.#engine.play();
   }
 
   async next(): Promise<void> {
@@ -440,6 +534,10 @@ export class PlayerStore {
     // button and no explanation — words that belong to the song before, or none at all.
     this.lyrics = null;
     this.lyricsOpen = false;
+    // The playhead is part of the saved queue, and this is the one place a new song becomes
+    // current, so it is the place to file it. Written before the decoration requests below,
+    // which can fail or take a while and must not decide whether the queue survives a reload.
+    this.#persist();
 
     const server = this.#server;
     if (!server) return;
@@ -479,6 +577,7 @@ export class PlayerStore {
     this.#present(song);
 
     if (this.#engine.ownsQueue) {
+      this.#loaded = true;
       this.#engine.playAt?.(index);
       return;
     }
@@ -488,6 +587,7 @@ export class PlayerStore {
     try {
       const source = await server.source(song.id);
       if (this.track?.id !== song.id) return;
+      this.#loaded = true;
       this.#engine.setSource(source.url);
       this.#engine.play();
     } catch (error) {
@@ -518,5 +618,29 @@ export class PlayerStore {
    */
   #pushQueue(): void {
     this.#engine.setQueue?.(this.queue, this.#order, this.repeat);
+    this.#persist();
+  }
+
+  /**
+   * File the queue under the server that issued it.
+   *
+   * Every mutation already funnels through `#pushQueue`, so the saved copy cannot drift from the
+   * live one; the playhead is written where it changes, in `#present`. An empty queue is written
+   * as an empty queue — that is what a sign-out leaves behind, and it is what stops the next
+   * session from resurrecting a queue the person cleared.
+   */
+  #persist(): void {
+    if (!this.#origin) return;
+    const payload = {
+      server: this.#origin,
+      queue: this.queue.map(songRecord),
+      order: [...this.#order],
+      index: this.index,
+    };
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(payload));
+    } catch {
+      /* A private window refuses storage; the queue still works for this session. */
+    }
   }
 }

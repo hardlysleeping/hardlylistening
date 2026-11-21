@@ -129,8 +129,8 @@ export class Session {
 
   /** One client, every subscriber: the player and the browsing store are bound together or not
    * at all, so a signed-in window can never be half-wired. */
-  #attach(client: SubsonicClient): void {
-    this.#player.attach(client);
+  #attach(client: SubsonicClient, origin: string): void {
+    this.#player.attach(client, origin);
     this.#library?.attach(client);
   }
 
@@ -202,7 +202,7 @@ export class Session {
         this.#client = client;
         this.server = info;
         this.#remember(existing, id, target.origin, username, form);
-        this.#attach(client);
+        this.#attach(client, target.origin);
         this.status = "ready";
         return true;
       } catch (error) {
@@ -252,7 +252,7 @@ export class Session {
       this.server = await client.ping();
       this.#client = client;
       this.activeId = id;
-      this.#attach(client);
+      this.#attach(client, record.server);
       this.#write();
       this.status = "ready";
       return true;
