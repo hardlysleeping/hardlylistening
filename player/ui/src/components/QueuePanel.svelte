@@ -12,6 +12,12 @@
    * rows that were fine. Removal is now a `×` of its own, which is a control a mouse and a thumb
    * can both reach, and it calls the same `removeUpNext(position)`.
    *
+   * Reordering is the host's keyboard gesture and nothing else: Alt with Up/Down moves a row one
+   * place, Alt with Home/End sends it to either end (`queueHost`'s own keydown in
+   * `web/js/playback-queue.js`). The pointer grip is not ported, for the same reason the swipe is
+   * not: a drag nobody bound is a control that lies, and the keys are the path that has to work
+   * on a phone being read by VoiceOver as well.
+   *
    * `in-full` is the class the host adds when it moves this panel into the column; here the panel
    * has no other home, so it is always on. That class is what drops the floating card's border,
    * radius and shadow and lets the page, not an overlay, make room for it.
@@ -37,8 +43,23 @@
   /** A sentence the list has to say. Empty means the paragraph is hidden, as in the host. */
   let status = $state("");
 
+  /* Alt+Up/Down/Home/End, as the host's queue row reads them. Positions are offsets into Up
+     next, so the playhead is never crossed and the current audio is never touched. */
+  async function move(position: number, to: number): Promise<void> {
+    const count = player.upNext.length;
+    const target = Math.max(0, Math.min(count - 1, to));
+    if (target === position) return;
+    player.moveUpNext(position, target);
+    status = "Queue order updated.";
+    await tick();
+    /* Rows are patched by position, so without this the focus stays on the slot the song left
+       behind and the next Alt+Arrow would move the wrong one. */
+    document.querySelectorAll<HTMLElement>("#playback-items .pq-row")[target]?.focus();
+  }
+
   async function remove(position: number): Promise<void> {
     player.removeUpNext(position);
+    status = "Removed from queue. Current audio is unchanged.";
     await tick();
     /* The row that held focus is gone with its button, and the browser then drops focus to
        `body` — the next Tab starts again from the top of the page, outside the sheet. The host
@@ -103,7 +124,7 @@
           data-id={song.id}
           tabindex="0"
           role="button"
-          aria-label="Play {song.title}"
+          aria-label="Play {song.title}, Alt+Up or Alt+Down to reorder"
           onclick={() => void player.playUpNext(position)}
           onkeydown={(event) => {
             /* The row's own keys, not its children's. Enter and Space on the remove button are
@@ -111,6 +132,19 @@
                never got to activate it: one keystroke on the × played the song and left it in the
                queue, which is the opposite of what the button says it does. */
             if (event.target !== event.currentTarget) return;
+            if (event.altKey) {
+              const moves: Record<string, number> = {
+                ArrowUp: position - 1,
+                ArrowDown: position + 1,
+                Home: 0,
+                End: player.upNext.length - 1,
+              };
+              const to = moves[event.key];
+              if (to === undefined) return;
+              event.preventDefault();
+              void move(position, to);
+              return;
+            }
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               void player.playUpNext(position);

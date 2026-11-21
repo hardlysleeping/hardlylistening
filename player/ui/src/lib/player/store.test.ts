@@ -126,6 +126,49 @@ describe("editing the queue", () => {
     expect(player.track?.id).toBe("c");
   });
 
+  it("moves an up-next song without touching the playhead or the queue", async () => {
+    /* The host's Alt+Arrow reorder writes the order, not the queue: a reorder is not an edit of
+       what is queued, it is a different reading of the same list. Removing and re-inserting the
+       song would renumber the queue and, with a playhead, move the thing that is playing. */
+    const { player } = store(okServer());
+    await player.playQueue([a!, b!, c!, d!], 1);
+
+    // Up next is c, d; the last of them moves to the front.
+    player.moveUpNext(1, 0);
+
+    expect(player.queue.map((song) => song.id)).toEqual(["a", "b", "c", "d"]);
+    expect(player.upNext.map((song) => song.id)).toEqual(["d", "c"]);
+    expect(player.track?.id).toBe("b");
+
+    // Out of range is a no-op rather than a wrap-around, which is what a row at the end needs.
+    player.moveUpNext(0, 2);
+    player.moveUpNext(-1, 0);
+    expect(player.upNext.map((song) => song.id)).toEqual(["d", "c"]);
+
+    // The order is what `next` reads, so the moved song is now the one that plays.
+    await player.next();
+    expect(player.track?.id).toBe("d");
+  });
+
+  it("moves a row the same way when the order is shuffled", async () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const { player } = store(okServer());
+    await player.playQueue([a!, b!, c!, d!], 0);
+    player.toggleShuffle();
+    random.mockRestore();
+    // Fixed shuffle: a, then c, d, b.
+    expect(player.upNext.map((song) => song.id)).toEqual(["c", "d", "b"]);
+
+    player.moveUpNext(2, 0);
+
+    expect(player.upNext.map((song) => song.id)).toEqual(["b", "c", "d"]);
+    expect(player.queue.map((song) => song.id)).toEqual(["a", "b", "c", "d"]);
+    expect(player.track?.id).toBe("a");
+
+    await player.next();
+    expect(player.track?.id).toBe("b");
+  });
+
   it("keeps one song queued twice as two entries", async () => {
     // "Queue next" on a song that is already up next is allowed; the queue is an order, not a set.
     // The list has to draw both, which is why it cannot be keyed by the song's id.

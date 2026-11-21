@@ -412,6 +412,26 @@ at 390×844: Enter on row 3's `+` plays nothing new — track 1 keeps playing an
 rows), Enter on the release link opens the album's three songs, and Enter on the row itself still
 plays row 3.
 
+**Up next can be reordered, and the reason it could not be was one field.** The host's queue row
+carries the order's keyboard path — Alt with Up/Down moves a row one place, Alt with Home/End sends
+it to either end — and the player had no reorder at all. `moveUpNext(from, to)` writes `#order`
+only: the queue keeps every song and the playhead is a position in the order that is never crossed,
+so a reorder cannot touch the current audio (and on a queue-owning player `#pushQueue` hands over
+the new order, whose contract keeps the item that is playing). Adding it found the defect
+underneath: `#order` was a plain private field, and every earlier edit changed it *alongside*
+`queue`, so the view was redrawn by the queue's change rather than the order's. The first edit that
+touches the order alone was therefore applied and never drawn — the same list on screen, the new
+order playing. It is `$state` now, which is what "the order is state" means.
+
+Measured at 390×844 with track 1 playing and Up next `Album 2 track 1, Album 1 track 2, Album 1
+track 3`: Alt+Down on the first row moves it to the second place and focus follows it, Alt+End
+takes it to the end, Alt+Home brings it back to the front, Alt+Up on the first row is a clamp
+rather than a wrap, and a plain ArrowUp moves nothing. The bar and the "now" row keep naming track
+1 throughout — a reorder is not a track change — and Enter on the top row then plays exactly the
+song the move put there. The status line says "Queue order updated.", which is the host's wording,
+and a removal says "Removed from queue. Current audio is unchanged." Store cases pin the move under
+both an ordinary and a shuffled order: the queue array is untouched and `next` plays the moved song.
+
 **The fullscreen player takes the keyboard with it.** It declares `role="dialog"
 aria-modal="true"`, and behaved as though the declaration were decoration: opening it left focus on
 the docked bar's artwork, Tab walked the bar's thirteen controls — and everything else focusable on
@@ -498,7 +518,7 @@ that can be built is built inside the `huibuild` distrobox, which has those pack
   390×844;
 * `cargo test --release` — 35 cases, several of them socket-level, including a stub that answers
   `/rest/*` — and `rustfmt --check` accept the Rust tree;
-* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 172 vitest cases;
+* the front end builds (`vite build`), type-checks (`svelte-check`) and passes 174 vitest cases;
 * the built tree is audited file by file by `tests/test_player_store_safe.py` (9 tests).
 
 What no Linux build settles is the device: `gen/apple`/`gen/android` generation, a real WKWebView,

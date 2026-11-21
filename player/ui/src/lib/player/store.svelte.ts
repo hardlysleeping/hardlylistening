@@ -63,7 +63,11 @@ export class PlayerStore {
   #engine: AudioEngine;
   #events: EngineEvents;
   #server: MusicServer | null = null;
-  #order: number[] = [];
+  /* Reactive, because it is state: `upNext` and `upcoming` are readings of this list, and every
+     edit used to change it *alongside* the queue, so a view was re-drawn by the queue's change
+     rather than by the order's. The first edit that touches only the order — moving a row — was
+     therefore applied and never drawn: the same list on screen, the new order playing. */
+  #order = $state<number[]>([]);
 
   constructor(engine?: AudioEngine) {
     // One event object, made here, so every engine reports into the same place: the default web
@@ -227,6 +231,27 @@ export class PlayerStore {
     if (this.#order[orderAt] === undefined) return;
     // One path for both engines: `#start` is where "the order is the player's" is decided.
     await this.#start(orderAt);
+  }
+
+  /**
+   * Move an up-next song to another position in the up-next list, 0 being the song after the
+   * playhead.
+   *
+   * Only `#order` changes: the queue keeps every song, and the playhead is a position in the
+   * order that is never crossed, so nothing needs renumbering and the current audio cannot be
+   * touched by a reorder. That is what makes this safe to do mid-playback on a queue-owning
+   * player too — `#pushQueue` hands over the new order, and its contract keeps the item that is
+   * playing when that item is still in the order.
+   */
+  moveUpNext(from: number, to: number): void {
+    const start = Math.max(0, this.index + 1);
+    const count = this.#order.length - start;
+    if (from === to) return;
+    if (from < 0 || to < 0 || from >= count || to >= count) return;
+    const [moved] = this.#order.splice(start + from, 1);
+    if (moved === undefined) return;
+    this.#order.splice(start + to, 0, moved);
+    this.#pushQueue();
   }
 
   removeUpNext(position: number): void {
