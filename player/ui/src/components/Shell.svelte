@@ -115,11 +115,14 @@
 <div class="player-shell">
   <header class="ps-nav">
     <div class="ps-brand">Hardly<span>Listening</span></div>
+    <!-- Which view is open was carried by the `.on` class alone, which is colour and nothing
+         else: a screen reader heard four buttons with no way to tell which one it was already
+         looking at. `aria-current` is that fact, stated. -->
     <nav class="ps-tabs" aria-label="Library">
-      <button type="button" class:on={tab === "albums"} onclick={() => open("albums")}>Albums</button>
-      <button type="button" class:on={tab === "artists"} onclick={() => open("artists")}>Artists</button>
-      <button type="button" class:on={tab === "playlists"} onclick={() => open("playlists")}>Playlists</button>
-      <button type="button" class:on={tab === "favorites"} onclick={() => open("favorites")}>Favourites</button>
+      <button type="button" class:on={tab === "albums"} aria-current={tab === "albums" ? "page" : undefined} onclick={() => open("albums")}>Albums</button>
+      <button type="button" class:on={tab === "artists"} aria-current={tab === "artists" ? "page" : undefined} onclick={() => open("artists")}>Artists</button>
+      <button type="button" class:on={tab === "playlists"} aria-current={tab === "playlists" ? "page" : undefined} onclick={() => open("playlists")}>Playlists</button>
+      <button type="button" class:on={tab === "favorites"} aria-current={tab === "favorites" ? "page" : undefined} onclick={() => open("favorites")}>Favourites</button>
     </nav>
     <form class="ps-search" onsubmit={submitSearch}>
       <input type="search" placeholder="Search" aria-label="Search" autocomplete="off"

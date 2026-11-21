@@ -62,7 +62,7 @@
     await tick();
     /* Rows are patched by position, so without this the focus stays on the slot the song left
        behind and the next Alt+Arrow would move the wrong one. */
-    document.querySelectorAll<HTMLElement>("#playback-items .pq-row")[target]?.focus();
+    document.querySelectorAll<HTMLElement>("#playback-items .pq-row .pq-play")[target]?.focus();
   }
 
   async function remove(position: number): Promise<void> {
@@ -199,8 +199,10 @@
     const onDown = (event: PointerEvent): void => {
       if (event.button > 0) return;
       const grip = (event.target as Element | null)?.closest(".pq-handle") ?? null;
-      // A press on the × is the ×'s, and on the grip is a drag, not a play.
-      if (!grip && (event.target as Element | null)?.closest("button,input")) return;
+      /* A press on the × is the ×'s; anywhere else in the row, including the play target, may
+         begin a drag. The play target is a button, so it cannot be excluded by tag: it *is* the
+         row's surface now, and a drag that could not start on it could not start at all. */
+      if (!grip && (event.target as Element | null)?.closest(".pq-drop")) return;
       const row = (grip ?? (event.target as Element | null))?.closest<HTMLElement>(".pq-row");
       if (!row || row.parentElement !== el) return;
       // A stale flag would swallow the next genuine tap after a drop that produced no click.
@@ -266,9 +268,17 @@
 </script>
 
 <aside id="playback-panel" class:open={open} class:in-full={true} aria-label="Playback queue">
-  <details id="playback-details" open>
-    <summary>
+  <!-- A plain header, not `<details><summary>`. The host's panel is a disclosure, and this one
+       never discloses: it has no other home, so it is always open, and the two buttons beside the
+       heading lived inside the summary — a summary being a control, its buttons were controls
+       inside a control, and a press on the heading collapsed the list with nothing in the sheet
+       that could open it again. The layout is the host's `summary` rule, restated here because
+       there is no summary left to carry it. -->
+  <div id="playback-details">
+    <div class="pq-head">
       <span class="pq-heading">Up next <span id="playback-count">{upNext.length}</span></span>
+      <span class="vh">Reordering: Alt with Up or Down moves a row one place, Alt with Home or End
+        sends it to either end, or hold a row and drag it.</span>
       <button
         type="button"
         class="pq-clear"
@@ -292,7 +302,7 @@
           onclose();
         }}
         aria-label="Close playback queue">×</button>
-    </summary>
+    </div>
 
     <!-- The "now" line belongs to the queue, not to the title: it is the head of the play
          order. `index` is what says a playhead exists, which is the host's own test. -->
@@ -309,39 +319,33 @@
            ("queue next" on a song that is already up next), and a keyed each with duplicate
            keys silently drops the extra rows — the count said four while two were drawn. -->
       {#each upNext as song, position}
-        <div
-          class="pq-row"
-          data-id={song.id}
-          tabindex="0"
-          role="button"
-          aria-label="Play {song.title}, Alt+Up or Alt+Down to reorder, or hold to drag"
-          onclick={() => play(position)}
-          onkeydown={(event) => {
-            /* The row's own keys, not its children's. Enter and Space on the remove button are
-               that button's — and because this handler also called `preventDefault`, the browser
-               never got to activate it: one keystroke on the × played the song and left it in the
-               queue, which is the opposite of what the button says it does. */
-            if (event.target !== event.currentTarget) return;
-            if (event.altKey) {
-              const moves: Record<string, number> = {
-                ArrowUp: position - 1,
-                ArrowDown: position + 1,
-                Home: 0,
-                End: player.upNext.length - 1,
-              };
-              const to = moves[event.key];
-              if (to === undefined) return;
-              event.preventDefault();
-              void move(position, to);
-              return;
-            }
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              void player.playUpNext(position);
-            }
-          }}
-        >
+        <div class="pq-row" data-id={song.id}>
           <div class="pq-body">
+            <!-- The row's play target, under its contents: the same box the whole row used to be,
+                 and now a button rather than a `role="button"` around the grip and the `×`. A
+                 widget role makes a row's children presentational, and the `×` is the only way to
+                 remove a song — it cannot be a decoration of a bigger control. The keys live
+                 here because this is where focus lands, and Enter and Space are the browser's
+                 own activation of it. -->
+            <button
+              type="button"
+              class="pq-play"
+              aria-label="Play {song.title}{song.artist ? `, ${song.artist}` : ""}"
+              onclick={() => play(position)}
+              onkeydown={(event) => {
+                if (!event.altKey) return;
+                const moves: Record<string, number> = {
+                  ArrowUp: position - 1,
+                  ArrowDown: position + 1,
+                  Home: 0,
+                  End: player.upNext.length - 1,
+                };
+                const to = moves[event.key];
+                if (to === undefined) return;
+                event.preventDefault();
+                void move(position, to);
+              }}
+            ></button>
             <!-- The host's grip, hidden below 600 px by the host's own stylesheet: there the row
                  is the target and a hold lifts it. Kept out of the tab order because it is a
                  pointer handle with no activation of its own, and a control that does nothing
@@ -370,10 +374,52 @@
       {/each}
     </div>
     <p id="playback-status" role="status" aria-live="polite">{status}</p>
-  </details>
+  </div>
 </aside>
 
 <style>
+  /* The host's `#playback-panel summary` rule, restated: the heading row is a plain div now
+     (a summary cannot hold the broom and the close button without nesting controls). */
+  .pq-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px 6px;
+  }
+
+  /* Said once for the whole sheet, not repeated in every row's name. */
+  .vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* The play target fills the row and paints under its contents, so the grip and the × keep
+     their own presses: a static sibling would be below a positioned one whatever its order. */
+  .pq-play {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: inherit;
+  }
+
+  .pq-handle,
+  .pq-drop {
+    position: relative;
+    z-index: 1;
+  }
+
   /* The host styles `#playback-items .pq-remove` as a 92 px panel that slides in from the right
      edge. This component draws its own button instead, so the host rule has nothing to apply to
      and every queued row keeps its own small target at the end. */

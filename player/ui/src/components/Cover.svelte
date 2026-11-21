@@ -59,7 +59,11 @@
   });
 </script>
 
-<div class="acover" style={url && !failed ? "" : `background:${gradient}`}>
+<!-- The tile is decoration in every place it is drawn: the card, the album header and the bar
+     each carry the release name beside it. Without this, the initials that stand in for a missing
+     cover are *visible text* inside whatever control wraps the card, so the card's accessible
+     name had to spell out "AS" to satisfy 2.5.3 — naming a picture after its own fallback. -->
+<div class="acover" aria-hidden="true" style={url && !failed ? "" : `background:${gradient}`}>
   {#if url && !failed}
     <img
       class="cover"

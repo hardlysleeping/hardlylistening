@@ -172,25 +172,20 @@
   <button class="plartwrap" id="plartwrap" title="Open album" onclick={() => onopen()}>
     <img id="plart" alt="" src={player.cover ?? ""} style:visibility={player.cover ? "visible" : "hidden"} />
   </button>
-  <div
-    class="pmeta"
-    id="plmeta"
-    title="Open fullscreen player"
-    role="button"
-    tabindex="0"
-    onclick={() => onopen()}
-    onkeydown={(event) => {
-      /* The links under the title are children of this block, and they are the only way a
-         keyboard reaches the artist and the release from here. `preventDefault` on the keys they
-         own cancelled their activation and opened the fullscreen player instead — the one place
-         the link must not go. */
-      if (event.target !== event.currentTarget) return;
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        onopen();
-      }
-    }}
-  >
+  <div class="pmeta" id="plmeta" title="Open fullscreen player">
+    <!-- The meta block opens the fullscreen player, and the artist and release under the title
+         are links. Those cannot both be true of one element: a `role="button"` here made its
+         children presentational, so the two links — the only way a keyboard reaches the artist
+         and the release from the bar — were inside a widget that owns them. The action is a
+         real button stretched under the block instead, leaving the links beside it, above it,
+         and untouched. Enter and Space are its own activation, so the guard that this block's
+         keydown needed for the links is gone with the keydown. -->
+    <button
+      type="button"
+      class="pmeta-open"
+      aria-label="Open fullscreen player"
+      onclick={() => onopen()}
+    ></button>
     <div class="ptitle" id="pltitle" bind:this={titleEl}></div>
     <div class="psub" id="plsub"><Subtitle variant="bar" {artist} {album} artistId={player.track?.artistId} albumId={player.track?.albumId} {onartist} {onalbum} /></div>
   </div>
@@ -277,3 +272,30 @@
     oninput={(event) => player.setVolume(Number(event.currentTarget.value) / 100)}
   />
 </div>
+
+<style>
+  /* The open-fullscreen target under the meta block's text. */
+  .pmeta {
+    position: relative;
+  }
+
+  .pmeta .pmeta-open {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: inherit;
+  }
+
+  /* The two names are links when the server gave them ids; they stay clickable through the
+     overlay. The rest of the line is plain text, so a press there falls to the button, which is
+     what this block did before it became one element too many. */
+  #plsub :global(a) {
+    position: relative;
+    z-index: 1;
+  }
+</style>

@@ -20,6 +20,14 @@
   let { library, album, playing = false, onopen }: Props = $props();
 
   const count = $derived(album.songCount ?? album.song?.length ?? 0);
+  /* What is written on the card, in the order it is written. An `aria-label` replaces the
+     content as the accessible name, so a name of just the release ("Album 1") left the artist
+     and the song count visible but unannounced *and* failed 2.5.3 — a speech-input user who
+     said "click Alex Ross" was saying a word the control did not answer to. The playing state
+     is `aria-current`, which is where a "this one" flag belongs. */
+  const label = $derived(
+    [album.name, album.artist, `${count} song${count === 1 ? "" : "s"}`].filter(Boolean).join(", "),
+  );
 </script>
 
 <!-- The host's card is a div with a click handler; keeping the element keeps the grid. The
@@ -29,7 +37,8 @@
   class:playing={playing}
   role="button"
   tabindex="0"
-  aria-label={album.name}
+  aria-label={label}
+  aria-current={playing ? "true" : undefined}
   onclick={() => onopen()}
   onkeydown={(event) => {
     if (event.key === "Enter" || event.key === " ") {

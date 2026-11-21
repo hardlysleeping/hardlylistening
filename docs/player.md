@@ -567,6 +567,51 @@ link already used, so a fixture that omitted `artistId` no longer produced a lin
 destination — measured against a stub variant without ids: both surfaces a span for the artist,
 still an anchor for the album.
 
+**The audit's three findings were three shapes, not thirty details.** axe-core (WCAG 2.0/2.1 A and
+AA rules) over eight surfaces at 390×844 and 1200×860 — connect, albums, an album, the docked bar,
+the fullscreen player, the queue sheet, the lyrics overlay, search — returned three rules and
+nothing else, and every surface but the connect screen and the fullscreen player failed one of
+them. All three were structural, and one of them was a control that could not be reached.
+
+*Nested interactive.* Three controls were a `role="button"` wrapped around other controls: the song
+row around its `+`, the queue row around its `×`, and `#plmeta` around the two subtitle links. A
+widget role makes its descendants presentational, so the inner control is announced as part of the
+outer name or not announced at all, depending on the reader — and on the queue row the inner control
+is the only way to remove a song. Each is now a plain element whose action is an empty real
+`<button>` stretched under the content (`position:absolute; inset:0; cursor:inherit`, so the row's
+own `cursor:default` is unchanged), with the control that shares the row given
+`position:relative; z-index:1`. Enter and Space are the browser's own activation of a button, so the
+`event.target !== event.currentTarget` guards these rows needed, and the comments explaining them,
+went with the handlers. The queue sheet's `<details><summary>` became a plain header for the same
+reason plus its own: the broom and the close button were inside a summary, and a press on the
+heading "Up next" collapsed the list with nothing in the sheet able to open it again — measured:
+heading pressed, two rows before and two rows after, and the element is a `div`.
+
+*Name mismatch* (2.5.3). An `aria-label` replaces an element's content as its accessible name, so
+the album card answered to "Album 1" while the wall showed the artist and the song count beside it,
+and a row answered to "Album 1 track 1" while showing its duration and its index. A speech-input
+user saying a word written on the card was saying a word the control did not answer to. The card's
+name is now its own text — release, artist, count — with `aria-current` carrying the album that is
+playing; a row's play button carries only its own name ("Play Album 1 track 1"), because the row's
+text is no longer shadowed by a label on the row. The cover tile is `aria-hidden`: it is decoration
+in all three places it is drawn, and its initials stand-in was *visible text* inside the card, so
+the card would otherwise have had to pronounce "AS" to satisfy the rule.
+
+*Scrollable region.* The lyrics box is the overlay's one scroller and holds no control of its own,
+so a keyboard had no way to reach it and no way to read a song longer than the window (2.1.1). It
+is a named region with a tab stop now — measured at 390×844: focused, `scrollHeight` 297 against
+`clientHeight` 219, ArrowDown then PageDown moved it 0 → 24.
+
+Also fixed in the same pass, because it is the same question — what does a screen reader learn: the
+view tabs carried the current view in the `.on` class alone, which is colour and nothing else, and
+now carry `aria-current="page"`. After the change the audit is silent on all sixteen surface and
+width pairs, and the four constructs read as they should: the card is one button named with its own
+text; a row is `button "Play Album 1 track 1"`, the text, then `button "Queue next"`; `#plmeta` is
+`button "Open fullscreen player"`, the text, then `link "Alex Ross"`, `·`, `link "Album 1"`; a queue
+row is its play button, its text, then `button "Remove Album 1 track 2 from the queue"`. Presses at
+the coordinates of the *text* still play the row and still open the player, because the stretched
+button is what a press lands on, and Tab from a row's play button reaches its `+` in one stop.
+
 ## What is unverified, and why
 
 The host is Bazzite (immutable), with **no `webkit2gtk-4.1`, `gtk+-3.0` or `libsoup-3.0`

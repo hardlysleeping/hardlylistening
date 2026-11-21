@@ -30,24 +30,21 @@
        each with duplicate keys drops the extra rows rather than drawing them. -->
   {#each songs as song, index}
     {@const on = song.id === currentId}
-    <div
-      class="songrow"
-      class:playing={on}
-      role="button"
-      tabindex="0"
-      aria-label={song.title}
-      onclick={() => onplay(index)}
-      onkeydown={(event) => {
-        /* The row's keys, not the ones pressed on the `+` inside it: that is a real button, and
-           this handler's `preventDefault` cancelled the activation the browser was about to give
-           it, so Enter on "Queue next" played the song instead of queueing it. */
-        if (event.target !== event.currentTarget) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onplay(index);
-        }
-      }}
-    >
+    <div class="songrow" class:playing={on} data-id={song.id}>
+      <!-- The row's whole box is the play target, as it was; the control is now a real button
+           stretched under the row's contents rather than a `role="button"` wrapped around them.
+           The row it replaces contained the queue `+`, and a widget role makes its children
+           presentational in the accessibility tree — the `+` could be announced as part of the
+           row's name or not at all, depending on the reader. An empty button with a name of its
+           own, sitting under the text, is the same target with no nesting: Enter and Space are
+           the browser's own activation, so the `event.target !== event.currentTarget` guard that
+           this handler needed is gone with the handler. -->
+      <button
+        type="button"
+        class="row-play"
+        aria-label="Play {song.title}"
+        onclick={() => onplay(index)}
+      ></button>
       <div class="idx" class:playing={on}>
         {#if on}
           <span class="nowbars" aria-hidden="true">{playing ? "❚❚" : "▶"}</span>
@@ -129,7 +126,23 @@
     grid-row: 1;
   }
 
+  /* The play target fills the row without taking a grid cell. It paints under the row's text and
+     under the `+`, which is why that button is given a stacking position below. */
+  .songtable .songrow .row-play {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: inherit;
+  }
+
   .songtable .songrow .snext {
+    position: relative;
+    z-index: 1;
     grid-column: 5;
     grid-row: 1;
     width: 30px;

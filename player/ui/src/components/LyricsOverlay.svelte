@@ -91,7 +91,13 @@
     {/if}
     <button id="lyrics-close" aria-label="Hide lyrics" onclick={() => onclose()}>×</button>
   </div>
-  <div id="lyrics-body" bind:this={body}>
+  <!-- The lyrics box is the overlay's one scroll container and holds no control of its own, so a
+       keyboard had no way to reach it and therefore no way to read a song that runs past the
+       window (WCAG 2.1.1). A region with a name is what a focusable scroll box should be: the tab
+       stop is the scroll, and the name is what the reader announces on landing. The linter reads
+       a tab stop as an interactive element and objects; here the stop *is* the point. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <div id="lyrics-body" bind:this={body} role="region" aria-label="Lyrics text" tabindex="0">
     {#if plain}
       <pre>{plain}</pre>
     {:else}
