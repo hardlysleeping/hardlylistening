@@ -1,10 +1,17 @@
 // The player's library control. It used to live in the bar's bottom-right corner beside the
 // clock, where it read as part of the time and was routinely missed on desktop. It now sits
-// in the heart's own cluster: immediately left of the heart, on the same line, because the
-// two answer the same question about the same song. This pins that — its own centre
-// hit-tests into its own button, it overlaps neither the heart nor the title column, it is
-// left of the heart at both widths — and that the fullscreen foot keeps the same control,
-// immediately left of the heart, bound to the playing track.
+// in the heart's own cluster, directly under the heart and centred on the same vertical line
+// (`body #player.on .plsave` in `web/styles/components/player.css`: right 11.5 + 14.5 = the
+// heart's own centre, 26 px from the bar's right edge), so the pair reads as one column and
+// stays clear of the clocks and the scrub. This pins that — its own centre hit-tests into its
+// own button, it overlaps neither the heart, the title column, the clocks nor the scrub, and
+// it is inside the bar at both widths — and that the fullscreen foot keeps the same control,
+// immediately left of the heart there (the foot has the room the phone bar does not).
+//
+// The column is the shipped arrangement, measured at 390×844 and 1280×800: save 335–364 under
+// the heart's 332–366 (centres 349.5 and 349), and 1135–1164 under 1132–1166. Beside the heart
+// at phone width there is nowhere to put a 29 px control — the duration ends at 325 — which is
+// why the slot sits on the time line instead.
 const fs = require("fs"), http = require("http"), path = require("path"), assert = require("assert");
 const { chromium } = require("./_pw.cjs");
 const ROOT = path.join(__dirname, "..", "web");
@@ -65,11 +72,29 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
       assert.strictEqual(like.hit, "pllike", `${at}: #pllike is covered by ${like.hit}`);
       assert(!overlaps(save, like), `${at}: the compact save overlaps #pllike`);
       assert(!overlaps(save, meta), `${at}: the compact save overlaps the title column`);
-      // Immediately left of the heart, on the same line: within a few pixels of its middle.
-      assert(save.right <= like.left, `${at}: the save is not left of the heart (${save.right} > ${like.left})`);
-      assert(like.left - save.right <= 14, `${at}: the save is not beside the heart (${like.left - save.right}px gap)`);
-      const heartMid = (like.top + like.bottom) / 2, saveMid = (save.top + save.bottom) / 2;
-      assert(Math.abs(heartMid - saveMid) <= 6, `${at}: the save is not on the heart's line (${Math.abs(heartMid - saveMid)}px off)`);
+      // Directly under the heart, on the heart's own vertical centre line: the pair reads as
+      // one column, which is what the stylesheet's `right:11.5px;bottom:13px` is for.
+      const likeMidX = (like.left + like.right) / 2, saveMidX = (save.left + save.right) / 2;
+      assert(Math.abs(likeMidX - saveMidX) <= 2, `${at}: the save is not on the heart's centre line (${Math.abs(likeMidX - saveMidX)}px off)`);
+      assert(save.top >= like.bottom - 1, `${at}: the save is not under the heart (top ${save.top}, heart bottom ${like.bottom})`);
+      assert(save.top - like.bottom <= 34, `${at}: the save is not beside the heart (${save.top - like.bottom}px gap)`);
+      // And out of the way of the line it shares: both clocks and the scrub.
+      for (const label of ["pltime", "pldur", "plseek"]) {
+        const r = await page.evaluate((id) => {
+          const el = document.getElementById(id);
+          if (!el) return null;
+          const b = el.getBoundingClientRect();
+          return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+        }, label);
+        assert(r, `${at}: #${label} is missing`);
+        assert(!overlaps(save, r), `${at}: the compact save overlaps #${label}`);
+      }
+      const inside = await page.evaluate(() => {
+        const bar = document.getElementById("player").getBoundingClientRect();
+        const slot = document.getElementById("plsave").getBoundingClientRect();
+        return { right: bar.right - slot.right, bottom: bar.bottom - slot.bottom };
+      });
+      assert(inside.right >= 0 && inside.bottom >= 0, `${at}: the save sticks out of the bar (${JSON.stringify(inside)})`);
       await page.close();
     }
 
@@ -114,6 +139,6 @@ const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bot
     });
     assert.strictEqual(stable, true, "an unchanged state must not rebuild the button");
 
-    console.log("Player save slot PASS: compact save beside the heart, title clears it, fullscreen foot save left of the heart");
+    console.log("Player save slot PASS: compact save under the heart on its centre line, clear of the clocks and the scrub, fullscreen foot save left of the heart");
   } finally { await browser.close(); srv.close(); }
 })().catch(e => { console.error("FAIL " + e.message); process.exitCode = 1; });
