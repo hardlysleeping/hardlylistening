@@ -58,6 +58,7 @@ Ids chain from the listing to the detail endpoints (`getArtists` → `getArtist`
 | 4 | `formPost` is real because it is declared | extension declared | credentials in a form body authenticate | `...test_cell_4_form_post_is_real_because_it_is_declared` |
 | 12 | an unimplemented endpoint is error `30`, never a fake empty answer | — | `getVideos`, `getVideoInfo`, `getCaptions` → `30` (the sonic pair left this cell with HL-205) | `...test_cell_12_an_unimplemented_endpoint_is_error_30_not_a_fake_empty_answer` |
 | 13 | a sonic answer is songs the caller may see, and nothing is invented | — | `getSimilarSongs`/`getSimilarSongs2`/`getSonicSimilarTracks` answer cosine neighbours of the analysed vectors; `findSonicPath` answers a greedy walk; an unknown id is `70`, an unanalysed track is empty-and-queued | `tests/test_sonic.py` (§ SubsonicSurface) |
+| 14 | a playlist made by a client is the same playlist the web editor writes | — | `createPlaylist` writes the canonical `playlists`/`playlist_tracks` rows, saves them into the caller's scope, and `updatePlaylist` re-snapshots that scope so the next read shows the edit; a duplicate add, a missing position, a comment, Favorites and another member's list are refused by name | `tests/test_subsonic_playlists.py` (4 tests) |
 
 ### The client, against a server that is not ours
 

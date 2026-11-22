@@ -30,6 +30,8 @@ function fake(overrides: Partial<MusicServer> = {}): MusicServer & Record<string
     album: vi.fn(async (id: string) => ({ ...album(id), song: [] }) as Album),
     playlists: vi.fn(async () => [] as Playlist[]),
     playlist: vi.fn(async (id: string) => ({ id, name: `List ${id}`, entry: [] }) as Playlist),
+    createPlaylist: vi.fn(async (name: string) => ({ id: "p9", name, entry: [] }) as Playlist),
+    updatePlaylist: vi.fn(async () => {}),
     search: vi.fn(async () => EMPTY_RESULTS),
     star: vi.fn(async () => {}),
     unstar: vi.fn(async () => {}),
@@ -40,7 +42,7 @@ function fake(overrides: Partial<MusicServer> = {}): MusicServer & Record<string
   } as never;
 }
 
-const CALLS = ["ping", "artists", "artist", "albums", "album", "playlists", "playlist", "search", "starred", "cover"];
+const CALLS = ["ping", "artists", "artist", "albums", "album", "playlists", "playlist", "search", "starred", "cover", "createPlaylist", "updatePlaylist"];
 
 function assertOnly(server: MusicServer & Record<string, ReturnType<typeof vi.fn>>, allowed: string[]): void {
   const used = CALLS.filter((name) => (server[name]?.mock.calls.length ?? 0) > 0);
@@ -165,5 +167,69 @@ describe("the library loads lazily", () => {
     expect(library.error).toBe("gateway timeout");
     expect(library.albumsDone).toBe(true);
     expect(library.loadingAlbums).toBe(false);
+  });
+});
+
+describe("a playlist is the one thing this client writes", () => {
+  it("makes one, then opens what the server made", async () => {
+    const server = fake();
+    const library = new Library();
+    library.attach(server);
+
+    const made = await library.createPlaylist("  Road trip  ");
+
+    // The name is trimmed before it is sent: a playlist called "  Road trip  " is a typo the
+    // server would store forever, since nothing here can rename it afterwards by itself.
+    expect(server.createPlaylist).toHaveBeenCalledWith("Road trip");
+    expect(made?.id).toBe("p9");
+    // Opened, not merely listed: a new playlist with no screen behind the tap reads as a no-op.
+    expect(server.playlist).toHaveBeenCalledWith("p9");
+    expect(library.playlist?.id).toBe("p9");
+    expect(library.playlists.map((row) => row.id)).toContain("p9");
+  });
+
+  it("refuses a name that is only space, and asks the server for nothing", async () => {
+    const server = fake();
+    const library = new Library();
+    library.attach(server);
+
+    expect(await library.createPlaylist("   ")).toBeNull();
+    expect(server.createPlaylist).not.toHaveBeenCalled();
+    expect(library.error).toBe("A playlist needs a name");
+  });
+
+  it("re-reads the server after an edit, so the screen is never a local guess", async () => {
+    const server = fake();
+    const library = new Library();
+    library.attach(server);
+    await library.openPlaylist("p1");
+    (server.playlist as ReturnType<typeof vi.fn>).mockClear();
+    (server.playlists as ReturnType<typeof vi.fn>).mockClear();
+
+    expect(await library.editPlaylist({ add: "s1" })).toBe(true);
+
+    expect(server.updatePlaylist).toHaveBeenCalledWith("p1", { add: "s1" });
+    // Both screens follow the write: the open list and the index behind the tab.
+    expect(server.playlist).toHaveBeenCalledWith("p1");
+    expect(server.playlists).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the screen as it was when the server refuses the edit", async () => {
+    const server = fake({
+      updatePlaylist: vi.fn(async () => {
+        throw new Error("That song is already in the playlist");
+      }),
+    });
+    const library = new Library();
+    library.attach(server);
+    await library.openPlaylist("p1");
+    const before = library.playlist;
+    (server.playlist as ReturnType<typeof vi.fn>).mockClear();
+
+    expect(await library.editPlaylist({ add: "s1" })).toBe(false);
+    expect(library.error).toBe("That song is already in the playlist");
+    // Nothing re-read: a refusal changed nothing, so there is nothing new to show.
+    expect(server.playlist).not.toHaveBeenCalled();
+    expect(library.playlist).toBe(before);
   });
 });

@@ -87,11 +87,56 @@ Notes that matter in practice:
 * **Playlists can only grow.** Subsonic can add a song to the end of a playlist and remove one;
   it cannot express an order. A save that only appends is forwarded to `updatePlaylist`; a
   reorder or a removal is refused with 501 and the reason. A reorder that silently did nothing
-  would be worse than one that says why.
+  would be worse than one that says why. (This was the bridge's rule for the app's own save
+  button. The player's Playlists tab writes through the Subsonic client directly and removes by
+  position — see [Playlist writes](#playlist-writes).)
 * **Folders are empty by fact.** `personal folders` are the host's own tables; Subsonic's tree
   is artist/album. The app calls `/api/listening/saves` and `/api/listening/folders` together,
   so an error there would take the whole Library scope down. An empty *list of folders* is the
   truth, unlike an empty library.
+
+## Playlist writes
+
+The player's Playlists tab is the one screen that writes. It sends three calls, all of them the
+protocol's own:
+
+| what the person did | what the client sends |
+| --- | --- |
+| made a playlist | `createPlaylist` with a name, then opens the row the answer carried |
+| renamed it | `updatePlaylist` with `name` |
+| added what is playing | `updatePlaylist` with `songIdToAdd` |
+| removed a row | `updatePlaylist` with `songIndexToRemove`, the position that row was drawn at |
+
+`player/ui/src/lib/subsonic/types.ts` types the edit as a union of exactly those three, so a
+caller cannot half-apply a change it never showed the person. The transport's parameters are one
+flat map, so a song is added one at a time: adding five songs is five calls.
+
+On this server a playlist made from a client is **the same playlist the web editor writes**. The
+canonical `playlists`/`playlist_tracks` rows are written through `library/playlists.py::write`,
+then saved into the caller's own scope (`library/saves.py::set_saved`), which is the set
+`getPlaylists` reads. An edit re-snapshots that scope (`library/saves.py::resync_playlist`) so the
+next read shows the edit instead of waiting for the playlist to be saved again. Ownership,
+the optimistic `expected` membership and the one transaction stay in the domain module; the REST
+handler only parses and records the Activity event.
+
+Refusals are named, and each is a sentence rather than a silent no-op:
+
+* a duplicate add, a position that is not in the playlist, or a call that changes nothing;
+* `comment` — this server has no comment column, and accepting it would be a silent lie;
+* `favorites` — computed from the member's stars, so it is refused as *not editable* (code 40),
+  not as a bad id;
+* another member's playlist — not theirs to write (code 40), and not theirs to read either.
+
+Three limits are deliberate:
+
+* **No reorder.** `updatePlaylist` carries add and remove, and no order; expressing one would mean
+  replacing the whole membership, which the protocol has no parameter for.
+* **No delete.** Nothing on any surface deletes a manual playlist today, and the host's own delete
+  is not a list-only operation: `deletion.py::apply` deletes every track no other playlist still
+  references and then moves those files to the trash, so deleting a playlist can take the audio
+  with it. A delete here has to wait for an explicit ownership flag on `getPlaylists` and a design
+  that says whether the songs stay.
+* **One song per write.** See above — the transport carries one value per parameter.
 
 ## What is refused, and why that is the answer
 
@@ -188,8 +233,8 @@ the failed session is not retried on a timer.
   against a stub OpenSubsonic server, including the empty states and both window widths; what a
   walk cannot settle is the device (the audio engine, ATS and the platform keychain).
 * **Playlist writes depend on the server.** This server answers `createPlaylist`/`updatePlaylist`
-  with "unsupported" (see `sdk/subsonic.py`), and the bridge surfaces that as an error: creating
-  or extending a playlist works only on a server that implements them.
+  (see [Playlist writes](#playlist-writes)); a third-party server that does not leaves the
+  controls refusing with its own sentence rather than failing quietly.
 * **The visualiser's scratch buffer** re-fetches the playing stream URL from the element. That is
   a cross-origin fetch; a server without CORS refuses it and the effect is skipped, never
   playback.

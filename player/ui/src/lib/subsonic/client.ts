@@ -28,6 +28,7 @@ import type {
   Lyrics,
   PlayableSource,
   Playlist,
+  PlaylistChange,
   PlayQueue,
   SearchOptions,
   SearchResults,
@@ -47,6 +48,10 @@ export interface MusicServer {
   album(id: Id): Promise<Album>;
   playlists(): Promise<Playlist[]>;
   playlist(id: Id): Promise<Playlist>;
+  /** Make a playlist on the server, owned by this account and saved into this account's scope. */
+  createPlaylist(name: string): Promise<Playlist>;
+  /** Rename a playlist, add one song to its end, or remove the song at a position. */
+  updatePlaylist(id: Id, change: PlaylistChange): Promise<void>;
 
   search(query: string, options?: SearchOptions): Promise<SearchResults>;
 
@@ -225,6 +230,26 @@ export class SubsonicClient implements MusicServer {
     const playlist = toPlaylist(envelope["playlist"]);
     if (!playlist) throw new SubsonicError(70, "The server could not find that playlist", "getPlaylist");
     return playlist;
+  }
+
+  async createPlaylist(name: string): Promise<Playlist> {
+    const envelope = await this.#call("createPlaylist", { name });
+    const playlist = toPlaylist(envelope["playlist"]);
+    // Every server that implements this answers with the playlist it made. A `status: ok` with
+    // no row means the request landed and the result is unknown, which is not something to
+    // invent a list entry from.
+    if (!playlist) throw new SubsonicError(70, "The server did not return the playlist it made", "createPlaylist");
+    return playlist;
+  }
+
+  async updatePlaylist(id: Id, change: PlaylistChange): Promise<void> {
+    const params =
+      "name" in change
+        ? { playlistId: id, name: change.name }
+        : "add" in change
+          ? { playlistId: id, songIdToAdd: change.add }
+          : { playlistId: id, songIndexToRemove: change.removeIndex };
+    await this.#call("updatePlaylist", params);
   }
 
   /* ---- search -------------------------------------------------------------------------- */

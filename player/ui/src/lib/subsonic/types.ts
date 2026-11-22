@@ -103,6 +103,18 @@ export interface Playlist {
   entry?: Song[];
 }
 
+/** One edit to a playlist.
+ *
+ * The protocol carries a rename, one song appended, and one position removed; this player asks
+ * for exactly one of them per call, so a caller cannot half-apply a change it never showed the
+ * member. Adding a song the playlist already holds is the server's refusal to give, not a guess
+ * made here.
+ */
+export type PlaylistChange =
+  | { name: string }
+  | { add: Id }
+  | { removeIndex: number };
+
 export interface SearchResults {
   artists: Artist[];
   albums: Album[];

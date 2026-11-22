@@ -238,8 +238,9 @@ def rest(handler, store, security):
                 if set(form) & set(query):
                     raise Denied(400, 'Duplicate parameter')
                 query.update(form)
-        # Subsonic repeats `id` / `songId` for multi-item operations (star, scrobble, queue).
-        repeated = {'id', 'songId', 'albumId', 'artistId'}
+        # Subsonic repeats `id` / `songId` for multi-item operations (star, scrobble, queue),
+        # and the playlist write parameters are repeatable by definition.
+        repeated = {'id', 'songId', 'albumId', 'artistId', 'songIdToAdd', 'songIndexToRemove'}
         if any(len(v) != 1 for k, v in query.items() if k not in repeated):
             raise Denied(400, 'Duplicate parameter')
         params = {k: v[0] for k, v in query.items()}

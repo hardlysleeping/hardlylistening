@@ -168,9 +168,15 @@ in a message.
   cross-instance feature from the app's plans.
 - **No credential storage.** No keychain, no config file, no cache: a caller owns its secrets.
 - **No XML.** Only the JSON envelope is parsed.
-- **No playlist writes on this server.** `create_playlist`, `update_playlist` and
-  `delete_playlist` are sent like the spec says, and `subsonic.py`'s `Unsupported endpoint`
-  becomes `NotSupported`. The read path (`playlists`, `playlist`) is real.
+- **Playlist writes are real, and deletion is not.** `create_playlist` and `update_playlist` go
+  to this server: a playlist made here is the canonical one the web editor writes, saved into the
+  caller's own scope, and `remove` is a tuple of positions (`songIndexToRemove`) because the
+  protocol expresses no order. `delete_playlist` is sent like the spec says and `subsonic.py`'s
+  `Unsupported endpoint` becomes `NotSupported` — nothing on this server deletes a playlist. The
+  read path (`playlists`, `playlist`) is real too.
+- **A refused write is a sentence.** A duplicate add, a position that is not in the list, a
+  comment (this server has no comment column), the computed Favorites set or another member's
+  playlist comes back as the protocol's own error with the server's words, never a silent ok.
 - **No silent degradation of a claimed feature.** When `probe` cannot read the document it
   returns `degraded=True` with the OpenSubsonic core only — `subsonic.enabled` True, no
   extensions, no transcode targets, every optional domain unavailable.

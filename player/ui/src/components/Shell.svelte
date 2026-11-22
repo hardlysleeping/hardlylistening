@@ -90,6 +90,11 @@
     }
   });
 
+  function songs(count: number | undefined): string {
+    const total = count ?? 0;
+    return `${total} song${total === 1 ? "" : "s"}`;
+  }
+
   function sing(album: Album): string {
     const count = album.songCount ?? album.song?.length ?? 0;
     return `${count} song${count === 1 ? "" : "s"}`;
@@ -97,6 +102,44 @@
 
   function playList(songs: Song[], index: number): void {
     void player.playQueue(songs, index);
+  }
+
+  /* Playlists are the one thing this client writes, so the controls live where the lists are: a
+     name field above the Playlists tab makes one and opens it, and an open playlist carries its
+     rename, its add of whatever is playing, and a remove on every row. Every write is answered by
+     re-reading the server, so what is on screen is what the server holds — a locally patched row
+     would disagree with it the first time a write was refused. */
+  let newName = $state("");
+  let renaming = $state(false);
+  let renameTo = $state("");
+
+  async function makePlaylist(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (await library.createPlaylist(newName)) newName = "";
+  }
+
+  function startRename(): void {
+    renameTo = library.playlist?.name ?? "";
+    renaming = true;
+  }
+
+  async function saveRename(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const name = renameTo.trim();
+    if (!name || name === library.playlist?.name) {
+      renaming = false;
+      return;
+    }
+    if (await library.editPlaylist({ name })) renaming = false;
+  }
+
+  async function addPlaying(): Promise<void> {
+    const song = player.track;
+    if (song) await library.editPlaylist({ add: song.id });
+  }
+
+  async function removeAt(index: number): Promise<void> {
+    await library.editPlaylist({ removeIndex: index });
   }
 
   async function openAlbum(id: string): Promise<void> {
@@ -210,7 +253,7 @@
         <section class="ps-detail">
           <div class="ps-detail-meta">
             <h2>{playlist.name}</h2>
-            <p class="ps-dim">{playlist.songCount ?? playlist.entry?.length ?? 0} songs</p>
+            <p class="ps-dim">{songs(playlist.songCount ?? playlist.entry?.length)}</p>
             <button
               type="button"
               class="ps-play"
@@ -219,6 +262,29 @@
                 const songs = playlist.entry ?? [];
                 if (songs.length) playList(songs, 0);
               }}>Play playlist</button>
+            <div class="ps-edit">
+              {#if renaming}
+                <form class="ps-rename" onsubmit={saveRename}>
+                  <input
+                    type="text"
+                    bind:value={renameTo}
+                    aria-label="Playlist name"
+                    autocomplete="off"
+                    autocorrect="off"
+                    enterkeyhint="done"
+                  />
+                  <button type="submit" disabled={!renameTo.trim()}>Save</button>
+                  <button type="button" onclick={() => (renaming = false)}>Cancel</button>
+                </form>
+              {:else}
+                <button type="button" onclick={startRename}>Rename</button>
+              {/if}
+              <button
+                type="button"
+                disabled={!player.track}
+                title={player.track ? `Add ${player.track.title}` : "Nothing is playing"}
+                onclick={() => void addPlaying()}>Add the playing song</button>
+            </div>
           </div>
         </section>
         {#if playlist.entry?.length}
@@ -231,6 +297,7 @@
               const song = playlist.entry?.[index];
               if (song) player.enqueue([song], { next: true });
             }}
+            onremove={(index) => void removeAt(index)}
           />
         {:else}
           <p class="ps-dim">This playlist is empty.</p>
@@ -264,6 +331,18 @@
         <p class="ps-dim">This server has no artists yet.</p>
       {/if}
     {:else if tab === "playlists"}
+      <form class="ps-new" onsubmit={makePlaylist}>
+        <input
+          type="text"
+          bind:value={newName}
+          placeholder="New playlist"
+          aria-label="New playlist name"
+          autocomplete="off"
+          autocorrect="off"
+          enterkeyhint="done"
+        />
+        <button type="submit" disabled={!newName.trim()}>Create</button>
+      </form>
       <div class="ps-rows">
         {#each library.playlists as playlist (playlist.id)}
           <button type="button" class="ps-row" onclick={() => void library.openPlaylist(playlist.id)}>
@@ -515,6 +594,60 @@
   .ps-play:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+
+  /* Making a playlist is one row: the field takes the width, the button keeps its own, so a long
+     name never pushes Create off the edge. The field is 16px because anything smaller makes a
+     phone zoom the page the moment it is focused. */
+  .ps-new {
+    display: flex;
+    gap: 8px;
+  }
+
+  .ps-new input,
+  .ps-rename input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 16px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  .ps-new button,
+  .ps-rename button,
+  .ps-edit > button {
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+
+  .ps-new button:disabled,
+  .ps-rename button:disabled,
+  .ps-edit > button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* The playlist's own two controls, under Play: they edit the list on this screen, so they sit
+     below it rather than in the header with the destination tabs. */
+  .ps-edit {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .ps-rename {
+    display: flex;
+    flex: 1 1 100%;
+    gap: 8px;
   }
 
   .ps-rows {

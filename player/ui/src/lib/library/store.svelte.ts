@@ -10,7 +10,7 @@
  * no snapshot shaped like the old `/api/library`.
  */
 
-import type { Album, AlbumListType, Artist, MusicServer, Playlist, SearchResults, Song } from "../subsonic";
+import type { Album, AlbumListType, Artist, MusicServer, Playlist, PlaylistChange, SearchResults, Song } from "../subsonic";
 
 const PAGE_SIZE = 50;
 
@@ -203,6 +203,58 @@ export class Library {
     this.album = null;
     this.artist = null;
     this.playlist = null;
+  }
+
+  /* ---- writing a playlist --------------------------------------------------------------- */
+
+  /** Make one, then open it: a new playlist with no screen behind the tap reads as a no-op. */
+  async createPlaylist(name: string): Promise<Playlist | null> {
+    if (!this.#server) return null;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      this.error = "A playlist needs a name";
+      return null;
+    }
+    this.error = null;
+    try {
+      const playlist = await this.#server.createPlaylist(trimmed);
+      if (!this.playlists.some((known) => known.id === playlist.id)) {
+        this.playlists = [...this.playlists, playlist];
+      }
+      await this.openPlaylist(playlist.id);
+      return playlist;
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : "The playlist was not made";
+      return null;
+    }
+  }
+
+  /** Rename the open playlist, add one song to it, or remove one position from it. */
+  async editPlaylist(change: PlaylistChange): Promise<boolean> {
+    if (!this.#server || !this.playlist) return false;
+    const id = this.playlist.id;
+    this.error = null;
+    try {
+      await this.#server.updatePlaylist(id, change);
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : "The playlist was not changed";
+      return false;
+    }
+    // Both screens re-read from the server after a write. A locally patched membership would
+    // disagree with the server the first time it refused something, and the member would be
+    // looking at a list they do not have.
+    await this.#reloadPlaylist(id);
+    return true;
+  }
+
+  async #reloadPlaylist(id: string): Promise<void> {
+    if (!this.#server) return;
+    try {
+      this.playlist = await this.#server.playlist(id);
+      this.playlists = await this.#server.playlists();
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : "That playlist did not reload";
+    }
   }
 
   /* ---- search and favourites ------------------------------------------------------------ */

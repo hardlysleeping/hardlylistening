@@ -154,6 +154,56 @@ describe("lazy loading", () => {
   });
 });
 
+describe("playlist writes", () => {
+  it("sends a name to createPlaylist and reads back the row the server made", async () => {
+    const transport = new FakeTransport({
+      createPlaylist: envelope({ playlist: { id: "p9", name: "Road trip", songCount: 0 } }),
+    });
+    const client = new SubsonicClient({ transport });
+
+    const made = await client.createPlaylist("Road trip");
+
+    expect(transport.calls.at(-1)).toEqual({ endpoint: "createPlaylist", params: { name: "Road trip" } });
+    expect(made).toEqual(expect.objectContaining({ id: "p9", name: "Road trip" }));
+  });
+
+  it("will not invent a playlist from a bare ok", async () => {
+    // `status: ok` with no row means the request landed and the result is unknown. Fabricating
+    // an entry would put a playlist on screen that may not exist.
+    const transport = new FakeTransport({ createPlaylist: envelope({}) });
+    const client = new SubsonicClient({ transport });
+    await expect(client.createPlaylist("Nameless")).rejects.toThrow(/did not return the playlist/);
+  });
+
+  it("sends exactly one kind of edit per call", async () => {
+    const transport = new FakeTransport({ updatePlaylist: envelope({}) });
+    const client = new SubsonicClient({ transport });
+
+    await client.updatePlaylist("p9", { name: "Renamed" });
+    expect(transport.calls.at(-1)).toEqual({ endpoint: "updatePlaylist", params: { playlistId: "p9", name: "Renamed" } });
+
+    await client.updatePlaylist("p9", { add: "s-1" });
+    expect(transport.calls.at(-1)).toEqual({ endpoint: "updatePlaylist", params: { playlistId: "p9", songIdToAdd: "s-1" } });
+
+    await client.updatePlaylist("p9", { removeIndex: 0 });
+    expect(transport.calls.at(-1)).toEqual({ endpoint: "updatePlaylist", params: { playlistId: "p9", songIndexToRemove: 0 } });
+  });
+
+  it("surfaces the server's refusal with its own words", async () => {
+    const transport = new FakeTransport({
+      updatePlaylist: {
+        "subsonic-response": {
+          status: "failed",
+          version: "1.16.1",
+          error: { code: 10, message: "That song is already in the playlist" },
+        },
+      },
+    });
+    const client = new SubsonicClient({ transport });
+    await expect(client.updatePlaylist("p9", { add: "s-1" })).rejects.toThrow("That song is already in the playlist");
+  });
+});
+
 describe("the servers' disagreements", () => {
   it("reads a single object where a list was expected", async () => {
     const transport = new FakeTransport({

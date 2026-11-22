@@ -471,6 +471,34 @@ def handle(endpoint, params, multi, ctx):
     def ids_of(key):
         return multi.get(key) or ([params[key]] if params.get(key) else [])
 
+    def track_ids_of(key):
+        """Canonical track ids from a repeatable song parameter, refusing what is not one."""
+        chosen = []
+        for raw in ids_of(key):
+            try:
+                chosen.append(int(raw))
+            except ValueError:
+                raise Denied(404, 'No such song')
+        return chosen
+
+    def playlist_summary(row):
+        """One canonical playlist row in the shape `getPlaylists` already answers with.
+
+        The durations are summed from the tracks table, not from this request's catalogue
+        snapshot: the snapshot was built before this write, so a song added by this very call is
+        missing from it and the answer would report a duration the playlist does not have.
+        """
+        chosen = row['track_ids']
+        total = 0
+        with store.lock:
+            for start in range(0, len(chosen), 500):
+                batch = chosen[start:start + 500]
+                total += store.conn.execute(
+                    'SELECT COALESCE(SUM(duration),0) FROM tracks WHERE id IN ('
+                    + ','.join('?' for _ in batch) + ')', batch).fetchone()[0] or 0
+        return {'id': str(row['id']), 'name': row['title'], 'public': False,
+                'songCount': len(chosen), 'duration': int(total)}
+
     # The catalogue questions belong to the library service, so this surface and the web
     # API cannot drift apart about what a member has starred or how often they played it.
     from library import service
@@ -507,6 +535,72 @@ def handle(endpoint, params, multi, ctx):
         row, entries = playlist_of(find(ctx['playlists']), songs)
         row['entry'] = entries
         return {'playlist': row}
+
+    # ---- playlist writes ---------------------------------------------------
+    # A playlist made from a client is the same playlist the web editor writes: the canonical
+    # `playlists`/`playlist_tracks` rows behind `/api/playlists`, then saved into this member's
+    # listening scope, which is the set `getPlaylists` above lists. Writing anywhere else would
+    # give a phone a private list the web app never shows.
+    if endpoint in ('createPlaylist', 'updatePlaylist'):
+        from library import playlists as library_playlists
+        from library import saves as library_saves
+        import activity
+
+    if endpoint == 'createPlaylist':
+        result = library_playlists.write(store, uid, None,
+                                         library_playlists.title(params.get('name', '')),
+                                         track_ids_of('songId'))
+        # Saving it is what puts it in this member's `getPlaylists`, and the snapshot is taken
+        # now so a later catalogue addition cannot widen the member's copy.
+        library_saves.set_saved(store, uid, 'playlist', result['playlist']['id'], True)
+        activity.record(store, activity.KIND_PLAYLIST_NEW, member_id=uid,
+                        playlist_id=result['playlist']['id'], detail=result['playlist']['title'])
+        return {'playlist': playlist_summary(result['playlist'])}
+
+    if endpoint == 'updatePlaylist':
+        raw_pid = params.get('playlistId', '')
+        if not raw_pid.isdigit():
+            # A playlist this surface lists but does not own as a row — the Favorites set is
+            # computed from the member's stars — is refused for what it is.
+            if any(str(p['id']) == raw_pid for p in ctx['playlists']):
+                raise Denied(403, 'That playlist is computed and cannot be edited')
+            raise Denied(400, 'playlistId must be a playlist id')
+        pid = int(raw_pid)
+        rows = library_playlists.listing(store, uid, pid)
+        if not rows:
+            raise Denied(404, 'No such playlist')
+        before = rows[0]['track_ids']
+        # A playlist here is a title and a membership, not a comment. Accepting a comment and
+        # dropping it would be a silent lie, so it is refused by name.
+        if params.get('comment'):
+            raise Denied(400, 'This server does not store playlist comments')
+        dropped = set()
+        for raw in ids_of('songIndexToRemove'):
+            try:
+                position = int(raw)
+            except ValueError:
+                raise Denied(400, 'songIndexToRemove must be a position in the playlist')
+            if not 0 <= position < len(before):
+                raise Denied(400, 'No song at that position')
+            dropped.add(position)
+        adds = track_ids_of('songIdToAdd')
+        for track_id in adds:
+            if track_id in before:
+                raise Denied(400, 'That song is already in the playlist')
+        membership = [t for i, t in enumerate(before) if i not in dropped] + adds
+        name = library_playlists.title(params['name']) if params.get('name') else None
+        if name is None and not dropped and not adds:
+            raise Denied(400, 'Nothing to change')
+        # `before` is the membership this caller just read, which is exactly what the canonical
+        # writer's optimistic check wants: a concurrent edit is refused rather than overwritten.
+        result = library_playlists.write(store, uid, pid, name, membership, before)
+        # The member's snapshot is what `getPlaylist` served them a moment ago. An edit they
+        # just made is not a catalogue addition, so it follows immediately instead of waiting
+        # for them to save the playlist again.
+        library_saves.resync_playlist(store, uid, pid)
+        activity.record(store, activity.KIND_PLAYLIST_EDIT, member_id=uid, playlist_id=pid,
+                        detail=name or result['playlist']['title'])
+        return {'playlist': playlist_summary(result['playlist'])}
     if endpoint in ('search', 'search2', 'search3'):
         term = params.get('query', '').casefold()
         key = {'search': 'searchResult', 'search2': 'searchResult2', 'search3': 'searchResult3'}[endpoint]

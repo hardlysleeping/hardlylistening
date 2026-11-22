@@ -383,9 +383,11 @@ class SubsonicClient:
                             artists=tuple(Artist.from_json(row) for row in _rows(payload, 'artist')))
 
     # ---- playlists --------------------------------------------------------
-    # This server answers the three writes with "Unsupported endpoint", which becomes
-    # `NotSupported`. They are still sent: the client is not HardlyListening-only, and a server
-    # that does implement them should work from the same call.
+    # `createPlaylist` and `updatePlaylist` are implemented by HardlyListening (a playlist made
+    # here is the canonical one the web editor writes, saved into the caller's own scope) and by
+    # other servers; `deletePlaylist` is not, anywhere on this server, and becomes `NotSupported`
+    # here. All three are still sent: the client is not HardlyListening-only, and a server that
+    # implements them should work from the same call.
 
     def playlists(self):
         payload = self.request('getPlaylists').get('playlists')
@@ -397,14 +399,21 @@ class SubsonicClient:
         return Playlist.from_json(row, songs=songs)
 
     def create_playlist(self, name, song_ids=()):
-        """Make a playlist; raises `NotSupported` on this server, which has no createPlaylist."""
-        self.request('createPlaylist', name=name, songId=tuple(song_ids))
+        """Make a playlist, optionally seeded with songs, and return the row the server made."""
+        payload = self.request('createPlaylist', name=name, songId=tuple(song_ids)).get('playlist')
+        return Playlist.from_json(payload) if isinstance(payload, dict) else None
 
     def update_playlist(self, playlist_id, *, name=None, comment=None, song_ids=None,
                         add=(), remove=()):
-        """Rename, replace the songs, or add/remove some; `song_ids=None` leaves them alone."""
+        """Rename, replace the songs, or add/remove some; `song_ids=None` leaves them alone.
+
+        `remove` is a tuple of **positions** in the playlist as the last read returned it, not of
+        song ids: the protocol's parameter is `songIndexToRemove`. `comment` and `song_ids` are
+        passed through for servers that keep them; HardlyListening stores neither a comment nor a
+        membership replace, and refuses the first by name.
+        """
         self.request('updatePlaylist', playlistId=playlist_id, name=name, comment=comment,
-                     songId=song_ids, songIdToAdd=tuple(add), songIdToRemove=tuple(remove))
+                     songId=song_ids, songIdToAdd=tuple(add), songIndexToRemove=tuple(remove))
 
     def delete_playlist(self, playlist_id):
         """Delete a playlist; raises `NotSupported` here."""

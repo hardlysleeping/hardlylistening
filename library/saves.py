@@ -100,6 +100,31 @@ def set_saved(store, uid, kind, identity, saved):
     return saved
 
 
+def resync_playlist(store, uid, playlist_id):
+    """Re-snapshot one saved playlist after the playlist itself was edited.
+
+    The snapshot exists so a later catalogue addition cannot silently widen a member's scope. An
+    edit the member just made is not a catalogue addition, so their own copy follows it — which
+    is what the client that made the edit is about to read. Only a playlist this member saved is
+    touched, and nothing is read from another member's rows.
+    """
+    schema(store)
+    with store.lock:
+        saved = store.conn.execute(
+            'SELECT 1 FROM listening_playlists WHERE member_id=? AND playlist_id=?',
+            (uid, playlist_id)).fetchone()
+        if not saved:
+            return False
+        store.conn.execute(
+            'DELETE FROM listening_playlist_tracks WHERE member_id=? AND playlist_id=?',
+            (uid, playlist_id))
+        store.conn.execute(
+            'INSERT INTO listening_playlist_tracks SELECT ?,playlist_id,track_id,position'
+            ' FROM playlist_tracks WHERE playlist_id=?', (uid, playlist_id))
+        store.conn.commit()
+    return True
+
+
 def want_playlist(store, member_id: str, playlist_id: int) -> int:
     """Downloading from the Feed also puts the release in the library.
 

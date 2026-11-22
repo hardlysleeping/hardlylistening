@@ -61,7 +61,9 @@ list in a script, because a list is a promise and a build is evidence. See
 [player/store-safe.md](player/store-safe.md).
 
 Present, because a client needs them: the Subsonic client (auth, transport, normalisation,
-error codes), the library surfaces (albums, artists, playlists, search, stars), playback and
+error codes), the library surfaces (albums, artists, playlists, search, stars) including the
+playlist writes (`createPlaylist`, rename, add one song, remove by position — see
+[player/library.md](player/library.md#playlist-writes)), playback and
 Up Next, lyrics, and optionally this server's social feed once PLAYER-006 lands.
 
 Absent, by construction: **every `/api/…` route this server registers**. A player that spoke

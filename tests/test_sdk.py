@@ -189,10 +189,12 @@ class Wire(StubServer):
         if endpoint == 'deleteBookmark':
             self.bookmarks.pop(params['id'], None)
             return self.json(envelope())
+        if endpoint == 'updatePlaylist':
+            return self.json(envelope())
         if endpoint == 'createPlaylist':
-            # Exactly what `listening.rest()` sends for an endpoint `subsonic.py` lacks: a 404
-            # flattened to code 70, with the message naming the reason.
-            return self.json(envelope(error=(70, 'Unsupported endpoint')))
+            return self.json(envelope({'playlist': {
+                'id': 'p_9', 'name': params.get('name', 'Mix'),
+                'songCount': len(query.get('songId', ())), 'duration': 200}}))
         return super().answer(path, query, headers)
 
 
@@ -241,11 +243,26 @@ class Envelopes(Wire):
         self.assertEqual(caught.exception.code, 40)
         self.assertEqual(caught.exception.message, 'Invalid device credentials')
 
-    def test_an_unimplemented_endpoint_is_not_supported(self):
+    def test_a_playlist_write_returns_the_row_the_server_made(self):
+        made = self.client.create_playlist('Mix', ['7'])
+        self.assertEqual((made.id, made.name), ('p_9', 'Mix'))
+        # The seed songs are a repeated `songId`, which is what the protocol says.
+        self.assertEqual(self.calls('createPlaylist')[0].params()['songId'], '7')
+
+    def test_a_server_that_lacks_the_write_is_not_supported(self):
+        # A third-party server without `createPlaylist` refuses in its own words, and that is a
+        # `NotSupported` carrying the sentence — not a silent success with no playlist.
+        self.broken = (70, 'Unsupported endpoint')
         with self.assertRaises(NotSupported) as caught:
             self.client.create_playlist('Mix', ['7'])
         self.assertIn('Unsupported endpoint', caught.exception.message)
         self.assertEqual(self.calls('createPlaylist')[0].params()['songId'], '7')
+
+    def test_removal_is_by_position_not_by_song_id(self):
+        self.client.update_playlist('p_1', remove=[2])
+        params = self.calls('updatePlaylist')[0].params()
+        self.assertEqual(params['songIndexToRemove'], '2')
+        self.assertNotIn('songIdToRemove', params)
 
     def test_a_server_that_says_it_does_not_implement_is_not_supported(self):
         self.broken = (30, 'This server does not implement hls')
