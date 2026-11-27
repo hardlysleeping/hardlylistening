@@ -426,4 +426,46 @@ class PartyHTTP(unittest.TestCase):
         self.assertEqual(self.req(self.path('jukebox'),'POST',{'action':'clear'},self.member)[0],200)
         self.assertEqual(self.req(self.path(),cookie=self.member)[2]['current']['entry_id'],first)
 
+    def test_a_removed_guest_is_visible_to_a_moderator_and_can_be_given_a_way_back(self):
+        cookie,token,inv,_=self.join('Alex','star')
+        self.assertEqual(self.req(self.path(),cookie=cookie)[0],200)
+        self.assertEqual(self.req(self.path(),cookie=cookie)[2]['removed'],[])   # guests are not told
+        self.assertEqual(self.req(self.path(),cookie=self.member)[2]['removed'],[])
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'revoke','guest_id':inv['guest_id']},self.member)[0],200)
+        s=self.req(self.path(),cookie=self.member)[2]
+        self.assertEqual([(g['guest_id'],g['name'],g['icon']) for g in s['removed']],[(inv['guest_id'],'Alex','star')])
+        self.assertEqual(s['people'],[p for p in s['people'] if p['kind']=='member'])
+        bee,_,_,_=self.join('Bee','sun')
+        self.assertEqual(self.req(self.path(),cookie=bee)[2]['removed'],[])      # and stay untold
+        # The old link was revoked and its secret was never stored, so the way back is a new one.
+        code,_,out=self.req(self.path('control'),'POST',{'op':'readmit','guest_id':inv['guest_id']},self.member)
+        self.assertEqual(code,200)
+        self.assertEqual((out['guest_id'],out['name']),(inv['guest_id'],'Alex'))
+        self.assertEqual(self.req(self.path(),cookie=self.member)[2]['removed'],[])
+        self.assertEqual(self.req('/api/party/exchange','POST',{'invite':token})[0],401)
+        fresh=out['link'].split('invite=')[1]
+        code,h,joined=self.req('/api/party/exchange','POST',{'invite':fresh,'display_name':'Ignored','profile_icon':'sun'})
+        self.assertEqual(code,200)
+        back=h['Set-Cookie'].split(';')[0]
+        # Same guest row, so the same identity: their own name and icon, not the ones just typed.
+        me=[p for p in self.req(self.path(),cookie=back)[2]['people'] if p['you']]
+        self.assertEqual([(p['name'],p['icon'],p['guest_id']) for p in me],[('Alex','star',inv['guest_id'])])
+        # What a removal took is not handed back.
+        self.assertEqual(self.req(self.path(),cookie=self.member)[2]['queue'],[])
+
+    def test_readmit_is_only_for_a_guest_this_room_actually_removed(self):
+        _,_,inv,_=self.join('Alex','star')
+        other=self.req('/api/party','POST',{'title':'Elsewhere'},self.member)[2]['id']
+        foreign=self.req('/api/party/'+other+'/invite','POST',{},self.member)[2]
+        self.req('/api/party/'+other+'/control','POST',{'op':'revoke','guest_id':foreign['guest_id']},self.member)
+        for body,code in (({'op':'readmit'},400),({'op':'readmit','guest_id':''},400),
+                          ({'op':'readmit','guest_id':123},400),
+                          ({'op':'readmit','guest_id':'nobody'},404),
+                          ({'op':'readmit','guest_id':foreign['guest_id']},404),
+                          ({'op':'readmit','guest_id':inv['guest_id']},409)):
+            self.assertEqual(self.req(self.path('control'),'POST',body,self.member)[0],code,body)
+        # A guest cannot readmit anybody, not even themselves.
+        cookie,_,_,_=self.join('Bee','sun')
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'readmit','guest_id':inv['guest_id']},cookie)[0],401)
+
 if __name__=='__main__':unittest.main()

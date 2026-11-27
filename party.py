@@ -441,6 +441,16 @@ def state(store, pid, actor):
                            'guest_id': row['actor'][2:] if kind == 'guest' else None,
                            'you': row['actor'] == actor,
                            'host': bool(held and r['host_until'] > now)})
+        # A removal the moderator cannot see is a removal they cannot undo. Only members
+        # get this list: a guest has no business knowing who else was shown the door.
+        removed = []
+        if actor.startswith('m:'):
+            removed = [{'guest_id': row['id'], 'name': row['display_name'] or 'Guest',
+                        'icon': row['profile_icon'] or 'music'}
+                       for row in c.execute(
+                           'SELECT id,display_name,profile_icon FROM party_guests'
+                           ' WHERE party=? AND revoked=1 AND expires>? ORDER BY display_name,id',
+                           (pid, now))]
         skips = skip_votes(c, pid, current['entry_id'], now) if current else 0
         mine = bool(current) and bool(c.execute(
             'SELECT 1 FROM party_skips WHERE entry=? AND actor=?', (current['entry_id'], actor)).fetchone())
@@ -458,7 +468,8 @@ def state(store, pid, actor):
                 'next': ({k: nxt[k] for k in ('entry_id', 'id', 'title', 'artist_name', 'duration', 'score')} if nxt else None),
                 'participants': total,
                 'skip': {'count': skips, 'mine': mine, 'needed': total // 2 + 1},
-                'current': current, 'queue': queue, 'icons': ICONS, 'people': roster}
+                'current': current, 'queue': queue, 'icons': ICONS, 'people': roster,
+                'removed': removed}
 
 
 def skip(store, pid, actor, expected=None):
@@ -643,6 +654,24 @@ def control(store, member, pid, op, host_token=None, expected=None, guest_id=Non
                 if op == 'next':
                     c.execute('UPDATE party_rooms SET deck_position=0 WHERE id=?', (pid,))
                     advance(c, store, pid, expected)
+        elif op == 'readmit':
+            # Only the digest of an invite is kept, so the old link cannot be handed out again.
+            # Re-admitting mints a new secret for the same guest row — same name, same icon —
+            # and the songs and votes they lost stay lost, because a removal already happened.
+            if not isinstance(guest_id, str) or not guest_id:
+                raise Denied(400, 'A guest id is required')
+            row = c.execute('SELECT revoked,display_name FROM party_guests'
+                            ' WHERE id=? AND party=? AND expires>?', (guest_id, pid, now)).fetchone()
+            if not row:
+                raise Denied(404, 'No such guest in this room')
+            if not row['revoked']:
+                raise Denied(409, 'That guest was never removed')
+            secret = secrets.token_urlsafe(32)
+            expiry = min(r['expires'], now + TTL)
+            c.execute('UPDATE party_guests SET revoked=0,invite_digest=?,expires=? WHERE id=?',
+                      (digest(secret), expiry, guest_id))
+            return {'ok': True, 'guest_id': guest_id, 'name': row['display_name'] or 'Guest',
+                    'link': '/party#invite=' + secret, 'expires': expiry}
         elif op == 'unsend':
             # A moderator's other half: taking a message down. Deleting in place is honest —
             # the log is a room record, not an archive — and the cursor the page polls with

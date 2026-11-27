@@ -216,6 +216,14 @@ input::placeholder{color:#7d8090}
 .ptag{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);
   white-space:nowrap}
 .ptag.quiet{color:#6d707c}
+/* Who was removed, and the way back. A separate label, not a row tag, so present people and
+   removed people never read as one list. */
+.psect{margin:0;padding:9px 13px 4px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  color:#6d707c;border-top:1px solid var(--line)}
+.prow.off b{color:var(--dim);font-weight:500}
+.prow .again{margin-left:auto;flex:0 0 auto;padding:3px 7px;font-size:11px;color:var(--accent);
+  border:0;background:none;cursor:pointer}
+.prow .again:hover{text-decoration:underline}
 .prow .drop,.qrow .drop{margin-left:auto;flex:0 0 auto;padding:3px 7px;font-size:11px;
   color:#8f93a6;border:0;background:none;cursor:pointer}
 .prow .drop:hover,.qrow .drop:hover{color:#e2858f}

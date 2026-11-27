@@ -95,6 +95,12 @@ anonymous member fallback. Party guest credentials never authenticate app APIs.
     `{ok,entries,votes}`. A track they queued that is already playing keeps playing;
     cutting it is `next`/skip, not a removal. An unknown or other party's
     `guest_id` is a 404, never a silent no-op.
+  - `readmit {guest_id}`: the way back for somebody this room removed. Only the digest of
+    an invite is ever stored, so the old link cannot be re-issued: this mints a new secret
+    for the same guest row — same name, same icon — and returns
+    `{ok,guest_id,name,link,expires}`. What the removal took (waiting entries, votes) stays
+    taken. A guest who was never removed is a 409, an unknown or other party's id a 404,
+    and an invite that has already expired cannot be reopened.
   - `unsend {message_id}`: removes one chat message from this room, in place, returning
     `{ok,id}`. A message in another room, or an id that is not a positive integer, is a
     404/400 rather than a no-op; a guest cannot reach this op at all.
@@ -106,6 +112,12 @@ panel: one row per identity seen in the last 45 s as
 moderator's Remove button sends to `revoke`; `host` marks the device currently
 holding the aux lease. Reading the room is what puts you on it, so a closed tab
 drops off with its skip.
+
+A member's read also carries `removed`: `[{guest_id,name,icon}]` for the guests
+this room removed and whose invite has not expired, so the decision is visible
+and reversible from the same panel ("Invite again" puts a fresh link in the
+page's guest-link box). Guests get an empty list — who was removed is not their
+business.
 
 Members moderate the queue through `jukebox` (existing levers, now surfaced on
 the page): `remove {index}` drops one waiting row by its position in the sorted

@@ -275,7 +275,7 @@ function chatLine(m){
   return p;
 }
 // Who is in the room, and — for a member — the way to remove a guest from it.
-function paintPeople(roster){
+function paintPeople(roster,removed){
   const box=$('people');
   if(!box)return;
   $('pcount').textContent=String(roster.length);
@@ -303,6 +303,32 @@ function paintPeople(roster){
     frag.append(row);
   }
   if(!roster.length){const p=document.createElement('p');p.className='empty';p.style.padding='12px 13px';p.textContent='Nobody else is here yet.';frag.append(p);}
+  // Who was shown the door, so the decision can be taken back. The old link is gone (only its
+  // digest was ever stored), so the way back is a fresh one for the same person.
+  if(member&&removed&&removed.length){
+    const head=document.createElement('p');head.className='psect';head.textContent='Removed';
+    frag.append(head);
+    for(const g of removed){
+      const row=document.createElement('div');row.className='prow off';
+      const face=document.createElement('span');face.className='pf';face.setAttribute('aria-hidden','true');
+      face.textContent=(icons[g.icon]||'♫');
+      const name=document.createElement('b');name.textContent=g.name;
+      const again=document.createElement('button');again.type='button';again.className='plain again';
+      again.textContent='Invite again';
+      again.setAttribute('aria-label','Give '+g.name+' a new link into this party');
+      again.onclick=action(async()=>{
+        const s=await control('readmit',{guest_id:g.guest_id});
+        // The person is no longer removed, so the row goes now: a poll can be in flight, and a
+        // second press on a stale row would only get a 409 back.
+        row.remove();
+        if(!box.querySelector('.prow.off')){const h=box.querySelector('.psect');if(h)h.remove();}
+        $('link').value=location.origin+s.link;$('invitebox').hidden=false;
+        $('invitebox').scrollIntoView({block:'nearest',behavior:'smooth'});
+        await refresh();
+      });
+      row.append(face,name,again);frag.append(row);
+    }
+  }
   box.replaceChildren(frag);
 }
 function paintQueue(queue){
@@ -327,7 +353,7 @@ $('skip').textContent=skp.mine?'Skip requested':'Skip';
 $('skipcount').textContent=current?(skp.mine?'Your skip is in — ':'')+skp.count+' of '+(s.participants??1)+' want to skip · '+skp.needed+' skips needed':'';
 $('nextup').textContent=s.next?'Next up: '+s.next.title+' — '+s.next.artist_name:'Next up: nothing queued';
 paintQueue(s.queue||[]);
-paintPeople(s.people||[]);
+paintPeople(s.people||[],s.removed||[]);
 $('queuemods').hidden=!member;
 render();
 if(hostToken&&!current&&playing!==null){audio.pause();audio.removeAttribute('src');playing=null;}
