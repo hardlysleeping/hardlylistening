@@ -812,12 +812,12 @@
 <dialog id="dlg-listening" onclose="clearListeningSecret()" oncancel="clearListeningSecret()">
   <h2>Player connections</h2>
   <p>Personal saved music only. Separate from administrator settings and acquisition permissions.</p>
-  <p>Save songs or playlists in Library, create a named device, then enter the fields separately in a Subsonic player. Use password authentication (u/p), not MD5 token authentication.</p>
+  <p>Save songs or playlists in Library, create a named device, then enter the fields separately in a Subsonic player. Show details on any connection brings its username and password back. Use password authentication (u/p), not MD5 token authentication.</p>
   <label>Server URL <input id="listening-url" readonly autocomplete="off"></label><button onclick="copyListening('url')">Copy URL</button>
   <label>Device name <input id="listening-label" maxlength="80" placeholder="My phone" autocomplete="off"></label>
   <button id="listening-create" onclick="createListeningDevice()">Create connection</button>
   <div id="listening-secret" hidden>
-    <p>Shown only now. Copy before closing; lost passwords require a new device. Never share or email it.</p>
+    <p id="listening-secret-for">Copy these into your player. They can be shown again here at any time; never share or email them.</p>
     <label>Username <input id="listening-username" readonly autocomplete="off"></label><button onclick="copyListening('username')">Copy username</button>
     <label>Password <input id="listening-password" readonly autocomplete="off"></label><button onclick="copyListening('password')">Copy password</button>
   </div>
@@ -2456,6 +2456,7 @@ function leavePersonalFolder(){ const current=personalFolder(activeFolderId); ac
 function clearListeningSecret(){
   for (const field of ['username','password']) $('#listening-'+field).value = '';
   $('#listening-secret').hidden = true;
+  $('#listening-secret-for').textContent = 'Copy these into your player. They can be shown again here at any time; never share or email them.';
 }
 async function openListening(){
   clearListeningSecret();
@@ -2470,7 +2471,10 @@ async function openListening(){
 async function loadListeningDevices(){
   try {
     const data = await listeningGet('devices');
-    $('#listening-devices').innerHTML = data.devices.map(d => `<div class="libtools"><span class="grow">${esc(d.label)} · ${esc(d.created)} · ${d.revoked ? 'Revoked' : 'Active'}</span>${d.revoked ? '' : `<button data-device="${esc(d.id)}">Revoke</button>`}</div>`).join('') || 'No listening connections yet.';
+    $('#listening-devices').innerHTML = data.devices.map(d => `<div class="libtools"><span class="grow">${esc(d.label)} · ${esc(d.created)} · ${d.revoked ? 'Revoked' : 'Active'}</span><button data-show="${esc(d.id)}" data-label="${esc(d.label)}">Show details</button>${d.revoked ? '' : `<button data-device="${esc(d.id)}">Revoke</button>`}</div>`).join('') || 'No listening connections yet.';
+    $('#listening-devices').querySelectorAll('[data-show]').forEach(button => {
+      button.onclick = () => showListeningSecret(button.dataset.show, button.dataset.label);
+    });
     $('#listening-devices').querySelectorAll('[data-device]').forEach(button => {
       button.onclick = async () => {
         button.disabled = true;
@@ -2479,6 +2483,21 @@ async function loadListeningDevices(){
       };
     });
   } catch(e){ $('#listening-error').textContent = e.message; $('#listening-devices').textContent = 'Connections unavailable. Approved member sign-in is required.'; }
+}
+async function showListeningSecret(id, label){
+  clearListeningSecret();
+  $('#listening-error').textContent = '';
+  try {
+    const data = await api('/api/listening/devices/secret', {id});
+    if (!$('#dlg-listening').open) return;
+    $('#listening-username').value = data.username;
+    $('#listening-password').value = data.password;
+    $('#listening-secret-for').textContent = data.revoked
+      ? `“${label}” is revoked, so these no longer work. Copy them only to see what it used.`
+      : `For “${label}”. Copy into your player; they can be shown again here at any time. Never share or email them.`;
+    $('#listening-secret').hidden = false;
+    $('#listening-password').focus();
+  } catch(e){ $('#listening-error').textContent = e.message; }
 }
 async function createListeningDevice(){
   if (location.protocol !== 'https:') return;
@@ -2491,6 +2510,7 @@ async function createListeningDevice(){
     if (!$('#dlg-listening').open) return; // Closed while the request was in flight.
     $('#listening-username').value = data.username;
     $('#listening-password').value = data.password;
+    $('#listening-secret-for').textContent = `For “${label}”. Copy into your player; they can be shown again here at any time. Never share or email them.`;
     $('#listening-secret').hidden = false;
     $('#listening-error').textContent = '';
     await loadListeningDevices();

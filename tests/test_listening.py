@@ -191,6 +191,32 @@ class ListeningHTTP(unittest.TestCase):
         self.assertNotIn(self.device['password'], str(listing))
         self.assertEqual(self.response('ping', device=dict(self.device, password='enc:'+self.device['password'].encode().hex()))['status'], 'ok')
 
+    def test_a_device_password_can_be_read_back(self):
+        """Creation used to be the only sight of a device password.
+
+        The secret is stored recoverably on purpose — token authentication is md5(secret + salt),
+        so the server has to hold it to verify anything — which means "shown once, then lost" was
+        a property of the screen, not of the storage. It left a person holding a device they could
+        not sign in with and no way back except a new device.
+        """
+        code, data = self.api('devices/secret', {'id': self.device['username']})
+        self.assertEqual(code, 200, data)
+        self.assertEqual(data['username'], self.device['username'])
+        self.assertEqual(data['password'], self.device['password'])
+        self.assertFalse(data['revoked'])
+        self.assertTrue(data['token_auth'])
+
+        # Someone else's id is not theirs to read, and a row that predates stored secrets says so
+        # instead of answering with an empty password.
+        self.assertEqual(self.api('devices/secret', {'id': 'hl_not_mine'})[0], 404)
+        with self.store.lock:
+            self.store.conn.execute('UPDATE listening_devices SET token_secret=NULL WHERE id=?',
+                                    (self.device['username'],))
+            self.store.conn.commit()
+        code, data = self.api('devices/secret', {'id': self.device['username']})
+        self.assertEqual(code, 409, data)
+        self.assertIn('Create a new connection', data['error'])
+
     def test_rest_answers_a_player_that_is_a_page(self):
         """A Subsonic client inside a WebView is a page, and a page cannot read a cross-origin
         answer without a policy that allows it.

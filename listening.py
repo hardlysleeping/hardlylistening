@@ -144,6 +144,27 @@ def browser(handler, store, security):
             store.conn.commit()
             handler.json({'username': identity, 'password': password, 'token_auth': True})
             return
+        if path == '/api/listening/devices/secret':
+            # The password a device signs in with. It is stored recoverably on purpose, because
+            # token authentication is md5(secret + salt) and the server has to hold the secret to
+            # verify it — so "shown once, then lost" was a property of the screen, not of the
+            # storage. Reading it back is the owner's own credential: the session is what says so.
+            device_id = str(body.get('id', ''))
+            row = store.conn.execute(
+                'SELECT id,token_secret,revoked FROM listening_devices WHERE id=? AND member_id=?',
+                (device_id, uid)).fetchone()
+            if not row:
+                raise Denied(404, 'No such connection')
+            if not row['token_secret']:
+                raise Denied(409, 'That connection was made before passwords were stored. '
+                                  'Create a new connection instead.')
+            try:
+                secret = bytes.fromhex(row['token_secret']).decode()
+            except (ValueError, UnicodeError):
+                raise Denied(409, 'That connection\'s password cannot be read back. Create a new one.')
+            handler.json({'username': row['id'], 'password': secret, 'token_auth': True,
+                          'revoked': bool(row['revoked'])})
+            return
         if path == '/api/listening/devices/revoke':
             store.conn.execute('UPDATE listening_devices SET revoked=1 WHERE id=? AND member_id=?', (str(body.get('id', '')), uid))
         else:
