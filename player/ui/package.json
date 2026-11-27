@@ -1,7 +1,7 @@
 {
   "name": "hardlylistening-player",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "A Subsonic / OpenSubsonic client. The library lives on your server; this is the window onto it.",
   "scripts": {

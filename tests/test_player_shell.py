@@ -73,6 +73,34 @@ class TauriConfiguration(unittest.TestCase):
         self.assertIn('minimumSystemVersion', bundle['iOS'])
         self.assertGreaterEqual(int(bundle['android']['minSdkVersion']), 24)
 
+    def test_the_window_may_reach_the_server_somebody_typed(self):
+        """`connect-src` is the reason a sign-in can fail before a request ever leaves the app.
+
+        `'self'` plus the native bridge covers the bundled page and `invoke`, and nothing else.
+        A client whose entire purpose is to talk to a server the person names has to be allowed
+        to make that request: while it was not, the page-side transport was refused by its own
+        policy and the screen said "could not reach" about a server that was answering.
+        """
+        csp = self.config['app']['security']['csp']
+        rules = [part.strip() for part in csp.split(';') if part.strip()]
+        connect = [rule for rule in rules if rule.startswith('connect-src')]
+        self.assertEqual(len(connect), 1)
+        sources = connect[0].split()[1:]
+        self.assertIn('ipc:', sources, 'the native bridge still has to be allowed')
+        for scheme in ('https:', 'http:'):
+            self.assertIn(scheme, sources)
+        self.assertNotIn('*', sources)
+        # Widening the connection policy must not widen the script policy with it.
+        script = [rule for rule in rules if rule.startswith('script-src')]
+        self.assertEqual(script, ["script-src 'self'"])
+
+    def test_one_version_is_stamped_wherever_it_is_read(self):
+        ui = json.loads((PLAYER / 'ui' / 'package.json').read_text())
+        source = (PLAYER / 'ui' / 'src' / 'lib' / 'app' / 'version.ts').read_text()
+        stamped = re.search(r'APP_VERSION = "([^"]+)"', source).group(1)
+        self.assertEqual(self.config['version'], ui['version'])
+        self.assertEqual(self.config['version'], stamped)
+
     def test_capabilities_grant_the_core_and_nothing_else(self):
         self.assertTrue(self.capabilities, 'no capability file means no window can load')
         for capability in self.capabilities:

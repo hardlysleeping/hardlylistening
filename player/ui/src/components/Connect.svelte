@@ -12,6 +12,7 @@
    * person can act on.
    */
   import type { Session } from "../lib/app/session.svelte";
+  import { APP_VERSION } from "../lib/app/version";
 
   interface Props {
     session: Session;
@@ -149,6 +150,8 @@
       This machine has no keychain this build can reach, so the password is kept in memory for
       this session only — it is never written to disk.
     {/if}</p>
+
+  <p class="fine build" id="connect-build">Version {APP_VERSION}</p>
 </main>
 </div>
 
@@ -179,6 +182,15 @@
     font-size: 19px;
     font-weight: 700;
     letter-spacing: -0.01em;
+  }
+
+  /* Quiet, but always present: the first question about a failed sign-in is which build it is. */
+  .build {
+    margin: 0;
+    font-size: 11px;
+    color: var(--dim);
+    text-align: right;
+    opacity: 0.8;
   }
 
   .brand span {
