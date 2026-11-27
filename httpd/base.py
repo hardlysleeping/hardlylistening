@@ -47,6 +47,23 @@ class Plumbing:
         self.send_header('Content-Security-Policy', "frame-ancestors 'none'; object-src 'none'; base-uri 'self'")
         if security().required:
             self.send_header('Strict-Transport-Security', 'max-age=31536000')
+        # `/rest/` is the Subsonic surface, and every Subsonic client that runs in a WebView is a
+        # page making a cross-origin request: a Tauri or capacitor player's origin is never the
+        # server's. Without this the browser refuses the answer and the app reports "could not
+        # reach" about a server that was answering — which is exactly what happened.
+        #
+        # `*` and not the caller's origin: the credential for this surface travels in the query
+        # string (`u` plus `p` or a salted `t`), never a cookie, and the page's fetch sets
+        # `credentials: omit`. Nothing here is readable by a page that does not already hold a
+        # device password, and `*` is what real Subsonic servers send.
+        #
+        # Scoped to `/rest/` on purpose: `/api/` is cookie-authenticated, and answering that with
+        # a wildcard origin would hand every website a signed-in session to ride.
+        if self.path.startswith('/rest/'):
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Accept, Content-Type')
+            self.send_header('Access-Control-Max-Age', '600')
         super().end_headers()
 
     def _send(self, code: int, body: bytes, ctype: str, extra_headers=None) -> None:

@@ -205,6 +205,13 @@ def envelope(handler, params, payload=None, error=None):
 
 def rest(handler, store, security):
     params = {}
+    if handler.command == 'OPTIONS':
+        # A CORS preflight carries no credentials and answers no question about the library, so
+        # it is not authentication. `end_headers` has already attached the policy that allows it.
+        handler.send_response(204)
+        handler.send_header('Content-Length', '0')
+        handler.end_headers()
+        return
     try:
         if len(handler.path) > 16384:
             raise Denied(400, 'Request too long')

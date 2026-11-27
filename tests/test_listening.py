@@ -191,6 +191,35 @@ class ListeningHTTP(unittest.TestCase):
         self.assertNotIn(self.device['password'], str(listing))
         self.assertEqual(self.response('ping', device=dict(self.device, password='enc:'+self.device['password'].encode().hex()))['status'], 'ok')
 
+    def test_rest_answers_a_player_that_is_a_page(self):
+        """A Subsonic client inside a WebView is a page, and a page cannot read a cross-origin
+        answer without a policy that allows it.
+
+        This is not a nicety: `/rest/` answered with no `Access-Control-Allow-Origin` at all, so
+        the browser refused the response and the app reported "could not reach" about a server
+        that was answering. The wildcard is safe on this surface because it authenticates from
+        the query string (`u` with `p` or a salted `t`), never from a cookie, and the allowance is
+        scoped to `/rest/` so the cookie-authenticated `/api/` cannot inherit it.
+        """
+        code, headers, _ = self.rest('ping')
+        self.assertEqual(code, 200)
+        allowed = {k.lower(): v for k, v in headers.items()}
+        self.assertEqual(allowed.get('access-control-allow-origin'), '*')
+        self.assertIn('GET', allowed.get('access-control-allow-methods', ''))
+        self.assertIn('Accept', allowed.get('access-control-allow-headers', ''))
+
+        # A preflight carries no credential and asks nothing about the library, so it is answered
+        # without one.
+        code, headers, raw = self.request('/rest/ping.view', 'OPTIONS')
+        self.assertEqual(code, 204)
+        self.assertEqual(raw, b'')
+        self.assertEqual({k.lower(): v for k, v in headers.items()}
+                         .get('access-control-allow-origin'), '*')
+
+        # And the cookie-authenticated surface stays cross-origin unreadable.
+        code, headers, _ = self.request('/api/listening/devices')
+        self.assertNotIn('access-control-allow-origin', {k.lower() for k in headers})
+
     def test_browser_auth_csrf_local_mode_device_is_not_browser_session(self):
         for mode in ('0', '1'):
             os.environ['HARDLYLISTENING_AUTH_REQUIRED'] = mode
