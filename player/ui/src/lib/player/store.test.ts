@@ -24,6 +24,7 @@ function stubEngine(): AudioEngine {
     setVolume: vi.fn(),
     setMuted: vi.fn(),
     setRepeat: vi.fn(),
+    preload: vi.fn(),
     destroy: vi.fn(),
   };
 }
@@ -77,6 +78,52 @@ describe("a track that will not play", () => {
     player.engineEvents.error("the file is gone");
 
     expect(player.error).toBe("the file is gone");
+  });
+});
+
+describe("cueing without a wait", () => {
+  const [a, b, c] = ["a", "b", "c"].map((id) => ({ id, title: id.toUpperCase(), duration: 100 }));
+
+  it("fetches the song that follows while this one plays", async () => {
+    /* The press used to be the first thing that asked for bytes. The store now warms the next
+       song's address, so the engine can swap a buffer in rather than open a request in silence. */
+    const { player, engine } = store(okServer());
+    await player.playQueue([a!, b!, c!], 0);
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenCalledWith("http://stub/b"));
+  });
+
+  it("warms the first song again when repeat-all wraps", async () => {
+    const { player, engine } = store(okServer());
+    await player.playQueue([a!, b!], 0);
+    player.cycleRepeat(); // off -> all
+    await player.playQueue([a!, b!], 1);
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenLastCalledWith("http://stub/a"));
+  });
+
+  it("drops the warm copy when nothing follows", async () => {
+    const { player, engine } = store(okServer());
+    await player.playQueue([a!, b!], 0);
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenCalledWith("http://stub/b"));
+
+    await player.playQueue([a!, b!], 1);
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenLastCalledWith(null));
+  });
+
+  it("re-warms when the order changes under it", async () => {
+    const { player, engine } = store(okServer());
+    await player.playQueue([a!, b!, c!], 0);
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenCalledWith("http://stub/b"));
+
+    player.moveUpNext(0, 1); // c now follows a
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenLastCalledWith("http://stub/c"));
+  });
+
+  it("says nothing when the next song's bytes cannot be resolved", async () => {
+    const { player } = store(brokenServer());
+    await player.playQueue([a!], 0);
+    // The failure belongs to the track that was asked for, not to a copy fetched in advance.
+    await Promise.resolve();
+    expect(player.error).toBe("This track could not be played");
   });
 });
 

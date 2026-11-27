@@ -638,6 +638,7 @@ export class PlayerStore {
         this.#loaded = true;
         this.#engine.setSource(local);
         this.#engine.play();
+        this.#preloadNext();
         return;
       }
       const source = await server.source(song.id);
@@ -645,9 +646,54 @@ export class PlayerStore {
       this.#loaded = true;
       this.#engine.setSource(source.url);
       this.#engine.play();
+      this.#preloadNext();
     } catch (error) {
       this.error = error instanceof Error ? error.message : "This track could not be played";
     }
+  }
+
+  /**
+   * Fetch the song the queue will ask for next, so the press is a swap and not a round trip.
+   *
+   * The gap this removes was the whole of the delay a cued song used to have: the element was
+   * only given an address at the moment of the press, so the request, the TLS and the media
+   * pipeline's start-up were all inside the silence. The bytes are ones the queue would have
+   * fetched a few minutes later anyway; skipping past the song is the price of the warm copy.
+   *
+   * Every refusal here is silent: a warm copy is an optimisation, so a source that cannot be
+   * resolved (or an engine with no second buffer) leaves playback exactly as it was.
+   */
+  #preloadNext(): void {
+    const engine = this.#engine;
+    if (!engine.preload || this.index < 0) return;
+
+    const following = this.index + 1;
+    const nextIndex = following < this.#order.length
+      ? following
+      : this.repeat === "all" && this.#order.length ? 0 : -1;
+    const song = nextIndex < 0
+      ? undefined
+      : this.queue[this.#order[nextIndex] ?? -1];
+    // Nothing follows, or the queue repeats the song already playing: drop any stale copy.
+    if (!song || song.id === this.track?.id) {
+      engine.preload(null);
+      return;
+    }
+
+    void (async () => {
+      const local = this.#local ? await this.#local(song.id).catch(() => null) : null;
+      if (local) {
+        engine.preload?.(local);
+        return;
+      }
+      const server = this.#server;
+      if (!server) return;
+      try {
+        engine.preload?.((await server.source(song.id)).url);
+      } catch {
+        engine.preload?.(null);
+      }
+    })();
   }
 
   /**
@@ -674,6 +720,8 @@ export class PlayerStore {
   #pushQueue(): void {
     this.#engine.setQueue?.(this.queue, this.#order, this.repeat);
     this.#persist();
+    // The order just changed, so the song that follows is a different one: re-warm it.
+    if (this.#loaded) this.#preloadNext();
   }
 
   /**

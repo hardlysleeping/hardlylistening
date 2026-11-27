@@ -45,6 +45,16 @@ export interface AudioEngine {
   setMuted(muted: boolean): void;
   destroy(): void;
 
+  /**
+   * Fetch a source that is expected next, without playing it.
+   *
+   * A press must not be the first thing that asks for bytes: that made the gap between the tap
+   * and the sound the whole of the network round trip plus the media pipeline's start-up. An
+   * engine that can hold a second buffer warms it and is then asked to play an address it
+   * already has. Optional, because a queue-owning player does this itself.
+   */
+  preload?(url: string | null): void;
+
   /* The queue-owning half. A web engine has none of these, because the store does their job. */
 
   /** The playback order, as positions in `songs`, and what to do at the end. No URLs. */
@@ -57,96 +67,168 @@ export interface AudioEngine {
   setRepeat?(repeat: Repeat): void;
 }
 
+/** What `preload` leaves behind: enough buffered to start without asking the network again. */
+const HAVE_CURRENT_DATA = 2;
+
 export class WebAudioEngine implements AudioEngine {
   readonly kind = "web" as const;
   readonly ownsQueue = false;
 
-  #audio: HTMLAudioElement;
+  /** The element the person is hearing. */
+  #active: HTMLAudioElement;
+  /** The second buffer. Its bytes were fetched ahead of the press; it is silent until it swaps. */
+  #standby: HTMLAudioElement;
   #events: EngineEvents;
   #lastDuration = 0;
 
-  constructor(events: EngineEvents) {
+  /** The factory is injectable so a test can drive two fake elements instead of a browser's. */
+  constructor(events: EngineEvents, make: () => HTMLAudioElement = () => new Audio()) {
     this.#events = events;
-    this.#audio = new Audio();
-    this.#audio.preload = "metadata";
+    this.#active = this.#element(make);
+    this.#standby = this.#element(make);
+  }
 
-    this.#audio.addEventListener("timeupdate", () => {
-      this.#events.time(this.#audio.currentTime || 0, this.duration);
+  /**
+   * One element, wired to the shared events.
+   *
+   * Both elements are wired, and every handler asks whether its element is the active one: a
+   * standby finishing its fetch (`canplay`) or being unloaded must not move the playhead, the
+   * loading state or the play button.
+   */
+  #element(make: () => HTMLAudioElement): HTMLAudioElement {
+    const audio = make();
+    audio.preload = "metadata";
+    const mine = () => audio === this.#active;
+
+    audio.addEventListener("timeupdate", () => {
+      if (mine()) this.#events.time(audio.currentTime || 0, this.duration);
     });
-    this.#audio.addEventListener("durationchange", () => {
+    audio.addEventListener("durationchange", () => {
+      if (!mine()) return;
       if (this.duration !== this.#lastDuration) {
         this.#lastDuration = this.duration;
-        this.#events.time(this.#audio.currentTime || 0, this.duration);
+        this.#events.time(audio.currentTime || 0, this.duration);
       }
     });
-    this.#audio.addEventListener("ended", () => this.#events.ended());
-    this.#audio.addEventListener("play", () => this.#events.playing(true));
-    this.#audio.addEventListener("pause", () => this.#events.playing(false));
-    this.#audio.addEventListener("waiting", () => this.#events.loading(true));
-    this.#audio.addEventListener("playing", () => this.#events.loading(false));
-    this.#audio.addEventListener("canplay", () => this.#events.loading(false));
-    this.#audio.addEventListener("error", () => {
+    audio.addEventListener("ended", () => {
+      if (mine()) this.#events.ended();
+    });
+    audio.addEventListener("play", () => {
+      if (mine()) this.#events.playing(true);
+    });
+    audio.addEventListener("pause", () => {
+      if (mine()) this.#events.playing(false);
+    });
+    audio.addEventListener("waiting", () => {
+      if (mine()) this.#events.loading(true);
+    });
+    audio.addEventListener("playing", () => {
+      if (mine()) this.#events.loading(false);
+    });
+    audio.addEventListener("canplay", () => {
+      if (mine()) this.#events.loading(false);
+    });
+    audio.addEventListener("error", () => {
+      if (!mine()) return;
       this.#events.loading(false);
       this.#events.error("This track could not be played");
     });
+    return audio;
+  }
+
+  /** Silence an element and let its buffer go. Called only after it has stopped being active. */
+  #drop(audio: HTMLAudioElement): void {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+  }
+
+  #level(audio: HTMLAudioElement, volume: number, muted: boolean): void {
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.muted = muted;
   }
 
   /** The element itself, for a caller that needs the platform's own hooks. */
   get element(): HTMLAudioElement {
-    return this.#audio;
+    return this.#active;
   }
 
   get duration(): number {
-    const value = this.#audio.duration;
+    const value = this.#active.duration;
     return Number.isFinite(value) && value > 0 ? value : 0;
   }
 
   get position(): number {
-    return this.#audio.currentTime || 0;
+    return this.#active.currentTime || 0;
   }
 
   setSource(url: string | null): void {
     if (url === null) {
-      this.#audio.removeAttribute("src");
-      this.#audio.load();
+      this.#drop(this.#active);
+      this.#drop(this.#standby);
       return;
     }
-    if (this.#audio.src !== url) {
-      this.#events.loading(true);
-      this.#audio.src = url;
-      this.#audio.load();
+    if (this.#active.src === url) return;
+    // The warmed copy: swap rather than load. The element the press lands on has already got
+    // its bytes, so `play()` starts from the buffer instead of from a request.
+    if (this.#standby.src === url && this.#standby.readyState >= HAVE_CURRENT_DATA) {
+      const spent = this.#active;
+      this.#active = this.#standby;
+      this.#standby = spent;
+      // Dropped while it is no longer active, so its own `pause` cannot reach the store and
+      // flicker the button between the two tracks.
+      this.#drop(spent);
+      return;
     }
+    this.#events.loading(true);
+    this.#active.src = url;
+    this.#active.load();
+  }
+
+  preload(url: string | null): void {
+    if (url === null) {
+      this.#drop(this.#standby);
+      return;
+    }
+    if (this.#standby.src === url || this.#active.src === url) return;
+    // `auto` here and nowhere else: this element exists to fetch ahead, and its bytes are ones
+    // the queue would have asked for at the next press anyway.
+    this.#standby.preload = "auto";
+    this.#standby.src = url;
+    this.#standby.load();
   }
 
   play(): void {
     // A rejected `play()` is the autoplay policy, not a broken track: the store keeps the queue
     // and the button stays a play button, which is the honest state.
-    void this.#audio.play().catch(() => this.#events.playing(false));
+    void this.#active.play().catch(() => this.#events.playing(false));
   }
 
   pause(): void {
-    this.#audio.pause();
+    this.#active.pause();
   }
 
   seekFraction(fraction: number): void {
     const duration = this.duration;
     if (!duration) return;
     const target = Math.max(0, Math.min(1, fraction)) * duration;
-    this.#audio.currentTime = target;
+    this.#active.currentTime = target;
     this.#events.time(target, duration);
   }
 
   setVolume(volume: number): void {
-    this.#audio.volume = Math.max(0, Math.min(1, volume));
+    // Both, because a swap must not land at the default level.
+    this.#level(this.#active, volume, this.#active.muted);
+    this.#level(this.#standby, volume, this.#standby.muted);
   }
 
   setMuted(muted: boolean): void {
-    this.#audio.muted = muted;
+    this.#active.muted = muted;
+    this.#standby.muted = muted;
   }
 
   destroy(): void {
-    this.#audio.pause();
-    this.#audio.removeAttribute("src");
-    this.#audio.load();
+    this.#drop(this.#active);
+    this.#drop(this.#standby);
   }
 }

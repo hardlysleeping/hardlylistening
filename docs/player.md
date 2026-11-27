@@ -206,6 +206,30 @@ password crosses to the server as Subsonic's plain `p=` parameter, so the addres
 `https://`; token auth (`t`/`s`, md5) is supported by the client but not used for the bind.
 `docs/player/accounts.md` and `docs/player/transport.md` are the two documents for this.
 
+## Cueing a queued song
+
+A press used to be the first thing that asked for the song's bytes, so the silence between the
+tap and the sound was the whole of the delay: measured on a phone-sized path, ~120–150 ms to
+first byte through a TLS tunnel against a server that answers in **2 ms** (a local file, range
+request included), plus WebKit's own media start-up on top. None of that was the server's.
+
+`WebAudioEngine` now holds **two** elements (`src/lib/player/engine.ts`). The active one plays;
+the standby is given the address of the song the queue will ask for next
+(`PlayerStore#preloadNext`, `preload: "auto"` and an explicit `load()`), and `setSource` swaps
+the two when the address matches and the buffer is ready (`readyState >= HAVE_CURRENT_DATA`).
+The spent element is dropped *after* the swap so its `pause` cannot flicker the play button, and
+volume/mute are applied to both so a swap does not land at the default level. Every event
+handler asks whether its element is the active one: a standby finishing its fetch must not move
+the playhead.
+
+Nothing plays early, and the bytes are ones the queue would have fetched at the next press. The
+costs are honest: skipping past the warmed song wastes one track's download, and a standby that
+iOS declines to buffer (it may refuse to fetch for an element that has never been played) simply
+falls through to the old behaviour — a request at the press — rather than breaking playback.
+`engine.test.ts` drives two fake elements for the swap, the not-ready fallback and the event
+filtering; `store.test.ts` pins what gets warmed, including repeat-all wrapping and re-warming
+after the order changes.
+
 ## A screen that has nothing to show
 
 A player is asked what it is by the states that are not the happy path. `Shell.svelte` and
