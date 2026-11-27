@@ -1,8 +1,19 @@
 # The store-safe assertion
 
-Purpose: make "the player ships no acquisition code and no download machinery, and speaks only
-Subsonic" a fact about **the tree the window loads** rather than a claim about the sources that
-built it. P4 of the plan; it replaces PLAYER-007's assembler-era version.
+Purpose: make "the player ships no acquisition code, and speaks only Subsonic" a fact about **the
+tree the window loads** rather than a claim about the sources that built it. P4 of the plan; it
+replaces PLAYER-007's assembler-era version.
+
+"Acquisition" means turning a source page somewhere else into a file in a library — the repo
+search, the download queue, `downloadUrl`. It does **not** mean keeping a song the server a person
+signed into already streams: a phone on a bad connection cannot play from the network at all, so
+the player holds its own copies of the bytes it was already allowed to play, under the commands in
+`src-tauri/src/keep.rs`. The rule this file enforces is therefore narrower than it was before that
+feature existed, and the narrowing is stated here rather than left to be inferred from the code:
+**no address ever comes from the page.** A keep command takes a song id; `keep.rs` builds the
+request from the bound account, exactly as the play path does. The `offline_*` names,
+`downloadUrl` and `/download` stay banned, so the removed feature cannot come back under a new
+argument.
 
 The first version of this assertion audited `player/assemble.mjs`'s output, because that
 assembler was how the player was built from `web/`. Neither the assembler nor that tree exists
@@ -23,6 +34,7 @@ Every needle is read from a live source at test time; nothing below is a remembe
 | the absence is not vacuous | `/rest/`, `getAlbumList2`, `search3` present | an empty or non-client build passing the line above by having nothing in it |
 | no offline/download machinery | the ten `offline_*` command names, `downloadUrl`, `/download`, and the four deleted module paths | a kept copy of the removed feature, in the build or in `ui/src` / `src-tauri/src` |
 | no acquisition vocabulary | a phrase list (see below) | copy that offers a source page as a library download |
+| a kept copy is ids, not addresses | the five `keep_*` signatures in `src-tauri/src/keep.rs`, and the `subsonic::stream_url` call that resolves the origin | a `keep_*` command that takes a URL, an origin or a host — a page able to point the fetcher anywhere |
 | the audit bites | a copy of the build with a private route, `offline_manifest` and "download album" planted in it | an audit that cannot fail — not evidence |
 
 The `/api/` rule is the load-bearing one and it is unusual enough to state plainly: it is not
@@ -53,8 +65,32 @@ downloaded here", which is true and is not a feature; `OFFLINE_MACHINERY` is the
 names and `downloadUrl`, and `ACQUISITION_VOCABULARY` is phrases like `download album`,
 `queue for download`, `joins your library`.
 
-Measured 2026-11-15 on the P6 tree: `tests/test_player_store_safe.py` **9 tests, OK**. The build
-it audits is three files — `index.html`, one CSS asset, one JS asset.
+## The narrowed rule, and what it still forbids
+
+Keeping a song is a fetch, so the honest question is what makes it not acquisition:
+
+* **The origin is not a parameter.** `keep_add` takes `accountId` and a `song` record — id,
+  title, artist, album, suffix. `keep.rs` calls `subsonic::stream_url`, which reads the bound
+  account's origin and credential out of the registry and the keychain. No payload can name a
+  host, so the page cannot ask Rust to fetch anything the account was not already allowed to
+  stream. The test reads the five signatures and fails on `url:`, `origin:`, `address:` or
+  `host:` in any of them.
+* **The bytes are the server's own.** The request is the plain `stream` endpoint with no
+  `format`, so what is stored is what the server stores — not a re-encode and not a second copy
+  fetched from somewhere else.
+* **The address handed back plays, it does not reach out.** `keep_source` answers
+  `http://127.0.0.1:<port>/<id>`: this process's own listener, serving a file it already has.
+  The page never learns a path and never gets a URL to a remote host.
+
+The banned list still does the work it did: `/download` is refused even though the server
+implements it, because a player that can ask for a whole file by route is a player that can be
+pointed at a library by route. `keep.rs` fetches through `/rest/stream` and nothing else. The
+feature itself — the index, the loopback listener, the player's kept-copy-first order and what is
+still unverified — is [`kept-copies.md`](kept-copies.md).
+
+Measured on the kept-copies tree: `tests/test_player_store_safe.py` **10 tests, OK**. The build
+it audits is three files — `index.html`, one CSS asset, one JS asset. Five `keep_*` commands
+are in it, and no `/download`, `downloadUrl` or `offline_*` name is.
 
 ## How it runs
 
@@ -82,12 +118,14 @@ and because a build script only refuses the names it was told.
 ## What a reviewer looks at in a release
 
 ```sh
-python3 -m unittest tests.test_player_store_safe -v      # 9 tests, OK
+python3 -m unittest tests.test_player_store_safe -v      # 10 tests, OK
 cd player/ui && npm run build && cd ../..
 find player/ui/dist -type f | sort                       # index.html + one CSS + one JS
 grep -oI '/api/[A-Za-z0-9_./-]*' player/ui/dist/assets/*.js | sort -u
 #   /api/v1/capabilities        the probe, and nothing else
 grep -oI 'offline_[a-z]*\|downloadUrl' player/ui/dist/assets/*.js     # no output
+grep -oI 'keep_[a-z]*' player/ui/dist/assets/*.js | sort -u
+#   keep_add keep_clear keep_list keep_remove keep_source
 ```
 
 Anything under `/api/` other than the two social reads is the failure this document is about.

@@ -1680,6 +1680,8 @@ re-encode is told so.
   `docs/podcast-retention.md`). There is no podcast page in the web UI; the Subsonic surface is the
   client.
 - **Phase 7:** chat inside party rooms only (distinct from Discuss), `party_messages`, chat endpoints.
-- **Open:** Phase 3 (jukebox) and Phase 7 (chat) on the Subsonic surface, and the in-app sonic UI
-  (Phase 4's server half shipped as **HL-205**).
+- **Open:** the in-app sonic UI only (Phase 4's server half shipped as **HL-205**). Phase 3
+  (jukebox, **HL-204**) and Phase 7 (chat, **HL-206**/**HL-210**) are live since 2026-11-13 —
+  `jukeboxControl` and `addChatMessage`/`getChatMessages` map onto the party room, and
+  `tests/test_subsonic_jukebox.py` + `tests/test_party_jukebox.py` cover the deck.
 - **Dropped:** music videos entirely. **Out:** re-encoding/HLS, user administration, server-sound-card jukebox.

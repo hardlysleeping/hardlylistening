@@ -8,6 +8,7 @@
   import { PlayerStore } from "./lib/player/store.svelte";
   import { Session } from "./lib/app/session.svelte";
   import { Library } from "./lib/library/store.svelte";
+  import { KeepStore } from "./lib/keep/store.svelte";
   import { nativeInvoke, type Song } from "./lib/subsonic";
   import { nativeListen } from "./lib/player/native-engine";
   import { useNativeAudioIfPresent } from "./lib/player/select";
@@ -28,6 +29,11 @@
   // to let it go — see `Session.signOut`).
   const library = new Library();
   const session = new Session(player, { library });
+  /* What this device holds. Built here rather than inside the shell because the player needs it
+     too: `useLocalSource` is what makes a kept song play with no network, and it is the same
+     store the shell lists. In a browser there is no folder and no native command, so it stays
+     detached and every song streams, exactly as before. */
+  const keep = new KeepStore();
 
   // A phone gets the platform's player, so playback survives the lock screen; a browser and a
   // desktop build get the WebView's. Asked once, and the answer decides — see `select.ts`.
@@ -99,6 +105,23 @@
 
   $effect(() => {
     if (session.client) library.attach(session.client);
+  });
+
+  /* Kept copies belong to the account that is signed in: the folder's index is per device, but
+     the songs in it are one server's ids, and a different server would read the wrong ones. So
+     the store binds when an account becomes active and lets go when it stops being one. */
+  $effect(() => {
+    const client = session.client;
+    const account = session.active;
+    if (!client || !account || !session.native) return;
+    const invoke = nativeInvoke();
+    if (!invoke) return;
+    keep.attach(invoke, account.id);
+    player.useLocalSource((id) => keep.sourceFor(id));
+    return () => {
+      player.useLocalSource(null);
+      keep.detach();
+    };
   });
 
   $effect(() => {
@@ -205,6 +228,7 @@
     <Shell
       {library}
       {player}
+      {keep}
       serverLabel={session.active?.label ?? "Server"}
       onsignout={() => void session.signOut()}
     />

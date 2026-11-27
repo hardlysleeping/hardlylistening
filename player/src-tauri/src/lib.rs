@@ -15,6 +15,7 @@
 //! closing it is the mobile build's job — it needs Xcode and the Android SDK, not this host.
 
 mod accounts;
+pub mod keep;
 mod native_audio;
 pub mod native_queue;
 mod subsonic;
@@ -34,7 +35,16 @@ pub fn run() {
         // The order a platform player would obey. Empty on every build today: no platform player
         // is compiled in, and `native_audio_available` says so.
         .manage(native_audio::AudioState::new())
+        // The kept copies: the folder, the loopback listener's port and the songs being
+        // fetched. Everything under the app's own data directory.
+        .manage(keep::KeepState::new())
+        .manage(keep::Listener::new())
         .invoke_handler(tauri::generate_handler![
+            keep::keep_add,
+            keep::keep_list,
+            keep::keep_remove,
+            keep::keep_clear,
+            keep::keep_source,
             accounts::accounts_mode,
             accounts::accounts_put,
             accounts::accounts_secret,

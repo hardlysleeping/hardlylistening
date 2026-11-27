@@ -95,6 +95,8 @@ export class PlayerStore {
   #engine: AudioEngine;
   #events: EngineEvents;
   #server: MusicServer | null = null;
+  /** A kept copy's address, when this device holds the song. Asked before the server. */
+  #local: ((id: string) => Promise<string | null>) | null = null;
   /** The address of the server the queue came from; the saved copy is filed under it. */
   #origin = "";
   /** Whether the playing song's bytes were ever asked for. A restored queue has none yet. */
@@ -184,6 +186,15 @@ export class PlayerStore {
     this.#server = server;
     this.#origin = origin;
     this.restoreQueue();
+  }
+
+  /**
+   * Say where a kept copy can be played from. The player asks this first, before it asks the
+   * server: a song held on this device is the one case where a bad connection cannot stop the
+   * music. Returns `null` for a song that is not held, and the player falls back to the stream.
+   */
+  useLocalSource(resolver: ((id: string) => Promise<string | null>) | null): void {
+    this.#local = resolver;
   }
 
   /**
@@ -617,6 +628,18 @@ export class PlayerStore {
     const server = this.#server;
     if (!server) return;
     try {
+      // A kept copy first: it is the same song, already on this device, and it is the only
+      // source that works with no network at all.
+      const local = this.#local
+        ? await this.#local(song.id).catch(() => null)
+        : null;
+      if (this.track?.id !== song.id) return;
+      if (local) {
+        this.#loaded = true;
+        this.#engine.setSource(local);
+        this.#engine.play();
+        return;
+      }
       const source = await server.source(song.id);
       if (this.track?.id !== song.id) return;
       this.#loaded = true;

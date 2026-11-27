@@ -1,11 +1,16 @@
 <script lang="ts">
   /* A list of songs: the host's `.songrow` structure, with this player's actions.
    *
-   * What is gone from the host row is everything about acquiring or storing a file — the save
-   * chip, the download pair, the offline badge, the vote row. A Subsonic client plays what the
-   * server has; there is no second copy to manage.
+   * What is gone from the host row is everything about acquiring a file from somewhere else —
+   * the save chip that reached into a source page, the download pair, the vote row. What is
+   * here instead is one control that keeps the song this server already streams: the bytes are
+   * the signed-in server's own, fetched by Rust, held in this app's folder, and played from a
+   * loopback address. A row whose song is held shows a mark rather than an offer.
    */
   import type { Song } from "../lib/subsonic";
+
+  /** What a row may say about a song's kept copy. `null` means nothing is known yet. */
+  export type KeepState = "kept" | "keeping" | null;
 
   interface Props {
     songs: Song[];
@@ -14,11 +19,23 @@
     playing?: boolean;
     onplay: (index: number) => void;
     onqueue?: (index: number) => void;
-    /** Present only where the list is one member's to edit: a playlist. */
+    /** Present where a row can be dropped from the list it is shown in: a playlist, the kept copies. */
     onremove?: (index: number) => void;
+    /** Present where songs can be kept on this device. Reads the store, so it must be cheap. */
+    onkeep?: (index: number) => void;
+    keepState?: (id: string) => KeepState;
   }
 
-  let { songs, currentId = null, playing = false, onplay, onqueue, onremove }: Props = $props();
+  let {
+    songs,
+    currentId = null,
+    playing = false,
+    onplay,
+    onqueue,
+    onremove,
+    onkeep,
+    keepState,
+  }: Props = $props();
 
   function clock(seconds: number | undefined): string {
     if (!seconds || !Number.isFinite(seconds)) return "";
@@ -27,7 +44,7 @@
   }
 </script>
 
-<div class="songtable" class:has-remove={!!onremove}>
+<div class="songtable" class:has-remove={!!onremove} class:has-keep={!!onkeep}>
   <!-- No key on the song id: a playlist is allowed to list the same song twice, and a keyed
        each with duplicate keys drops the extra rows rather than drawing them. -->
   {#each songs as song, index}
@@ -57,6 +74,27 @@
       <div class="st"><span class="sttext"><b>{song.title}</b></span></div>
       <div class="sartist">{song.artist ?? ""}</div>
       <span class="sdur">{clock(song.duration)}</span>
+      {#if onkeep}
+        {@const state = keepState?.(song.id) ?? null}
+        {#if state === "kept"}
+          <span
+            class="skept"
+            role="img"
+            aria-label="Kept on this device"
+            title="Kept on this device">●</span>
+        {:else}
+          <button
+            type="button"
+            class="skeep"
+            title="Keep on this device"
+            aria-label="Keep {song.title} on this device"
+            disabled={state === "keeping"}
+            onclick={(event) => {
+              event.stopPropagation();
+              onkeep(index);
+            }}>{state === "keeping" ? "…" : "↓"}</button>
+        {/if}
+      {/if}
       {#if onqueue}
         <button
           type="button"
@@ -72,8 +110,8 @@
         <button
           type="button"
           class="sremove"
-          title="Remove from this playlist"
-          aria-label="Remove {song.title} from this playlist"
+          title="Remove from this list"
+          aria-label="Remove {song.title} from this list"
           onclick={(event) => {
             event.stopPropagation();
             onremove(index);
@@ -176,9 +214,64 @@
     color: var(--accent);
   }
 
-  /* A playlist is the member's own list, so its rows carry the remove. It takes a column of its
-     own beside the queue button rather than sharing it: two 30 px targets in one cell is one
-     mis-tap away from queueing the song somebody meant to remove. */
+  /* A song this device can hold gets a control of its own, in a column beside the queue button —
+     the same reason the remove has one: two 30 px targets sharing a cell is one mis-tap away
+     from queueing the song somebody meant to keep. */
+  .songtable.has-keep .songrow {
+    grid-template-columns: 32px minmax(0, 2.2fr) minmax(0, 1.3fr) 72px 34px 34px;
+  }
+
+  .songtable.has-keep .songrow .skeep,
+  .songtable.has-keep .songrow .skept {
+    position: relative;
+    z-index: 1;
+    grid-column: 5;
+    grid-row: 1;
+    width: 30px;
+    height: 30px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    line-height: 1;
+  }
+
+  .songtable.has-keep .songrow .skeep {
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .songtable.has-keep .songrow .skeep:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .songtable.has-keep .songrow .skeep:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  /* Kept is a state, not an offer: an accent mark where the control was, and nothing to press.
+     Removing a copy lives in the Kept list, so a mis-tap on a song row cannot lose one. */
+  .songtable.has-keep .songrow .skept {
+    display: grid;
+    place-items: center;
+    border: 1px solid transparent;
+    color: var(--accent);
+    font-size: 9px;
+  }
+
+  .songtable.has-keep .songrow .snext {
+    grid-column: 6;
+  }
+
+  /* A row is droppable from the list it is shown in — a playlist's own songs, or a device's kept
+     copies — so its remove takes a column of its own beside the queue button rather than sharing
+     it: two 30 px targets in one cell is one mis-tap away from queueing the song somebody meant to
+     remove. */
   .songtable.has-remove .songrow {
     grid-template-columns: 32px minmax(0, 2.2fr) minmax(0, 1.3fr) 72px 34px 34px;
   }
@@ -207,6 +300,19 @@
     color: var(--text);
   }
 
+  /* A playlist row can carry all three controls; the columns grow rather than the targets shrink. */
+  .songtable.has-keep.has-remove .songrow {
+    grid-template-columns: 32px minmax(0, 2.2fr) minmax(0, 1.3fr) 72px 34px 34px 34px;
+  }
+
+  .songtable.has-keep.has-remove .songrow .snext {
+    grid-column: 6;
+  }
+
+  .songtable.has-keep.has-remove .songrow .sremove {
+    grid-column: 7;
+  }
+
   /* On a phone the artist line goes: the title and the duration are what a row is for. */
   @media (max-width: 760px) {
     .songtable .songrow {
@@ -227,6 +333,33 @@
       grid-column: 5;
     }
 
+    /* The kept control follows the same rule as the remove: its own cell, and the count of
+       cells grows with the number of controls. */
+    .songtable.has-keep .songrow {
+      grid-template-columns: 22px minmax(0, 1fr) 46px 30px 30px;
+    }
+
+    .songtable.has-keep .songrow .skeep,
+    .songtable.has-keep .songrow .skept {
+      grid-column: 4;
+    }
+
+    .songtable.has-keep .songrow .snext {
+      grid-column: 5;
+    }
+
+    .songtable.has-keep.has-remove .songrow {
+      grid-template-columns: 22px minmax(0, 1fr) 46px 30px 30px 30px;
+    }
+
+    .songtable.has-keep.has-remove .songrow .snext {
+      grid-column: 5;
+    }
+
+    .songtable.has-keep.has-remove .songrow .sremove {
+      grid-column: 6;
+    }
+
     .songtable .songrow .sartist {
       display: none;
     }
@@ -235,6 +368,42 @@
       grid-column: 3;
       grid-row: 1;
       font-size: 12px;
+    }
+  }
+
+  /* The narrowest phones: three controls plus a duration leave the title 27 px, which is no longer
+     a title. The row's identity is the title, so the duration is what goes when the controls need
+     the room — and only where the keep column exists, so every other list keeps its timings. */
+  @media (max-width: 360px) {
+    /* The gaps are the row's whole slack: 8 px between six columns is 40 px a title cannot use. */
+    .songtable.has-keep .songrow {
+      grid-template-columns: 22px minmax(0, 1fr) 30px 30px 30px;
+      column-gap: 4px;
+    }
+
+    .songtable.has-keep .songrow .sdur {
+      display: none;
+    }
+
+    .songtable.has-keep .songrow .skeep,
+    .songtable.has-keep .songrow .skept {
+      grid-column: 3;
+    }
+
+    .songtable.has-keep .songrow .snext {
+      grid-column: 4;
+    }
+
+    .songtable.has-keep.has-remove .songrow {
+      grid-template-columns: 22px minmax(0, 1fr) 30px 30px 30px 30px;
+    }
+
+    .songtable.has-keep.has-remove .songrow .snext {
+      grid-column: 4;
+    }
+
+    .songtable.has-keep.has-remove .songrow .sremove {
+      grid-column: 5;
     }
   }
 </style>

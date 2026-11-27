@@ -12,21 +12,23 @@
    */
   import type { Library } from "../lib/library/store.svelte";
   import type { PlayerStore } from "../lib/player/store.svelte";
+  import type { KeepStore } from "../lib/keep/store.svelte";
   import type { Album, Song } from "../lib/subsonic";
   import AlbumCard from "./AlbumCard.svelte";
   import Cover from "./Cover.svelte";
-  import TrackList from "./TrackList.svelte";
+  import TrackList, { type KeepState } from "./TrackList.svelte";
 
   interface Props {
     library: Library;
     player: PlayerStore;
+    keep: KeepStore;
     onsignout: () => void;
     serverLabel: string;
   }
 
-  let { library, player, onsignout, serverLabel }: Props = $props();
+  let { library, player, keep, onsignout, serverLabel }: Props = $props();
 
-  type Tab = "albums" | "artists" | "playlists" | "favorites" | "search";
+  type Tab = "albums" | "artists" | "playlists" | "favorites" | "search" | "kept";
 
   let tab = $state<Tab>("albums");
   let query = $state("");
@@ -81,6 +83,7 @@
     if (next === "artists") void library.loadArtists();
     if (next === "playlists") void library.loadPlaylists();
     if (next === "favorites") void library.loadStarred();
+    if (next === "kept") void keep.refresh();
   }
 
   // The first screen asks for one page of albums. Nothing else is fetched until it is opened.
@@ -102,6 +105,48 @@
 
   function playList(songs: Song[], index: number): void {
     void player.playQueue(songs, index);
+  }
+
+  /* Kept copies.
+   *
+   * The store is the truth about what is held (it re-reads the folder's index after every
+   * change), so the shell asks it rather than keeping a second list. A row reads its own state
+   * rather than the shell deciding per screen, which is why an album's songs and a search
+   * result look the same: they are the same song. */
+  function keepState(id: string): KeepState {
+    if (keep.keeping(id)) return "keeping";
+    return keep.has(id) ? "kept" : null;
+  }
+
+  function keepOne(song: Song | undefined): void {
+    if (song) void keep.keep(song);
+  }
+
+  function keepMany(songs: readonly Song[] | undefined): void {
+    if (songs?.length) void keep.keepAll(songs);
+  }
+
+  /** True while a song in this list is being fetched, so the button can say what is happening. */
+  function keepingAny(songs: readonly Song[] | undefined): boolean {
+    return (songs ?? []).some((song) => keep.keeping(song.id));
+  }
+
+  /** True when every song in this list is already on this device. */
+  function allKept(songs: readonly Song[] | undefined): boolean {
+    const list = songs ?? [];
+    return list.length > 0 && list.every((song) => keep.has(song.id));
+  }
+
+  function keepLabel(songs: readonly Song[] | undefined): string {
+    if (keepingAny(songs)) return "Keeping…";
+    return allKept(songs) ? "Kept on this device" : "Keep for offline";
+  }
+
+  /** A size a person can hold in their head. Approximate on purpose: this is a phone, not `df`. */
+  function size(bytes: number): string {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   }
 
   /* Playlists are the one thing this client writes, so the controls live where the lists are: a
@@ -166,6 +211,8 @@
       <button type="button" class:on={tab === "artists"} aria-current={tab === "artists" ? "page" : undefined} onclick={() => open("artists")}>Artists</button>
       <button type="button" class:on={tab === "playlists"} aria-current={tab === "playlists" ? "page" : undefined} onclick={() => open("playlists")}>Playlists</button>
       <button type="button" class:on={tab === "favorites"} aria-current={tab === "favorites" ? "page" : undefined} onclick={() => open("favorites")}>Favourites</button>
+      <!-- Six destinations, not five: the kept copies are a place a person goes, not a setting. -->
+      <button type="button" class:on={tab === "kept"} aria-current={tab === "kept" ? "page" : undefined} onclick={() => open("kept")}>Kept</button>
     </nav>
     <form class="ps-search" onsubmit={submitSearch}>
       <input type="search" placeholder="Search" aria-label="Search" autocomplete="off"
@@ -207,14 +254,23 @@
             <h2>{album.name}</h2>
             <p>{album.artist ?? ""}{album.year ? ` · ${album.year}` : ""}</p>
             <p class="ps-dim">{sing(album)}</p>
-            <button
-              type="button"
-              class="ps-play"
-              disabled={!album.song?.length}
-              onclick={() => {
-                const songs = album.song ?? [];
-                if (songs.length) playList(songs, 0);
-              }}>Play album</button>
+            <div class="ps-actions">
+              <button
+                type="button"
+                class="ps-play"
+                disabled={!album.song?.length}
+                onclick={() => {
+                  const songs = album.song ?? [];
+                  if (songs.length) playList(songs, 0);
+                }}>Play album</button>
+              <!-- Keep the album in one tap: the songs a person listens to offline are albums and
+                   playlists, not single rows, and 12 taps per album is not a feature. -->
+              <button
+                type="button"
+                class="ps-keep"
+                disabled={!album.song?.length || keepingAny(album.song) || allKept(album.song)}
+                onclick={() => keepMany(album.song)}>{keepLabel(album.song)}</button>
+            </div>
           </div>
         </section>
         {#if album.song?.length}
@@ -227,6 +283,8 @@
               const song = album.song?.[index];
               if (song) player.enqueue([song], { next: true });
             }}
+            onkeep={(index) => keepOne(album.song?.[index])}
+            {keepState}
           />
         {:else}
           <p class="ps-dim">This album has no songs on this server.</p>
@@ -263,6 +321,10 @@
                 if (songs.length) playList(songs, 0);
               }}>Play playlist</button>
             <div class="ps-edit">
+              <button
+                type="button"
+                disabled={!playlist.entry?.length || keepingAny(playlist.entry) || allKept(playlist.entry)}
+                onclick={() => keepMany(playlist.entry)}>{keepLabel(playlist.entry)}</button>
               {#if renaming}
                 <form class="ps-rename" onsubmit={saveRename}>
                   <input
@@ -298,6 +360,8 @@
               if (song) player.enqueue([song], { next: true });
             }}
             onremove={(index) => void removeAt(index)}
+            onkeep={(index) => keepOne(playlist.entry?.[index])}
+            {keepState}
           />
         {:else}
           <p class="ps-dim">This playlist is empty.</p>
@@ -363,6 +427,8 @@
           currentId={player.track?.id ?? null}
           playing={player.playing}
           onplay={(index) => playList(library.starred.songs, index)}
+          onkeep={(index) => keepOne(library.starred.songs[index])}
+          {keepState}
         />
       {/if}
       {#if library.starred.albums.length}
@@ -417,11 +483,45 @@
           currentId={player.track?.id ?? null}
           playing={player.playing}
           onplay={(index) => playList(library.results.songs, index)}
+          onkeep={(index) => keepOne(library.results.songs[index])}
+          {keepState}
         />
       {/if}
       {#if !library.results.artists.length && !library.results.albums.length && !library.results.songs.length && !library.error}
         <p class="ps-dim">
           {library.lastQuery ? `No results for “${library.lastQuery}”.` : "No results."}
+        </p>
+      {/if}
+    {:else if tab === "kept"}
+      {#if keep.error}
+        <!-- A shell without the keep commands says so, rather than drawing an empty folder that
+             looks like a person kept nothing. -->
+        <p class="ps-dim">{keep.error}</p>
+      {:else if keep.rows.length}
+        <div class="ps-kept-head">
+          <p class="ps-dim">
+            {keep.rows.length} song{keep.rows.length === 1 ? "" : "s"} · {size(keep.bytes)} on this device
+          </p>
+          <button type="button" class="ps-more" onclick={() => void keep.clear()}>Remove all</button>
+        </div>
+        <TrackList
+          songs={keep.rows}
+          currentId={player.track?.id ?? null}
+          playing={player.playing}
+          onplay={(index) => playList(keep.rows, index)}
+          onqueue={(index) => {
+            const song = keep.rows[index];
+            if (song) player.enqueue([song], { next: true });
+          }}
+          onremove={(index) => {
+            const id = keep.rows[index]?.id;
+            if (id) void keep.forget(id);
+          }}
+        />
+      {:else}
+        <p class="ps-dim">
+          No songs are kept on this device yet. Open an album or a playlist and choose
+          “Keep for offline”.
         </p>
       {/if}
     {/if}
@@ -596,6 +696,49 @@
     cursor: default;
   }
 
+  /* Play and Keep sit side by side under the album's title: one starts the music, the other makes
+     it work with no signal. Keep wraps below Play before either shrinks. */
+  .ps-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .ps-actions .ps-play {
+    margin-top: 0;
+  }
+
+  .ps-keep {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .ps-keep:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .ps-keep:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* What this device holds, and the one control that empties it. */
+  .ps-kept-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   /* Making a playlist is one row: the field takes the width, the button keeps its own, so a long
      name never pushes Create off the edge. The field is 16px because anything smaller makes a
      phone zoom the page the moment it is focused. */
@@ -715,6 +858,18 @@
   }
 
   @media (max-width: 700px) {
+    /* Five destinations at the desktop chip size wrapped onto a second row, which put two bands of
+       chips above the fold on a phone. Tighter chips keep them on one row at 390 and 440; at 320
+       they still wrap, which is the honest outcome there. */
+    .ps-tabs {
+      gap: 4px;
+    }
+
+    .ps-tabs button {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
     .ps-detail {
       flex-direction: column;
       align-items: flex-start;

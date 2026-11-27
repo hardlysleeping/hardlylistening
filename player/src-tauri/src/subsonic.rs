@@ -86,7 +86,7 @@ impl Failure {
 }
 
 /// The one client this process uses. Building it is the expensive part; the pool is the point.
-fn client() -> &'static reqwest::Client {
+pub(crate) fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
@@ -252,15 +252,47 @@ pub async fn subsonic_source(
     }
     address::params_ok(&params).map_err(Failure::config)?;
 
+    let transcoded = params.len() > 1;
+    let url = stream_address(&registry, &vault, &account_id, params)?;
+    Ok(StreamAddress { url, transcoded })
+}
+
+/// Build a credentialed stream address from the bound account. One place, so the play path and
+/// the keep path cannot drift apart in how they authenticate.
+fn stream_address(
+    registry: &Registry,
+    vault: &Vault,
+    account_id: &str,
+    params: Vec<(String, String)>,
+) -> Result<String, Failure> {
     let bound = registry
-        .bound(&account_id)
+        .bound(account_id)
         .ok_or_else(|| Failure::config("That account is not connected"))?;
     let secret = vault
-        .get(&account_id)
+        .get(account_id)
         .ok_or_else(|| Failure::config("The keychain has no password for that account"))?;
-    let transcoded = params.len() > 1;
-    let url = address::request_url(&bound, &secret, &address::salt(), "stream", &params);
-    Ok(StreamAddress { url, transcoded })
+    Ok(address::request_url(&bound, &secret, &address::salt(), "stream", &params))
+}
+
+/// The plain stream address for one song: no bitrate cap, no format, so the server sends the
+/// bytes it stores. `keep.rs` keeps exactly those.
+pub(crate) fn stream_url(
+    registry: &Registry,
+    vault: &Vault,
+    account_id: &str,
+    song_id: &str,
+) -> Result<String, Failure> {
+    if song_id.trim().is_empty() {
+        return Err(Failure::config("A stream needs a song"));
+    }
+    let params = vec![("id".to_string(), song_id.to_string())];
+    address::params_ok(&params).map_err(Failure::config)?;
+    stream_address(registry, vault, account_id, params)
+}
+
+/// The sentence a failed request is worth, with the credential-bearing URL left out.
+pub(crate) fn reason(error: &reqwest::Error) -> &'static str {
+    transport_reason(error)
 }
 
 #[tauri::command(rename_all = "camelCase")]

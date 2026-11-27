@@ -44,6 +44,8 @@ DIST = UI / 'dist'
 SHELL = PLAYER / 'shell'
 TAURI = PLAYER / 'src-tauri'
 RUST = TAURI / 'src'
+#: The kept-copies module, read by the boundary test: a keep command takes an id, not an address.
+KEEP = RUST / 'keep.rs'
 CONFIG = TAURI / 'tauri.conf.json'
 MODULE = APP_DIR / 'web' / 'js' / 'repo-discovery.js'
 API_SOURCE = APP_DIR / 'api' / 'v1.py'
@@ -279,6 +281,31 @@ class PlayerBuild(unittest.TestCase):
                     self.assertNotIn(token, text, f'{path.relative_to(PLAYER)} carries {token}')
         for rel in ('src-tauri/src/offline.rs', 'shell/offline.js'):
             self.assertFalse((PLAYER / rel).exists(), rel)
+
+    def test_a_kept_copy_is_ids_not_addresses(self):
+        """The narrowed rule, asserted rather than described.
+
+        Keeping a song is a fetch, so what makes it not acquisition is that the page cannot say
+        where from: `keep_add` takes an account and a song record, and the origin comes from the
+        bound account through `subsonic::stream_url`. A signature that grew a `url`, `origin`,
+        `address` or `host` argument would let a payload point the fetcher at another server,
+        which is the thing `OFFLINE_MACHINERY` and `/download` exist to prevent.
+        """
+        source = read(KEEP)
+        self.assertIn('subsonic::stream_url(', source,
+                      'the origin is resolved from the bound account, as the play path does')
+        signatures = dict(re.findall(
+            r'#\[tauri::command[^\]]*\]\s*pub (?:async )?fn (keep_[a-z_]+)\(([^)]*)\)',
+            source, re.S))
+        self.assertEqual(sorted(signatures), ['keep_add', 'keep_clear', 'keep_list',
+                                              'keep_remove', 'keep_source'])
+        for name, arguments in signatures.items():
+            for banned in ('url:', 'origin:', 'address:', 'host:'):
+                self.assertNotIn(banned, arguments,
+                                 f'{name} takes {banned}, so a page could point it anywhere')
+        self.assertIn('song_id: String', signatures['keep_source'])
+        self.assertIn('keep::keep_add', read(RUST / 'lib.rs'),
+                      'the command is reachable, not merely written')
 
     def test_the_audit_reports_planted_problems(self):
         # The negative control. If this ever passes silently, the assertions above prove nothing.

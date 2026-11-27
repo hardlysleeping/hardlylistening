@@ -728,6 +728,9 @@ P7 landed on 2026-11-14: the 2,300-line `Handler` in `server.py` is now `httpd/`
 package is `httpd`, not `http`, because a top-level `http/` shadows the standard library's
 `http.server`. `docs/server-domains.md` owns the layer's description.
 
-Offline downloading is **not** on that list. It was PLAYER-005's deliverable, deleted in P4
-with the rest of the old shell; `BACKLOG.md` records why it does not come back before the
-native engine (P3) exists.
+Offline copies are back, in a different shape and at his request. PLAYER-005's downloader was
+deleted in P4 because nothing called it and the store-safe contract forbids acquisition; what ships
+now is **kept copies** of what the signed-in server already streams — five commands, no `/download`,
+no address from the page, played from a loopback listener. `docs/player/kept-copies.md` states the
+four decisions and what is still unverified (no IPA has been built with it, and the native engine is
+still absent, so a kept copy plays through the WebView).
