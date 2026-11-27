@@ -95,6 +95,9 @@ anonymous member fallback. Party guest credentials never authenticate app APIs.
     `{ok,entries,votes}`. A track they queued that is already playing keeps playing;
     cutting it is `next`/skip, not a removal. An unknown or other party's
     `guest_id` is a 404, never a silent no-op.
+  - `unsend {message_id}`: removes one chat message from this room, in place, returning
+    `{ok,id}`. A message in another room, or an id that is not a positive integer, is a
+    404/400 rather than a no-op; a guest cannot reach this op at all.
   - `close`: ends party immediately and denies guest reads/writes/exchange.
 
 `GET /api/party/:id` also returns `people`, the roster behind the "In the room"

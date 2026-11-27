@@ -252,6 +252,28 @@ function queueRow(t,i){
   }
   return r;
 }
+// One chat line. A member gets the way to take a message down, because a party is a room and a
+// room needs that; the message's own id is what the server deletes, never its position.
+function chatLine(m){
+  const p=document.createElement('p');
+  p.dataset.id=String(m.id);
+  const name=document.createElement('strong');
+  name.textContent=(icons[m.profile_icon]||'♫')+' '+m.display_name+': ';
+  p.append(name,document.createTextNode(m.body));
+  if(member){
+    const drop=document.createElement('button');
+    drop.type='button';drop.className='plain drop';
+    drop.textContent='×';drop.title='Remove this message';
+    drop.setAttribute('aria-label','Remove the message from '+m.display_name);
+    drop.onclick=action(async()=>{
+      if(!confirm('Remove '+m.display_name+"'s message from the chat?"))return;
+      await api('/'+pid+'/control',{op:'unsend',message_id:m.id});
+      p.remove();
+    });
+    p.append(drop);
+  }
+  return p;
+}
 // Who is in the room, and — for a member — the way to remove a guest from it.
 function paintPeople(roster){
   const box=$('people');
@@ -314,7 +336,7 @@ if(hostToken&&current&&playing!==current.entry_id){playing=current.entry_id;ahea
 if(hostToken&&s.deck&&s.deck.playing===false&&!audio.paused)audio.pause();
 if(hostToken&&s.deck&&s.deck.playing&&audio.paused&&!audio.ended&&current&&playing===current.entry_id){try{await audio.play();}catch(e){}}
 if(hostToken&&s.next)prefetchParty(s.next.id);
-const c=await api('/'+pid+'/chat?after='+cursor),log=$('messages'),atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<40;for(const m of c.messages){const p=document.createElement('p'),name=document.createElement('strong');name.textContent=(icons[m.profile_icon]||'♫')+' '+m.display_name+': ';p.append(name,document.createTextNode(m.body));log.append(p);}cursor=c.cursor;while(log.children.length>500)log.firstElementChild.remove();if(atEnd)log.scrollTop=log.scrollHeight;
+const c=await api('/'+pid+'/chat?after='+cursor),log=$('messages'),atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<40;for(const m of c.messages)log.append(chatLine(m));cursor=c.cursor;while(log.children.length>500)log.firstElementChild.remove();if(atEnd)log.scrollTop=log.scrollHeight;
 }catch(e){if(hostToken)stopHost();fail(e);}finally{busy=false;}}
 $('qshuffle').onclick=action(async()=>{await api('/'+pid+'/jukebox',{action:'shuffle'});await refresh();});
 $('qclear').onclick=action(async()=>{

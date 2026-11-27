@@ -589,7 +589,7 @@ def jukebox(store, pid, member, action, ids=None, index=None, gain=None):
         return {'status': deck_status(c, pid, now)}
 
 
-def control(store, member, pid, op, host_token=None, expected=None, guest_id=None, position=None, playing=None):
+def control(store, member, pid, op, host_token=None, expected=None, guest_id=None, position=None, playing=None, message_id=None):
     member_identity(member)
     with transaction(store) as c:
         r, now = room(c, pid), time.time()
@@ -643,6 +643,20 @@ def control(store, member, pid, op, host_token=None, expected=None, guest_id=Non
                 if op == 'next':
                     c.execute('UPDATE party_rooms SET deck_position=0 WHERE id=?', (pid,))
                     advance(c, store, pid, expected)
+        elif op == 'unsend':
+            # A moderator's other half: taking a message down. Deleting in place is honest —
+            # the log is a room record, not an archive — and the cursor the page polls with
+            # still moves forward, so nothing is re-appended.
+            if isinstance(message_id, bool) or not isinstance(message_id, (int, str)):
+                raise Denied(400, 'A message id is required')
+            try:
+                mid = int(message_id)
+            except (TypeError, ValueError):
+                raise Denied(400, 'A message id is required')
+            gone = c.execute('DELETE FROM party_chat WHERE id=? AND party=?', (mid, pid)).rowcount
+            if not gone:
+                raise Denied(404, 'No such message in this room')
+            return {'ok': True, 'id': mid}
         else:
             raise Denied(400, 'Unknown party control')
     return {'ok': True}
@@ -781,7 +795,8 @@ def dispatch(handler, store, security):
             # rather than guessed. Members (not guests) steer the deck.
             result = control(store, m, pid, payload.get('op'), payload.get('host_token'),
                              payload.get('expected'), payload.get('guest_id'),
-                             payload.get('position'), payload.get('playing'))
+                             payload.get('position'), payload.get('playing'),
+                             payload.get('message_id'))
     elif action == 'jukebox':
         # Membership is required here even when a guest cookie is present: guests shape the
         # queue with votes, not by replacing it.

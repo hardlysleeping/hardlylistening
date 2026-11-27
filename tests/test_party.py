@@ -392,4 +392,38 @@ class PartyHTTP(unittest.TestCase):
         self.assertEqual(self.store.conn.execute('SELECT revoked FROM party_guests WHERE id=?',
                                                  (inv['guest_id'],)).fetchone()[0],0)
 
+    def test_a_member_can_take_a_message_down_and_nobody_else_can(self):
+        cookie,_,_,_=self.join('Alex','star')
+        spoken=self.req(self.path('chat'),'POST',{'body':'something to regret'},cookie)[2]['id']
+        self.assertEqual(self.req(self.path('chat'),cookie=self.member)[2]['messages'][0]['id'],spoken)
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'unsend','message_id':spoken},cookie)[0],401)
+        for body in ({'op':'unsend'},{'op':'unsend','message_id':'x'},{'op':'unsend','message_id':True}):
+            self.assertEqual(self.req(self.path('control'),'POST',body,self.member)[0],400,body)
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'unsend','message_id':99999},self.member)[0],404)
+        # A message in another room is not this room's to delete.
+        elsewhere=self.req('/api/party','POST',{'title':'Elsewhere'},self.member)[2]['id']
+        other=self.req('/api/party/'+elsewhere+'/chat','POST',{'body':'elsewhere'},self.member)[2]['id']
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'unsend','message_id':other},self.member)[0],404)
+        self.assertEqual(self.store.conn.execute('SELECT count(*) FROM party_chat WHERE id=?',(other,)).fetchone()[0],1)
+        code,_,out=self.req(self.path('control'),'POST',{'op':'unsend','message_id':spoken},self.member)
+        self.assertEqual((code,out),(200,{'ok':True,'id':spoken}))
+        self.assertEqual(self.req(self.path('chat'),cookie=self.member)[2]['messages'],[])
+        # The page polls forward, so a removed message is not re-delivered by a later read.
+        self.assertEqual(self.req(self.path('chat')+'?after=0',cookie=self.member)[2]['messages'],[])
+
+    def test_a_moderator_leaves_the_entry_that_is_playing_alone(self):
+        cookie,_,inv,_=self.join('Alex','star')
+        first=self.req(self.path('queue'),'POST',{'track_id':1},cookie)[2]['entry_id']
+        token=self.req(self.path('control'),'POST',{'op':'claim'},self.member)[2]['host_token']
+        self.assertEqual(self.req(self.path('control'),'POST',
+                                   {'op':'next','host_token':token,'expected':None},self.member)[0],200)
+        self.assertEqual(self.req(self.path('queue'),'POST',{'track_id':2},cookie)[0],200)
+        # Clearing and revoking take the queue, never the song in the air.
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'revoke','guest_id':inv['guest_id']},self.member)[0],200)
+        s=self.req(self.path(),cookie=self.member)[2]
+        self.assertEqual(s['current']['entry_id'],first)
+        self.assertEqual(s['queue'],[])
+        self.assertEqual(self.req(self.path('jukebox'),'POST',{'action':'clear'},self.member)[0],200)
+        self.assertEqual(self.req(self.path(),cookie=self.member)[2]['current']['entry_id'],first)
+
 if __name__=='__main__':unittest.main()

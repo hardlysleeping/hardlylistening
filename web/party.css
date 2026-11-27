@@ -202,6 +202,8 @@ input::placeholder{color:#7d8090}
 /* Moderator controls. They exist only for a member, so they are plain words on a rule rather
    than a second accent: the queue's own job is still to be read and voted on. */
 .modrow{display:flex;gap:6px;padding:9px 10px 10px 13px}
+/* A flex container ignores the hidden attribute on its own; the row is member-only. */
+.modrow[hidden]{display:none}
 .modrow button{padding:5px 10px;font-size:11.5px;border:1px solid var(--line);
   border-radius:999px;background:var(--panel2);color:var(--dim);cursor:pointer}
 .modrow button:hover{color:var(--text)}
@@ -250,6 +252,11 @@ input::placeholder{color:#7d8090}
 }
 #messages p{margin:0;font-size:12.5px;line-height:1.45;color:#cfd2de}
 #messages b{color:var(--text);font-weight:620}
+/* Taking a message down. Quiet and at the end of the line, so it never competes with the words
+   while still being reachable on a touch screen. */
+#messages p .drop{margin-left:6px;padding:0 5px;font-size:11px;line-height:1;color:#6d707c;
+  border:0;background:none;cursor:pointer}
+#messages p .drop:hover{color:#e2858f}
 .chatform{display:flex;gap:7px;padding:9px 11px;border-top:1px solid var(--line)}
 .chatform input{flex:1;min-width:0;font-size:16px;padding:8px 10px;border-radius:9px}
 .chatform button{font-size:12.5px;padding:8px 12px}
