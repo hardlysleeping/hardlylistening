@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const icons={music:'♫',headphones:'🎧',star:'★',sun:'☀',moon:'☾'};
 let inviteSecret=new URLSearchParams(location.hash.slice(1)).get('invite');
 history.replaceState(null,'',location.pathname+location.search); // wipe bearer fragment before any request
-let pid=new URLSearchParams(location.search).get('party'), member=false, hostToken='', current=null, playing=null, cursor=0, busy=false, timer, heartbeat;
+let pid=new URLSearchParams(location.search).get('party'), member=false, hostToken='', current=null, playing=null, cursor=0, busy=false, timer, heartbeat, mutedMe=false;
 const audio=$('audio');
 let inviteEpoch=0, deckGainHeld=false;
 // The page's job is "pick something and start it", so what a person can start from is fetched
@@ -254,6 +254,12 @@ function queueRow(t,i){
 }
 // One chat line. A member gets the way to take a message down, because a party is a room and a
 // room needs that; the message's own id is what the server deletes, never its position.
+function applyMute(){
+  const box=$('message'),send=$('send');
+  if(!box||!send)return;
+  box.disabled=mutedMe;send.disabled=mutedMe;
+  box.placeholder=mutedMe?'You are muted in this party.':'Say something…';
+}
 function chatLine(m){
   const p=document.createElement('p');
   p.dataset.id=String(m.id);
@@ -290,6 +296,13 @@ function paintPeople(roster,removed){
     if(p.host){const tag=document.createElement('span');tag.className='ptag';tag.textContent='Aux host';row.append(tag);}
     if(!p.you){const tag=document.createElement('span');tag.className='ptag quiet';tag.textContent=p.kind==='guest'?'Guest':'Member';row.append(tag);}
     if(member&&p.kind==='guest'&&!p.you){
+      const mute=document.createElement('button');mute.type='button';mute.className='plain mute';
+      mute.textContent=p.muted?'Unmute':'Mute';
+      mute.setAttribute('aria-pressed',String(p.muted));
+      mute.setAttribute('aria-label',(p.muted?'Unmute ':'Mute ')+p.name+' in the chat');
+      mute.title=p.muted?'Let them talk in the chat again':'Stop their messages, keep their votes';
+      mute.onclick=action(async()=>{await control(p.muted?'unmute':'mute',{guest_id:p.guest_id});await refresh();});
+      row.append(mute);
       const out=document.createElement('button');out.type='button';out.className='plain drop';
       out.textContent='Remove';out.title='Remove this guest and their queued songs';
       out.setAttribute('aria-label','Remove guest '+p.name);
@@ -353,6 +366,7 @@ $('skip').textContent=skp.mine?'Skip requested':'Skip';
 $('skipcount').textContent=current?(skp.mine?'Your skip is in — ':'')+skp.count+' of '+(s.participants??1)+' want to skip · '+skp.needed+' skips needed':'';
 $('nextup').textContent=s.next?'Next up: '+s.next.title+' — '+s.next.artist_name:'Next up: nothing queued';
 paintQueue(s.queue||[]);
+mutedMe=!!(s.viewer&&s.viewer.muted);applyMute();
 paintPeople(s.people||[],s.removed||[]);
 $('queuemods').hidden=!member;
 render();
@@ -405,7 +419,7 @@ $('close').onclick=action(async()=>{if(!confirm('End this party and expire all i
 audio.onended=action(async()=>{if(hostToken){await control('next',{expected:current?current.entry_id:null});await refresh();}});
 // A local play/pause is the same fact as a remote one; report it at once so the poll agrees.
 audio.onplay=audio.onpause=()=>{if(hostToken)control('heartbeat',{position:audio.currentTime||0,playing:!audio.paused}).catch(()=>{});};
-$('chat').onsubmit=action(async()=>{const draft=$('message').value;$('send').disabled=true;try{await api('/'+pid+'/chat',{body:draft});if($('message').value===draft)$('message').value='';await refresh();}finally{$('send').disabled=false;}});
+$('chat').onsubmit=action(async()=>{if(mutedMe)return;const draft=$('message').value;$('send').disabled=true;try{await api('/'+pid+'/chat',{body:draft});if($('message').value===draft)$('message').value='';await refresh();}finally{$('send').disabled=mutedMe;}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();schedule();});
 window.addEventListener('pagehide',()=>{clearInvite();inviteSecret=null;clearTimeout(timer);stopHost();for(const c of aheadJobs.values())c.abort();for(const url of ahead.values())URL.revokeObjectURL(url);ahead.clear();aheadJobs.clear();});
 (async()=>{if(inviteSecret){$('join').hidden=false;return;}try{const s=await api('');member=true;if(pid){await openRoom(pid);return;}$('members').hidden=false;for(const p of s.parties)$('parties').append(button(p.title,()=>openRoom(p.id)));}catch(e){if(pid){await openRoom(pid);}else{fail(Error('Open your private guest link, or sign in as a member to create a party.'));}}})();

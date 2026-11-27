@@ -221,6 +221,12 @@ input::placeholder{color:#7d8090}
 .psect{margin:0;padding:9px 13px 4px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
   color:#6d707c;border-top:1px solid var(--line)}
 .prow.off b{color:var(--dim);font-weight:500}
+/* Mute and Remove sit together on the right of a guest row: the quieter lever first. */
+.prow .mute{margin-left:auto;flex:0 0 auto;padding:3px 7px;font-size:11px;color:#8f93a6;
+  border:0;background:none;cursor:pointer}
+.prow .mute:hover{color:var(--text)}
+.prow .mute[aria-pressed=true]{color:var(--accent)}
+.prow .mute+.drop{margin-left:4px}
 .prow .again{margin-left:auto;flex:0 0 auto;padding:3px 7px;font-size:11px;color:var(--accent);
   border:0;background:none;cursor:pointer}
 .prow .again:hover{text-decoration:underline}

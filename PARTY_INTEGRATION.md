@@ -95,6 +95,12 @@ anonymous member fallback. Party guest credentials never authenticate app APIs.
     `{ok,entries,votes}`. A track they queued that is already playing keeps playing;
     cutting it is `next`/skip, not a removal. An unknown or other party's
     `guest_id` is a 404, never a silent no-op.
+  - `mute {guest_id}` / `unmute {guest_id}`: stops and restarts a guest's **chat**,
+    returning `{ok,guest_id,muted}`. Deliberately narrow — a muted guest still votes,
+    skips and queues songs, because those shape the evening and somebody who should not
+    be heard *or* present is `revoke`'s job. The flag lives on the guest row, so it
+    survives a reload, and a removal clears it. Removing a guest makes them a 404 here;
+    a missing or foreign id is a 400/404.
   - `readmit {guest_id}`: the way back for somebody this room removed. Only the digest of
     an invite is ever stored, so the old link cannot be re-issued: this mints a new secret
     for the same guest row — same name, same icon — and returns
@@ -108,10 +114,15 @@ anonymous member fallback. Party guest credentials never authenticate app APIs.
 
 `GET /api/party/:id` also returns `people`, the roster behind the "In the room"
 panel: one row per identity seen in the last 45 s as
-`{name,icon,kind:'guest'|'member',guest_id,you,host}`. `guest_id` is what a
+`{name,icon,kind:'guest'|'member',guest_id,you,muted,host}`. `guest_id` is what a
 moderator's Remove button sends to `revoke`; `host` marks the device currently
 holding the aux lease. Reading the room is what puts you on it, so a closed tab
 drops off with its skip.
+
+A guest's own `viewer` also carries `muted`, so the page can close the composer and say
+why ("You are muted in this party.") instead of letting a send bounce off a 403. The
+server is the boundary either way: a POST to `/chat` from a muted guest is a 403 with
+that sentence, and the messages already said stay said.
 
 A member's read also carries `removed`: `[{guest_id,name,icon}]` for the guests
 this room removed and whose invite has not expired, so the decision is visible

@@ -70,7 +70,8 @@ def schema(store):
                 ('party_rooms', 'deck_gain', 'REAL NOT NULL DEFAULT 1'),
                 ('party_rooms', 'deck_position', 'REAL NOT NULL DEFAULT 0'),
                 ('party_rooms', 'deck_updated', 'REAL NOT NULL DEFAULT 0'),
-                ('party_entries', 'position', 'INTEGER NOT NULL DEFAULT 0')):
+                ('party_entries', 'position', 'INTEGER NOT NULL DEFAULT 0'),
+                ('party_guests', 'muted', 'INTEGER NOT NULL DEFAULT 0')):
             try:
                 store.conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}')
             except sqlite3.OperationalError:
@@ -210,7 +211,8 @@ def guest(store, sid, pid):
                                (digest(sid), pid, time.time(), time.time())).fetchone()
         if not g:
             raise Denied(401, 'Party sign-in required')
-        return {'id': 'g:' + g['id'], 'display_name': g['display_name'], 'profile_icon': g['profile_icon']}
+        return {'id': 'g:' + g['id'], 'display_name': g['display_name'],
+                'profile_icon': g['profile_icon'], 'muted': bool(g['muted'])}
 
 
 def track(conn, store, tid):
@@ -428,7 +430,8 @@ def state(store, pid, actor):
         for row in c.execute(
                 '''SELECT p.actor,
                           COALESCE(g.display_name, m.display_name, '') AS name,
-                          COALESCE(g.profile_icon, m.profile_icon, 'music') AS icon
+                          COALESCE(g.profile_icon, m.profile_icon, 'music') AS icon,
+                          COALESCE(g.muted, 0) AS muted
                    FROM party_presence p
                    LEFT JOIN party_guests g ON p.actor LIKE 'g:%' AND g.id=substr(p.actor,3)
                    LEFT JOIN members m ON p.actor LIKE 'm:%' AND m.id=substr(p.actor,3)
@@ -440,6 +443,7 @@ def state(store, pid, actor):
                            'icon': row['icon'] or 'music', 'kind': kind,
                            'guest_id': row['actor'][2:] if kind == 'guest' else None,
                            'you': row['actor'] == actor,
+                           'muted': bool(row['muted']),
                            'host': bool(held and r['host_until'] > now)})
         # A removal the moderator cannot see is a removal they cannot undo. Only members
         # get this list: a guest has no business knowing who else was shown the door.
@@ -616,7 +620,7 @@ def control(store, member, pid, op, host_token=None, expected=None, guest_id=Non
             if not row:
                 raise Denied(404, 'No such guest in this room')
             voter = 'g:' + guest_id
-            c.execute('UPDATE party_guests SET revoked=1 WHERE id=? AND party=?', (guest_id, pid))
+            c.execute('UPDATE party_guests SET revoked=1,muted=0 WHERE id=? AND party=?', (guest_id, pid))
             c.execute('DELETE FROM party_sessions WHERE guest=?', (guest_id,))
             c.execute('DELETE FROM party_presence WHERE party=? AND actor=?', (pid, voter))
             votes = c.execute('DELETE FROM party_votes WHERE voter=? AND entry IN'
@@ -654,6 +658,18 @@ def control(store, member, pid, op, host_token=None, expected=None, guest_id=Non
                 if op == 'next':
                     c.execute('UPDATE party_rooms SET deck_position=0 WHERE id=?', (pid,))
                     advance(c, store, pid, expected)
+        elif op in ('mute', 'unmute'):
+            # Chat only. A muted guest still votes, skips and adds songs; a moderator who wants
+            # them silent *and* gone has `revoke`.
+            if not isinstance(guest_id, str) or not guest_id:
+                raise Denied(400, 'A guest id is required')
+            row = c.execute('SELECT muted FROM party_guests WHERE id=? AND party=? AND revoked=0'
+                            ' AND expires>?', (guest_id, pid, now)).fetchone()
+            if not row:
+                raise Denied(404, 'No such guest in this room')
+            muted = 1 if op == 'mute' else 0
+            c.execute('UPDATE party_guests SET muted=? WHERE id=? AND party=?', (muted, guest_id, pid))
+            return {'ok': True, 'guest_id': guest_id, 'muted': bool(muted)}
         elif op == 'readmit':
             # Only the digest of an invite is kept, so the old link cannot be handed out again.
             # Re-admitting mints a new secret for the same guest row — same name, same icon —
@@ -747,7 +763,9 @@ def chat(store, pid, actor, payload=None, after='0'):
         with transaction(store) as c:
             room(c, pid)
             if actor.startswith('g:'):
-                author = c.execute('SELECT display_name,profile_icon FROM party_guests WHERE id=? AND party=? AND revoked=0 AND expires>?', (actor[2:], pid, time.time())).fetchone()
+                author = c.execute('SELECT display_name,profile_icon,muted FROM party_guests WHERE id=? AND party=? AND revoked=0 AND expires>?', (actor[2:], pid, time.time())).fetchone()
+                if author and author['muted']:
+                    raise Denied(403, 'You are muted in this party')
             else:
                 author = c.execute("SELECT display_name,profile_icon FROM members WHERE id=? AND role IN ('member','admin')", (actor[2:],)).fetchone()
             if not author:

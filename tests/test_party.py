@@ -468,4 +468,50 @@ class PartyHTTP(unittest.TestCase):
         cookie,_,_,_=self.join('Bee','sun')
         self.assertEqual(self.req(self.path('control'),'POST',{'op':'readmit','guest_id':inv['guest_id']},cookie)[0],401)
 
+    def test_a_muted_guest_keeps_their_votes_but_loses_the_chat(self):
+        cookie,token,inv,_=self.join('Alex','star')
+        self.assertEqual(self.req(self.path(),cookie=cookie)[2]['viewer']['muted'],False)
+        self.assertEqual(self.req(self.path('chat'),'POST',{'body':'before'},cookie)[0],200)
+        code,_,out=self.req(self.path('control'),'POST',{'op':'mute','guest_id':inv['guest_id']},self.member)
+        self.assertEqual((code,out),(200,{'ok':True,'guest_id':inv['guest_id'],'muted':True}))
+        mine=[p for p in self.req(self.path(),cookie=self.member)[2]['people'] if p['kind']=='guest']
+        self.assertEqual([(p['name'],p['muted']) for p in mine],[('Alex',True)])
+        code,_,refused=self.req(self.path('chat'),'POST',{'body':'after'},cookie)
+        self.assertEqual(code,403)
+        self.assertIn('muted',refused['error'])
+        self.assertEqual(self.req(self.path(),cookie=cookie)[2]['viewer']['muted'],True)
+        # Everything that shapes the room still works: a mute is not an ejection.
+        eid=self.req(self.path('queue'),'POST',{'track_id':1},cookie)[2]['entry_id']
+        self.assertEqual(self.req(self.path('vote'),'POST',{'entry_id':eid,'value':1},cookie)[0],200)
+        # The messages already said stay said.
+        self.assertEqual([m['body'] for m in self.req(self.path('chat'),cookie=self.member)[2]['messages']],['before'])
+        code,_,out=self.req(self.path('control'),'POST',{'op':'unmute','guest_id':inv['guest_id']},self.member)
+        self.assertEqual((code,out['muted']),(200,False))
+        self.assertEqual(self.req(self.path('chat'),'POST',{'body':'again'},cookie)[0],200)
+        self.assertEqual(self.req(self.path(),cookie=cookie)[2]['viewer']['muted'],False)
+
+    def test_a_member_is_never_muted_and_a_mute_is_this_rooms_to_set(self):
+        cookie,_,inv,_=self.join('Alex','star')
+        other=self.req('/api/party','POST',{'title':'Elsewhere'},self.member)[2]['id']
+        foreign=self.req('/api/party/'+other+'/invite','POST',{},self.member)[2]
+        for op in ('mute','unmute'):
+            for body,code in (({'op':op},400),({'op':op,'guest_id':''},400),({'op':op,'guest_id':7},400),
+                              ({'op':op,'guest_id':'nobody'},404),
+                              ({'op':op,'guest_id':foreign['guest_id']},404)):
+                self.assertEqual(self.req(self.path('control'),'POST',body,self.member)[0],code,(op,body))
+            self.assertEqual(self.req(self.path('control'),'POST',{'op':op,'guest_id':inv['guest_id']},cookie)[0],401)
+            self.assertEqual(self.req(self.path('control'),'POST',{'op':op,'guest_id':inv['guest_id']},self.admin)[0],200)
+        # A member's own messages are never affected by a guest's mute.
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'mute','guest_id':inv['guest_id']},self.member)[0],200)
+        self.assertEqual(self.req(self.path('chat'),'POST',{'body':'still fine'},self.member)[0],200)
+        # Removing a muted guest clears the flag: a re-admitted person starts unmuted, and a
+        # revoked guest is not something to mute through a stale id.
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'revoke','guest_id':inv['guest_id']},self.member)[0],200)
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'mute','guest_id':inv['guest_id']},self.member)[0],404)
+        self.assertEqual(self.store.conn.execute('SELECT muted,revoked FROM party_guests WHERE id=?',
+                                                 (inv['guest_id'],)).fetchone()[:2],(0,1))
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'readmit','guest_id':inv['guest_id']},self.member)[0],200)
+        fresh=self.store.conn.execute('SELECT muted FROM party_guests WHERE id=?',(inv['guest_id'],)).fetchone()[0]
+        self.assertEqual(fresh,0)
+
 if __name__=='__main__':unittest.main()
