@@ -24,7 +24,11 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2", "charset"] }
+# Roots ship inside the binary, deliberately, and this is the one feature a phone depends on:
+# `rustls-tls-native-roots` reads certificate *files* on any unix that is not macOS, so on iOS it
+# looked for `/etc/ssl/certs/ca-certificates.crt`, found nothing, and every HTTPS handshake failed
+# — reported as "the connection was refused", which is why a correct address looked unreachable.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "http2", "charset"] }
 # Token authentication is `md5(secret + salt)`; the salt is fresh per request, from the OS.
 md-5 = "0.10"
 getrandom = "0.3"

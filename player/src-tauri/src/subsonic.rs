@@ -24,6 +24,7 @@
 //! as small as the job allows for that reason.
 
 use std::collections::HashMap;
+use std::error::Error as _;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -107,7 +108,15 @@ fn transport_reason(error: &reqwest::Error) -> &'static str {
     if error.is_timeout() {
         "the server did not answer in time"
     } else if error.is_connect() {
-        "the connection was refused"
+        // A refused socket and a rejected certificate arrive here alike: `reqwest` folds the TLS
+        // handshake into the connect error. The chain is what tells them apart, and they need
+        // different answers — one is the wrong address, the other is this device not trusting
+        // the server. (Found the hard way: a build with no root certificates said "refused".)
+        if untrusted_tls(error) {
+            "the server's certificate was not trusted"
+        } else {
+            "the connection was refused"
+        }
     } else if error.is_decode() || error.is_body() {
         "the answer was cut short"
     } else if error.is_redirect() {
@@ -115,6 +124,22 @@ fn transport_reason(error: &reqwest::Error) -> &'static str {
     } else {
         "the request could not be sent"
     }
+}
+
+/// Whether the connect error was a TLS verdict rather than a dead socket.
+///
+/// Only `source()` is read, never `Display`: `reqwest`'s own sentence ends in the request URL,
+/// which carries the credential.
+fn untrusted_tls(error: &reqwest::Error) -> bool {
+    let mut source = error.source();
+    while let Some(current) = source {
+        let said = current.to_string().to_ascii_lowercase();
+        if said.contains("certificate") || said.contains("handshake") || said.contains("tls") {
+            return true;
+        }
+        source = current.source();
+    }
+    false
 }
 
 /// One request, resolved to the parsed JSON body.
@@ -569,3 +594,4 @@ mod tests {
         assert_eq!(unbound.kind, "config");
     }
 }
+

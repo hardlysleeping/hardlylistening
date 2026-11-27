@@ -187,6 +187,15 @@ The address is normalised only where normalising cannot be wrong: trailing slash
 dropped, and a pasted `/rest` suffix is named rather than doubled. A missing scheme is
 refused rather than guessed (`http` versus `https` is the person's choice).
 
+TLS is `rustls` with **roots bundled in the binary** (`rustls-tls-webpki-roots` in
+`src-tauri/Cargo.toml`), and that feature must not go back to `rustls-tls-native-roots`: the
+native-roots loader reads certificate *files* on every unix that is not macOS, so on iOS it
+looked for `/etc/ssl/certs/ca-certificates.crt`, found nothing, and every HTTPS handshake
+failed with `invalid peer certificate: UnknownIssuer` — which `reqwest` reports as a *connect*
+error, so a shipped build told people their correct address was refused. That is why
+`transport_reason` now reads the error chain and says "the server's certificate was not
+trusted" instead.
+
 **Credentials go to the OS keychain** (`src-tauri/src/accounts.rs`: Keychain, Credential
 Manager, Secret Service). A platform with no keychain backend keeps the secret in memory and
 says so, rather than writing a password to disk — and the screen follows the store it has:
