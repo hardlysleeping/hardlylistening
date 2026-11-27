@@ -242,7 +242,46 @@ function queueRow(t,i){
     who.title='Voted: '+t.voters.map(v=>v.name+(v.value>0?' ▲':' ▼')).join(' · ');
     r.append(who);
   }
+  if(member){
+    const drop=document.createElement('button');
+    drop.type='button';drop.className='plain drop';drop.textContent='×';
+    drop.setAttribute('aria-label','Remove '+t.title+' from the queue');
+    drop.title='Remove from queue';
+    drop.onclick=action(async()=>{await api('/'+pid+'/jukebox',{action:'remove',index:i});await refresh();});
+    r.append(drop);
+  }
   return r;
+}
+// Who is in the room, and — for a member — the way to remove a guest from it.
+function paintPeople(roster){
+  const box=$('people');
+  if(!box)return;
+  $('pcount').textContent=String(roster.length);
+  const frag=document.createDocumentFragment();
+  for(const p of roster){
+    const row=document.createElement('div');row.className='prow';
+    const face=document.createElement('span');face.className='pf';face.setAttribute('aria-hidden','true');
+    face.textContent=(icons[p.icon]||'♫');
+    const name=document.createElement('b');name.textContent=p.name;
+    row.append(face,name);
+    if(p.you){const tag=document.createElement('span');tag.className='ptag';tag.textContent='You';row.append(tag);}
+    if(p.host){const tag=document.createElement('span');tag.className='ptag';tag.textContent='Aux host';row.append(tag);}
+    if(!p.you){const tag=document.createElement('span');tag.className='ptag quiet';tag.textContent=p.kind==='guest'?'Guest':'Member';row.append(tag);}
+    if(member&&p.kind==='guest'&&!p.you){
+      const out=document.createElement('button');out.type='button';out.className='plain drop';
+      out.textContent='Remove';out.title='Remove this guest and their queued songs';
+      out.setAttribute('aria-label','Remove guest '+p.name);
+      out.onclick=action(async()=>{
+        if(!confirm('Remove '+p.name+' from the party? Their queued songs and votes go too.'))return;
+        await api('/'+pid+'/control',{op:'revoke',guest_id:p.guest_id});
+        await refresh();
+      });
+      row.append(out);
+    }
+    frag.append(row);
+  }
+  if(!roster.length){const p=document.createElement('p');p.className='empty';p.style.padding='12px 13px';p.textContent='Nobody else is here yet.';frag.append(p);}
+  box.replaceChildren(frag);
 }
 function paintQueue(queue){
   lastQueue=queue;
@@ -266,6 +305,8 @@ $('skip').textContent=skp.mine?'Skip requested':'Skip';
 $('skipcount').textContent=current?(skp.mine?'Your skip is in — ':'')+skp.count+' of '+(s.participants??1)+' want to skip · '+skp.needed+' skips needed':'';
 $('nextup').textContent=s.next?'Next up: '+s.next.title+' — '+s.next.artist_name:'Next up: nothing queued';
 paintQueue(s.queue||[]);
+paintPeople(s.people||[]);
+$('queuemods').hidden=!member;
 render();
 if(hostToken&&!current&&playing!==null){audio.pause();audio.removeAttribute('src');playing=null;}
 if(hostToken&&current&&playing!==current.entry_id){playing=current.entry_id;aheadKeepOnly(current.id);const cached=ahead.get(current.id);audio.src=cached||('/api/track/'+current.id+'/audio');try{await audio.play();}catch(e){fail(Error('Press Play on the aux player to enable audio.'));}}
@@ -275,6 +316,11 @@ if(hostToken&&s.deck&&s.deck.playing&&audio.paused&&!audio.ended&&current&&playi
 if(hostToken&&s.next)prefetchParty(s.next.id);
 const c=await api('/'+pid+'/chat?after='+cursor),log=$('messages'),atEnd=log.scrollHeight-log.scrollTop-log.clientHeight<40;for(const m of c.messages){const p=document.createElement('p'),name=document.createElement('strong');name.textContent=(icons[m.profile_icon]||'♫')+' '+m.display_name+': ';p.append(name,document.createTextNode(m.body));log.append(p);}cursor=c.cursor;while(log.children.length>500)log.firstElementChild.remove();if(atEnd)log.scrollTop=log.scrollHeight;
 }catch(e){if(hostToken)stopHost();fail(e);}finally{busy=false;}}
+$('qshuffle').onclick=action(async()=>{await api('/'+pid+'/jukebox',{action:'shuffle'});await refresh();});
+$('qclear').onclick=action(async()=>{
+  if(!confirm('Clear every waiting song? The one playing keeps playing.'))return;
+  await api('/'+pid+'/jukebox',{action:'clear'});await refresh();
+});
 function schedule(){clearTimeout(timer);if(!document.hidden&&pid)timer=setTimeout(async()=>{await refresh();schedule();},3000);}
 $('joinform').onsubmit=action(async()=>{const s=await api('/exchange',{invite:inviteSecret,display_name:$('name').value,profile_icon:$('icon').value});inviteSecret=null;$('join').hidden=true;await openRoom(s.party_id);});
 $('create').onsubmit=action(async()=>{const s=await api('',{title:$('title').value,hours:24});await openRoom(s.id);});

@@ -326,4 +326,70 @@ class PartyHTTP(unittest.TestCase):
         self.assertNotIn('do-not-log',out.getvalue())
 
 
+    def test_roster_names_every_person_and_marks_you_and_the_aux_host(self):
+        """A moderator has to be able to point at a person, not at a vote count."""
+        cookie,_,inv,_=self.join('Alex','star')
+        self.assertEqual(self.req(self.path(),cookie=cookie)[0],200)   # the guest opens the room
+        code,_,s=self.req(self.path(),cookie=self.member)
+        self.assertEqual(code,200)
+        seen={(p['kind'],p['name'],p['icon']) for p in s['people']}
+        self.assertIn(('member','M','moon'),seen)
+        self.assertIn(('guest','Alex','star'),seen)
+        mine=[p for p in s['people'] if p['you']]
+        self.assertEqual([(p['kind'],p['name']) for p in mine],[('member','M')])
+        self.assertFalse(any(p['host'] for p in s['people']))
+        # The guest's own read marks the guest as `you` and carries their id, which is
+        # what the remove button sends back.
+        own=self.req(self.path(),cookie=cookie)[2]['people']
+        self.assertEqual([p['name'] for p in own if p['you']],['Alex'])
+        self.assertEqual([p['guest_id'] for p in own if p['you']],[inv['guest_id']])
+        # The aux lease is a property of a member's device, shown only while held.
+        self.assertEqual(self.req(self.path('control'),'POST',{'op':'claim'},self.member)[0],200)
+        host=[p for p in self.req(self.path(),cookie=self.member)[2]['people'] if p['host']]
+        self.assertEqual([(p['kind'],p['name']) for p in host],[('member','M')])
+
+    def test_a_guest_who_stopped_polling_leaves_the_roster(self):
+        cookie,_,inv,_=self.join('Gone','music')
+        with self.store.lock:
+            self.store.conn.execute('UPDATE party_presence SET seen=? WHERE actor=?',
+                                    (time.time()-party.PRESENCE_TTL-1,'g:'+inv['guest_id']))
+            self.store.conn.commit()
+        s=self.req(self.path(),cookie=self.member)[2]
+        self.assertEqual([p['name'] for p in s['people']],['M'])
+
+    def test_revoking_a_guest_removes_their_songs_votes_and_session(self):
+        cookie,_,inv,_=self.join('Spam','sun')
+        first=self.req(self.path('queue'),'POST',{'track_id':1},cookie)[2]['entry_id']
+        self.assertEqual(self.req(self.path('vote'),'POST',{'entry_id':first,'value':1},cookie)[0],200)
+        self.assertEqual(self.req(self.path('queue'),'POST',{'track_id':2},cookie)[0],200)
+        self.assertEqual(self.req(self.path('queue'),'POST',{'track_id':3},self.member)[0],200)
+        code,_,out=self.req(self.path('control'),'POST',{'op':'revoke','guest_id':inv['guest_id']},self.member)
+        self.assertEqual(code,200)
+        self.assertEqual((out['entries'],out['votes']),(2,1))
+        # Their songs are gone, the member's song stays, and no vote of theirs survives.
+        self.assertEqual([r['title'] for r in self.req(self.path(),cookie=self.member)[2]['queue']],['Track 3'])
+        self.assertEqual(self.store.conn.execute("SELECT count(*) FROM party_votes WHERE voter=?",
+                                                 ('g:'+inv['guest_id'],)).fetchone()[0],0)
+        self.assertEqual(self.store.conn.execute('SELECT count(*) FROM party_presence WHERE actor=?',
+                                                 ('g:'+inv['guest_id'],)).fetchone()[0],0)
+        self.assertEqual(self.store.conn.execute('SELECT count(*) FROM party_sessions').fetchone()[0],0)
+        self.assertEqual(self.store.conn.execute('SELECT revoked FROM party_guests WHERE id=?',
+                                                 (inv['guest_id'],)).fetchone()[0],1)
+        self.assertEqual([p['name'] for p in self.req(self.path(),cookie=self.member)[2]['people']],['M'])
+        for action in ('','vote','chat','queue'):
+            self.assertEqual(self.req(self.path(action),cookie=cookie)[0],401,action)
+        self.assertEqual(self.req('/api/party/exchange','POST',{'invite':inv['link'].split('invite=')[1]})[0],401)
+
+    def test_revoke_needs_a_real_guest_from_this_room(self):
+        _,_,inv,_=self.join('Alex','star')
+        other=self.req('/api/party','POST',{'title':'Elsewhere'},self.member)[2]['id']
+        foreign=self.req('/api/party/'+other+'/invite','POST',{},self.member)[2]
+        for body,code in (({'op':'revoke'},400),({'op':'revoke','guest_id':''},400),
+                          ({'op':'revoke','guest_id':123},400),
+                          ({'op':'revoke','guest_id':'nobody'},404),
+                          ({'op':'revoke','guest_id':foreign['guest_id']},404)):
+            self.assertEqual(self.req(self.path('control'),'POST',body,self.member)[0],code,body)
+        self.assertEqual(self.store.conn.execute('SELECT revoked FROM party_guests WHERE id=?',
+                                                 (inv['guest_id'],)).fetchone()[0],0)
+
 if __name__=='__main__':unittest.main()

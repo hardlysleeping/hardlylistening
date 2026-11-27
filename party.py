@@ -422,6 +422,25 @@ def state(store, pid, actor):
         current = next((e for e in entries if e['status'] == 'playing'), None)
         queue = [e for e in entries if e['status'] == 'waiting']
         total = people(c, pid, now)
+        # Who is actually here, by name. Guests were already visible through their votes; a
+        # moderator needs the person, not their vote, to be able to remove them.
+        roster = []
+        for row in c.execute(
+                '''SELECT p.actor,
+                          COALESCE(g.display_name, m.display_name, '') AS name,
+                          COALESCE(g.profile_icon, m.profile_icon, 'music') AS icon
+                   FROM party_presence p
+                   LEFT JOIN party_guests g ON p.actor LIKE 'g:%' AND g.id=substr(p.actor,3)
+                   LEFT JOIN members m ON p.actor LIKE 'm:%' AND m.id=substr(p.actor,3)
+                   WHERE p.party=? AND p.seen>=? ORDER BY p.seen DESC, p.actor''',
+                (pid, now - PRESENCE_TTL)):
+            kind = 'guest' if row['actor'].startswith('g:') else 'member'
+            held = kind == 'member' and r['host_member'] and row['actor'] == 'm:' + r['host_member']
+            roster.append({'name': (row['name'] or '').strip() or ('Guest' if kind == 'guest' else 'Member'),
+                           'icon': row['icon'] or 'music', 'kind': kind,
+                           'guest_id': row['actor'][2:] if kind == 'guest' else None,
+                           'you': row['actor'] == actor,
+                           'host': bool(held and r['host_until'] > now)})
         skips = skip_votes(c, pid, current['entry_id'], now) if current else 0
         mine = bool(current) and bool(c.execute(
             'SELECT 1 FROM party_skips WHERE entry=? AND actor=?', (current['entry_id'], actor)).fetchone())
@@ -439,7 +458,7 @@ def state(store, pid, actor):
                 'next': ({k: nxt[k] for k in ('entry_id', 'id', 'title', 'artist_name', 'duration', 'score')} if nxt else None),
                 'participants': total,
                 'skip': {'count': skips, 'mine': mine, 'needed': total // 2 + 1},
-                'current': current, 'queue': queue, 'icons': ICONS}
+                'current': current, 'queue': queue, 'icons': ICONS, 'people': roster}
 
 
 def skip(store, pid, actor, expected=None):
@@ -577,7 +596,23 @@ def control(store, member, pid, op, host_token=None, expected=None, guest_id=Non
         if op == 'close':
             c.execute('UPDATE party_rooms SET closed=1 WHERE id=?', (pid,))
         elif op == 'revoke':
+            # Revoking the invitation alone leaves the person's queue rows and votes in the room,
+            # which is not what a moderator who removes somebody means. Their current track stays:
+            # it is already playing, and cutting it is `next`/skip, not a removal.
+            if not isinstance(guest_id, str) or not guest_id:
+                raise Denied(400, 'A guest id is required')
+            row = c.execute('SELECT id FROM party_guests WHERE id=? AND party=?', (guest_id, pid)).fetchone()
+            if not row:
+                raise Denied(404, 'No such guest in this room')
+            voter = 'g:' + guest_id
             c.execute('UPDATE party_guests SET revoked=1 WHERE id=? AND party=?', (guest_id, pid))
+            c.execute('DELETE FROM party_sessions WHERE guest=?', (guest_id,))
+            c.execute('DELETE FROM party_presence WHERE party=? AND actor=?', (pid, voter))
+            votes = c.execute('DELETE FROM party_votes WHERE voter=? AND entry IN'
+                              ' (SELECT id FROM party_entries WHERE party=?)', (voter, pid)).rowcount
+            entries = c.execute("DELETE FROM party_entries WHERE party=? AND added_by=?"
+                                " AND status='waiting'", (pid, voter)).rowcount
+            return {'ok': True, 'entries': entries, 'votes': votes}
         elif op == 'claim':
             if r['host_until'] > now:
                 raise Denied(409, 'An aux host is already active')

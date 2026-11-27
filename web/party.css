@@ -199,6 +199,24 @@ input::placeholder{color:#7d8090}
 .qrule{margin:0;padding:8px 13px 0;font-size:11.5px;color:#7d8090}
 .ph .count{margin-left:auto;font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 
+/* Moderator controls. They exist only for a member, so they are plain words on a rule rather
+   than a second accent: the queue's own job is still to be read and voted on. */
+.modrow{display:flex;gap:6px;padding:9px 10px 10px 13px}
+.modrow button{padding:5px 10px;font-size:11.5px;border:1px solid var(--line);
+  border-radius:999px;background:var(--panel2);color:var(--dim);cursor:pointer}
+.modrow button:hover{color:var(--text)}
+.prow{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--line)}
+.prow:last-child{border-bottom:0}
+.prow .pf{width:21px;height:21px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;
+  font-size:10.5px;background:var(--panel2);border:1px solid var(--line)}
+.prow b{font-size:12.5px;font-weight:560;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.ptag{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);
+  white-space:nowrap}
+.ptag.quiet{color:#6d707c}
+.prow .drop,.qrow .drop{margin-left:auto;flex:0 0 auto;padding:3px 7px;font-size:11px;
+  color:#8f93a6;border:0;background:none;cursor:pointer}
+.prow .drop:hover,.qrow .drop:hover{color:#e2858f}
 .qrow{
   display:flex;align-items:center;gap:6px;padding:8px 10px 8px 12px;
   border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent);font-size:13px;

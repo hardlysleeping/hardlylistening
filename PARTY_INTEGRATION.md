@@ -89,8 +89,25 @@ anonymous member fallback. Party guest credentials never authenticate app APIs.
   - `next {host_token,expected}`: expected current entry ID or null; atomic
     compare-and-swap retires current and promotes highest-ranked waiting entry.
   - `release {host_token}`: releases aux lease.
-  - `revoke {guest_id}`: party-scoped revocation, invalidates link and all sessions.
+  - `revoke {guest_id}`: party-scoped revocation. Invalidates the link, deletes the
+    guest's sessions and their presence, and removes what they left in the room —
+    their waiting entries and their votes on this party's entries — returning
+    `{ok,entries,votes}`. A track they queued that is already playing keeps playing;
+    cutting it is `next`/skip, not a removal. An unknown or other party's
+    `guest_id` is a 404, never a silent no-op.
   - `close`: ends party immediately and denies guest reads/writes/exchange.
+
+`GET /api/party/:id` also returns `people`, the roster behind the "In the room"
+panel: one row per identity seen in the last 45 s as
+`{name,icon,kind:'guest'|'member',guest_id,you,host}`. `guest_id` is what a
+moderator's Remove button sends to `revoke`; `host` marks the device currently
+holding the aux lease. Reading the room is what puts you on it, so a closed tab
+drops off with its skip.
+
+Members moderate the queue through `jukebox` (existing levers, now surfaced on
+the page): `remove {index}` drops one waiting row by its position in the sorted
+queue, `shuffle` reorders positions, `clear` empties what is waiting. None of
+them touch the entry that is playing.
 
 ## Playback and limitations
 

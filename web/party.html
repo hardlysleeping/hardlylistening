@@ -71,7 +71,7 @@
       <section class="deck" id="deckbar">
         <div class="deckinfo">
           <b id="deckstate">Deck idle — no aux host</b>
-          <span id="expiry" class="hint"></span><span class="hint">Only this device makes sound; other speakers are not in sync.</span>
+          <span id="expiry" class="hint"></span><span class="hint">· Only this device makes sound; other speakers are not in sync.</span>
         </div>
         <div class="deckacts" id="deckactions">
           <label id="deckgainrow"><span class="sr">Room volume</span><input id="deckgain" type="range" min="0" max="100" step="5" value="100" aria-label="Room volume"></label>
@@ -109,9 +109,19 @@
 
     <aside class="side">
       <section class="panel">
-        <div class="ph"><h2>Waiting queue</h2><span class="count" id="qcount">0</span></div><p class="qrule">Scores reorder the queue; tap a vote again to retract.</p>
+        <div class="ph"><h2>Waiting queue</h2><span class="count" id="qcount">0</span></div>
+        <p class="qrule">Scores reorder the queue; tap a vote again to retract.</p>
+        <div class="modrow" id="queuemods" hidden>
+          <button type="button" id="qshuffle">Shuffle</button>
+          <button type="button" id="qclear">Clear queue</button>
+        </div>
         <div id="queue"></div>
         <button type="button" class="more" id="more" hidden></button>
+      </section>
+
+      <section class="panel">
+        <div class="ph"><h2>In the room</h2><span class="count" id="pcount">0</span></div>
+        <div id="people"></div>
       </section>
 
       <section class="panel" id="chatbox">
