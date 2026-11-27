@@ -1,1 +1,142 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"><meta name="referrer" content="no-referrer"><title>Party · HardlyListening</title><link rel="stylesheet" href="/party.css"><script src="/party.js" defer></script></head><body><main><header><a href="/">HardlyListening</a><h1>Party</h1><p>One aux host, a queue everyone shapes. Guest links last at most 24 hours. Guests cannot play or download the catalog.</p></header><p id="error" role="alert"></p><section id="join" hidden><h2>Join as a guest</h2><form id="joinform"><label>Display name<input id="name" maxlength="100" required></label><label>Built-in icon<select id="icon"><option value="music">♫ Music</option><option value="headphones">🎧 Headphones</option><option value="star">★ Star</option><option value="sun">☀ Sun</option><option value="moon">☾ Moon</option></select></label><button>Join / rejoin</button></form><p>A link belongs to one guest. Reusing it keeps the same identity and votes; share a separate link for each person.</p></section><section id="members" hidden><h2>Your parties</h2><form id="create"><label>Party name<input id="title" maxlength="100" value="Party" required></label><button>Create 24-hour party</button></form><div id="parties"></div></section><section id="room" hidden><h2 id="roomtitle"></h2><p id="identity"></p><p id="expiry"></p><div id="deckbar"><strong id="deckstate">Deck idle — no aux host</strong><div id="deckactions" hidden><button id="decktoggle" type="button">Play</button><label id="deckgainrow">Room volume<input id="deckgain" type="range" min="0" max="100" step="5" value="100"></label></div></div><div id="controls" hidden><button id="invite">New guest link</button><button id="host">Become aux host</button><button id="next" hidden>Next track</button><button id="release" hidden>Release aux</button><button id="close">End party</button><div id="invitebox" hidden><label>Private guest link<input id="link" readonly></label><button id="copy">Copy link</button><button id="dismiss">Dismiss</button></div><audio id="audio" controls preload="none"></audio><p>Aux playback needs your click. Other speakers are not synchronized. Keep this host page open.</p></div><h3>Now playing</h3><p id="current">Nothing yet</p><div id="skiprow"><button id="skip" type="button">Skip</button><span id="skipcount" role="status" aria-live="polite"></span></div><p id="nextup">Next up: nothing queued</p><form id="find"><label>Search existing music<input id="query" maxlength="100" required></label><button>Search</button></form><div id="results"></div><h3>Waiting queue</h3><p>Scores reorder the whole waiting queue; ties keep arrival order. Tap your vote again to retract.</p><div id="queue"></div><section id="chatbox"><h3>Party chat</h3><div id="messages" role="log" aria-label="Party messages" aria-live="polite"></div><form id="chat"><label>Message<textarea id="message" maxlength="1000" required></textarea></label><button id="send">Send</button></form></section></section></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Party · HardlyListening</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/party.css">
+<script src="/party.js" defer></script>
+</head>
+<body>
+<header class="bar">
+  <a class="mark" href="/">Hardly<span>Listening</span></a>
+  <span class="crumb"><span class="lbl">Party</span><span class="dot">·</span><b id="roomtitle">Party</b></span>
+  <span class="spacer"></span>
+  <span class="who" id="identity"></span>
+  <button type="button" class="quiet" id="invite" hidden>Invite</button>
+  <button type="button" class="quiet" id="close" hidden>End</button>
+</header>
+
+<p id="error" role="alert"></p>
+
+<section id="join" hidden>
+  <h1>Join the party</h1>
+  <form id="joinform" class="stack">
+    <label>Display name<input id="name" maxlength="100" autocomplete="nickname" required></label>
+    <label>Built-in icon
+      <select id="icon">
+        <option value="music">♫ Music</option>
+        <option value="headphones">🎧 Headphones</option>
+        <option value="star">★ Star</option>
+        <option value="sun">☀ Sun</option>
+        <option value="moon">☾ Moon</option>
+      </select>
+    </label>
+    <button class="primary">Join / rejoin</button>
+  </form>
+  <p class="hint">A link belongs to one guest. Reusing it keeps the same identity and votes;
+    share a separate link for each person.</p>
+</section>
+
+<section id="members" hidden>
+  <h1>Your parties</h1>
+  <form id="create" class="stack">
+    <label>Party name<input id="title" maxlength="100" required></label>
+    <button class="primary">Create</button>
+  </form>
+  <div id="parties" class="parties"></div>
+  <p class="hint">One aux host, a queue everyone shapes. Guest links last at most 24 hours.
+    Guests cannot play or download the catalog.</p>
+</section>
+
+<section id="room" hidden>
+  <div class="room">
+    <div class="main">
+
+      <section class="now" aria-label="Now playing">
+        <div class="art" aria-hidden="true"></div>
+        <div class="meta">
+          <span class="eyebrow">Now playing</span>
+          <b id="current">Nothing playing yet</b>
+          <span id="nextup" class="hint">Queue is empty</span>
+        </div>
+        <div id="skiprow" class="acts">
+          <button type="button" id="skip">Skip</button>
+          <span id="skipcount" class="hint"></span>
+        </div>
+      </section>
+
+      <section class="deck" id="deckbar">
+        <div class="deckinfo">
+          <b id="deckstate">Deck idle — no aux host</b>
+          <span id="expiry" class="hint"></span><span class="hint">Only this device makes sound; other speakers are not in sync.</span>
+        </div>
+        <div class="deckacts" id="deckactions">
+          <label id="deckgainrow"><span class="sr">Room volume</span><input id="deckgain" type="range" min="0" max="100" step="5" value="100" aria-label="Room volume"></label>
+          <button type="button" id="decktoggle">Play</button>
+        </div>
+      </section>
+
+      <section class="sets">
+        <div class="shead">
+          <h2>Start from a set</h2>
+          <span class="hint">Shuffles it in and plays it</span>
+        </div>
+        <form id="find" class="find" autocomplete="off">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="query" placeholder="Song, artist or playlist" aria-label="Search"
+            maxlength="100" enterkeyhint="search">
+          <button type="button" id="clearq" hidden aria-label="Clear search">✕</button>
+        </form>
+        <div class="tabs" role="tablist" aria-label="What to start from">
+          <button type="button" role="tab" data-tab="playlists" aria-selected="true">Playlists</button>
+          <button type="button" role="tab" data-tab="artists" aria-selected="false">Artists</button>
+          <button type="button" role="tab" data-tab="songs" aria-selected="false">Songs</button>
+        </div>
+        <p class="setstatus" id="setstatus" role="status"></p>
+        <div id="results" class="results" aria-live="polite"></div>
+      </section>
+
+      <div id="controls" class="controls">
+        <button type="button" id="host">Take the aux</button>
+        <button type="button" id="next" hidden>Next</button>
+        <button type="button" id="release" hidden>Release</button>
+      </div>
+    </div>
+
+    <aside class="side">
+      <section class="panel">
+        <div class="ph"><h2>Waiting queue</h2><span class="count" id="qcount">0</span></div><p class="qrule">Scores reorder the queue; tap a vote again to retract.</p>
+        <div id="queue"></div>
+        <button type="button" class="more" id="more" hidden></button>
+      </section>
+
+      <section class="panel" id="chatbox">
+        <div class="ph"><h2>Chat</h2></div>
+        <div id="messages"></div>
+        <form id="chat" class="chatform" autocomplete="off">
+          <input id="message" maxlength="1000" placeholder="Say something…" aria-label="Message"
+            enterkeyhint="send">
+          <button id="send">Send</button>
+        </form>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<div id="invitebox" hidden>
+  <label>Guest link<input id="link" readonly autocomplete="off"></label>
+  <div class="inviterow">
+    <button type="button" id="copy">Copy</button>
+    <button type="button" class="quiet" id="dismiss">Done</button>
+  </div>
+  <p class="hint">Share one link per person: a link keeps the same identity and votes, so a
+    link passed around is one guest, not three.</p>
+</div>
+
+<audio id="audio" controls preload="auto" hidden></audio>
+</body>
+</html>

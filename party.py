@@ -224,15 +224,132 @@ def public_track(t):
     return {k: t.get(k) for k in ('id', 'title', 'artist_name', 'album', 'duration')}
 
 
+# "A song somebody can actually hear", as SQL: not deleted, and with a file on this disk.
+# Deliberately not `local_path`, which stats every file — right for the handful of tracks an add
+# really queues, wrong for a list of every playlist in the library.
+PLAYABLE = "t.deleted=0 AND t.file<>''"
+
+
+def sets(store, pid, member=None):
+    """What a person can start the room from: playlists, and the artists they actually have.
+
+    `saved` marks the playlists this member has saved in the app, which is the only difference
+    between "the library's" and "mine" — they are the same rows.
+    """
+    with store.lock:
+        room(store.conn, pid)
+        saved = set()
+        if member:
+            try:
+                saved = {row[0] for row in store.conn.execute(
+                    'SELECT playlist_id FROM listening_playlists WHERE member_id=?',
+                    (member['id'],))}
+            except sqlite3.OperationalError:
+                saved = set()          # a library that has never saved one has no such table
+        rows = store.conn.execute(
+            'SELECT p.id AS id, p.title AS name, count(t.id) AS count'
+            ' FROM playlists p JOIN playlist_tracks pt ON pt.playlist_id=p.id'
+            ' JOIN tracks t ON t.id=pt.track_id AND ' + PLAYABLE +
+            ' GROUP BY p.id ORDER BY count DESC, p.id LIMIT 50').fetchall()
+        artists = store.conn.execute(
+            'SELECT t.artist_name AS name, count(*) AS count FROM tracks t'
+            " WHERE " + PLAYABLE + " AND t.artist_name<>''"
+            ' GROUP BY t.artist_name ORDER BY count DESC, t.artist_name LIMIT 24').fetchall()
+        return {'playlists': [{'id': r['id'], 'name': r['name'], 'count': r['count'],
+                               'saved': r['id'] in saved} for r in rows],
+                'artists': [{'name': r['name'], 'count': r['count']} for r in artists]}
+
+
 def search(store, pid, query):
+    """One field, three answers. Playlists and artists are what a person starts from, so a
+    search that only returned tracks was answering a narrower question than the one asked."""
     if not isinstance(query, str) or not 1 <= len(query.strip()) <= 100:
         raise Denied(400, 'Search must be 1–100 characters')
     # Bound both candidate work and returned metadata; never enumerate file/source URLs.
-    pattern = '%' + query.strip().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+    term = query.strip()
+    pattern = '%' + term.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
     with store.lock:
         room(store.conn, pid)
         rows = store.conn.execute("SELECT * FROM tracks WHERE title LIKE ? ESCAPE '\\' OR artist_name LIKE ? ESCAPE '\\' ORDER BY id LIMIT 200", (pattern, pattern)).fetchall()
-        return {'tracks': [public_track(dict(t)) for t in rows if local_path(store, dict(t))][:30]}
+        playlists = store.conn.execute(
+            "SELECT p.id AS id, p.title AS name, count(t.id) AS count"
+            " FROM playlists p JOIN playlist_tracks pt ON pt.playlist_id=p.id"
+            " JOIN tracks t ON t.id=pt.track_id AND " + PLAYABLE +
+            " WHERE p.title LIKE ? ESCAPE '\\' GROUP BY p.id ORDER BY count DESC LIMIT 8",
+            (pattern,)).fetchall()
+        artists = store.conn.execute(
+            'SELECT t.artist_name AS name, count(*) AS count FROM tracks t'
+            " WHERE " + PLAYABLE + " AND t.artist_name LIKE ? ESCAPE '\\'"
+            ' GROUP BY t.artist_name ORDER BY count DESC, t.artist_name LIMIT 8',
+            (pattern,)).fetchall()
+        return {'query': term,
+                'playlists': [{'id': r['id'], 'name': r['name'], 'count': r['count']} for r in playlists],
+                'artists': [{'name': r['name'], 'count': r['count']} for r in artists],
+                'tracks': [public_track(dict(t)) for t in rows if local_path(store, dict(t))][:30]}
+
+
+# The waiting queue's own cap, quoted back in a refusal so nobody has to guess why a
+# 399-song playlist only added part of itself.
+WAITING_LIMIT = 200
+
+
+def set_tracks(c, kind, ident):
+    """The tracks inside one set, in library order. Shuffling happens after this."""
+    if kind == 'playlist':
+        row = c.execute('SELECT title FROM playlists WHERE id=?', (integer(ident),)).fetchone()
+        if not row:
+            raise Denied(404, 'No such playlist')
+        rows = c.execute('SELECT t.* FROM tracks t JOIN playlist_tracks pt ON pt.track_id=t.id'
+                         ' WHERE pt.playlist_id=? ORDER BY pt.position, t.id',
+                         (integer(ident),)).fetchall()
+        return row['title'], [dict(t) for t in rows]
+    if kind == 'artist':
+        if not isinstance(ident, str) or not 1 <= len(ident.strip()) <= 300:
+            raise Denied(400, 'An artist is required')
+        name = ident.strip()
+        rows = c.execute('SELECT t.* FROM tracks t WHERE t.artist_name=? AND ' + PLAYABLE +
+                         ' ORDER BY id', (name,)).fetchall()
+        if not rows:
+            raise Denied(404, 'No playable tracks by that artist')
+        return name, [dict(t) for t in rows]
+    raise Denied(400, 'A set is a playlist or an artist')
+
+
+def queue_set(store, pid, actor, kind, ident):
+    """Shuffle a whole set into the waiting queue, skipping what is already there.
+
+    The single-track `add` refuses a duplicate and says so, because a press is a question with
+    one answer. A set is different: the interesting answer is how much of it landed, so
+    duplicates are skipped rather than turned into an error on the 200th song.
+    """
+    with transaction(store) as c:
+        room(c, pid)
+        name, rows = set_tracks(c, kind, ident)
+        # A deleted song can still have its file on disk, so `local_path` alone would queue a
+        # song somebody removed from their library. The set keeps it in `size` and reports it
+        # as unavailable rather than pretending the playlist was shorter than it is.
+        playable = [row for row in rows if not row.get('deleted') and local_path(store, row)]
+        random.shuffle(playable)
+        have = {row[0] for row in c.execute(
+            "SELECT track_id FROM party_entries WHERE party=? AND status IN ('waiting','playing')",
+            (pid,))}
+        waiting = c.execute(
+            "SELECT count(*) FROM party_entries WHERE party=? AND status='waiting'",
+            (pid,)).fetchone()[0]
+        added, already, unavailable, full = 0, 0, len(rows) - len(playable), False
+        for row in playable:
+            if row['id'] in have:
+                already += 1
+                continue
+            if waiting >= WAITING_LIMIT:
+                full = True
+                break
+            queue_entry(c, store, pid, actor, row['id'])
+            have.add(row['id'])
+            added += 1
+            waiting += 1
+    return {'name': name, 'added': added, 'already': already, 'unavailable': unavailable,
+            'full': full, 'limit': WAITING_LIMIT, 'size': len(rows)}
 
 
 def queue_entry(c, store, pid, actor, tid):
@@ -612,7 +729,9 @@ def dispatch(handler, store, security):
         m = security.authenticate(handler, store)
         handler.json(create(store, m, payload.get('title', 'Party'), payload.get('hours', 24)))
         return
-    match = re.fullmatch(r'/api/party/([A-Za-z0-9_-]{16})(?:/(search|queue|vote|skip|invite|control|chat|jukebox))?', path)
+    match = re.fullmatch(r'/api/party/([A-Za-z0-9_-]{16})'
+                         r'(?:/(search|queue|queue-set|sets|vote|skip|invite|control|chat|jukebox))?',
+                         path)
     if not match:
         raise Denied(404, 'Not found')
     pid, action = match.groups()
@@ -641,11 +760,13 @@ def dispatch(handler, store, security):
     else:
         # A party cookie is never accepted by Security.authenticate or other APIs.
         sid = security.cookie(handler, security.cookie_name(handler, COOKIE))
+        member = None
         if sid and not security.cookie(handler, security.cookie_name(handler, '__Host-hl_session')):
             identity = guest(store, sid, pid)
             actor = identity['id']
         else:
             m = security.authenticate(handler, store)
+            member = m
             actor = member_identity(m)
             identity = {k: m.get(k) for k in ('display_name', 'profile_icon')}
         security.limit(actor, 'party-actions', 90)
@@ -654,6 +775,14 @@ def dispatch(handler, store, security):
             result['viewer'] = identity
         elif action == 'search' and handler.command == 'GET':
             result = search(store, pid, parse_qs(urlsplit(handler.path).query).get('q', [''])[0])
+        elif action == 'sets' and handler.command == 'GET':
+            result = sets(store, pid, member)
+        elif action == 'queue-set' and handler.command == 'POST':
+            # A guest may add a song; shuffling two hundred in is shaping the room's whole
+            # evening, which is what membership and votes are for.
+            if member is None:
+                raise Denied(403, 'Members start sets; guests add songs and vote')
+            result = queue_set(store, pid, actor, payload.get('kind'), payload.get('id'))
         elif action == 'chat':
             if handler.command == 'POST':
                 security.limit(actor, 'party-chat', 20)

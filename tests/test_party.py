@@ -26,12 +26,20 @@ class PartyHTTP(unittest.TestCase):
         self.root = Path(self.tmp.name)
         conn = sqlite3.connect(self.root/'isolated.sqlite', check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        conn.execute('CREATE TABLE tracks(id INTEGER PRIMARY KEY,title TEXT,artist_name TEXT,album TEXT,duration REAL,file TEXT,source_url TEXT)')
+        conn.execute('CREATE TABLE tracks(id INTEGER PRIMARY KEY,title TEXT,artist_name TEXT,album TEXT,duration REAL,file TEXT,source_url TEXT,deleted INTEGER DEFAULT 0)')
         for i in range(1, 7):
             f = self.root/f'{i}.mp3'
             f.write_bytes(b'fixture never played')
-            conn.execute('INSERT INTO tracks VALUES(?,?,?,?,?,?,?)', (i, f'Track {i}', 'Artist', 'Album', 120, str(f), 'https://private.example/source'))
-        conn.execute("INSERT INTO tracks VALUES(7,'Track missing','Artist','Album',120,'/missing','secret')")
+            conn.execute('INSERT INTO tracks(id,title,artist_name,album,duration,file,source_url)'
+                         ' VALUES(?,?,?,?,?,?,?)', (i, f'Track {i}', 'Artist', 'Album', 120, str(f), 'https://private.example/source'))
+        conn.execute("INSERT INTO tracks(id,title,artist_name,album,duration,file,source_url)"
+                     " VALUES(7,'Track missing','Artist','Album',120,'/missing','secret')")
+        # The library's own playlists are core schema, so the grouped search can always ask them.
+        conn.execute('CREATE TABLE playlists(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL)')
+        conn.execute('CREATE TABLE playlist_tracks(playlist_id INTEGER NOT NULL, track_id INTEGER NOT NULL,'
+                     ' position INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(playlist_id, track_id))')
+        conn.execute("INSERT INTO playlists(title) VALUES('Party mix')")
+        conn.execute('INSERT INTO playlist_tracks VALUES(1,1,0)')
         conn.commit()
         self.store = SimpleNamespace(conn=conn, lock=threading.RLock(), setting=lambda key: str(self.root))
         self.sec = Security()

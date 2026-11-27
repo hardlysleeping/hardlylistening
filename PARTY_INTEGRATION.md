@@ -42,7 +42,21 @@ anonymous member fallback. Party guest credentials never authenticate app APIs.
   paths, source URLs, artwork/audio links, settings, emails or credentials.
 - `GET /api/party/:id/search?q=...`: 1–100-char search, up to 200 candidate rows
   checked and 30 playable canonical-root track metadata results; existing music
-  only, no network acquisition. Literal SQL wildcard escaping.
+  only, no network acquisition. Literal SQL wildcard escaping. The answer is
+  grouped — `{query,playlists,artists,tracks}` — so a page can render playlists,
+  artists and songs in one pass. It is the only complete answer: a page that
+  filtered its own browse list by hand would miss every artist outside that list.
+- `GET /api/party/:id/sets`: what can be started in one press, from the room's
+  own catalogue — `{playlists:[{id,name,count,saved}],artists:[{name,count}]}`.
+  `count` is SQL-only (`file<>''` and not deleted), so a file that has since
+  vanished still counts until a set is queued and reports it `unavailable`.
+- `POST /api/party/:id/queue-set {kind,id}`: `kind` is `playlist` (`id` a
+  positive playlist id) or `artist` (`id` the artist name); members and admins
+  only — a guest is refused `403 Members start sets; guests add songs and vote`.
+  Adds that set's playable tracks in order, skipping rows already waiting, and
+  answers `{name,added,already,unavailable,full,limit,size}`. It is the same
+  queue `queue` fills: the 200 waiting limit still applies (`full` is true when
+  it cut the set short), and nothing canonical is edited or deleted.
 - `POST /api/party/:id/queue {track_id}`: existing DB positive track ID and
   existing regular file inside canonical root required; no duplicate active
   recording, waiting queue maximum 200. Never edits/deletes canonical tracks.
