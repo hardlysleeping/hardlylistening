@@ -110,6 +110,19 @@ class Plumbing:
             self._body = {}
         return self._body
 
+    def do_OPTIONS(self) -> None:
+        """The preflight a page's cross-origin request sends before a non-simple one.
+
+        Only the Subsonic surface is cross-origin, and `boundary()` dispatches `/rest/` by path
+        rather than by method, so this reaches the same handler that will answer the real request.
+        Everywhere else there is nothing to preflight, and saying so is a 405 rather than the 501
+        an unimplemented verb used to earn.
+        """
+        path = urlparse(self.path).path
+        if not self.boundary(path):
+            return
+        self.json({"error": "no such endpoint"}, 405)
+
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
         if not self.boundary(path):
